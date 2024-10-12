@@ -1,0 +1,13 @@
+[package]
+name = "Cognition"
+version = "0.1.0"
+edition = "2021"
+description = "Rust implementation of the Cognition programming language"
+
+[[bin]]
+name = "crank"
+path = "src/main.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
