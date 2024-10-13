@@ -4,12 +4,8 @@ use std::process::ExitCode;
 use std::env;
 use std::fs;
 
-use crate::cognition::*;
-use crate::cognition::macros::*;
-
-#[macro_use]
-mod cognition;
-mod pool;
+use cognition::*;
+use cognition::macros::*;
 
 // to be reimplemented properly
 fn isint(_n: &String) -> bool { true }

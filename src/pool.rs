@@ -1,4 +1,4 @@
-use crate::cognition::*;
+use crate::*;
 
 pub struct Pool {
   i: i32,

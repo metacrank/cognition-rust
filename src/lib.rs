@@ -1,14 +1,16 @@
-use crate::pool;
+#![allow(dead_code)]
+
+#[macro_use]
+pub mod macros;
+pub mod pool;
+
 use crate::pool::Pool;
-use crate::cognition::macros::*;
+use crate::macros::*;
 use std::collections::HashMap;
 use std::default::Default;
 use std::io::Write;
 use std::io::stdout;
 use std::str::Chars;
-
-#[macro_use]
-pub mod macros;
 
 pub type CognitionFunction = fn(Value, CognitionState) -> CognitionState;
 pub type Stack = Vec<Value>;

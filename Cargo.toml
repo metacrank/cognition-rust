@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Rust implementation of the Cognition programming language"
 
+[lib]
+name = "cognition"
+path = "src/lib.rs"
+
 [[bin]]
 name = "crank"
 path = "src/main.rs"
