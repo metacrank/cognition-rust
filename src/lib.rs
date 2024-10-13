@@ -4,21 +4,24 @@
 #[macro_use]
 pub mod macros;
 pub mod pool;
+pub mod builtins;
 
 use crate::pool::Pool;
 use crate::macros::*;
+
 use std::collections::HashMap;
 use std::default::Default;
 use std::io::Write;
 use std::io::stdout;
 use std::str::Chars;
 
-pub type CognitionFunction = fn(Value, CognitionState) -> CognitionState;
+pub type CognitionFunction = fn(CognitionState, &Value) -> CognitionState;
 pub type Stack = Vec<Value>;
 pub type Cranks = Vec<Crank>;
 pub type Strings = Vec<String>;
 pub type Faliases = Strings;
 pub type WordTable = HashMap<String, Value>;
+
 
 pub trait Pretty {
   fn print_pretty(&self);
@@ -91,7 +94,6 @@ pub struct Crank {
 pub struct Container {
   pub stack: Stack,
   pub err_stack: Option<Stack>,
-  pub word_table: Option<WordTable>,
   pub cranks: Option<Cranks>,
   pub faliases: Option<Faliases>,
   pub delims: Option<String>,
@@ -100,6 +102,8 @@ pub struct Container {
   pub dflag: bool,
   pub iflag: bool,
   pub sflag: bool,
+
+  word_table: Option<WordTable>,
 }
 
 impl Default for Container {
@@ -107,7 +111,6 @@ impl Default for Container {
     Container {
       stack: Stack::new(),
       err_stack: None,
-      word_table: None,
       cranks: None,
       faliases: None,
       delims: None,
@@ -116,6 +119,8 @@ impl Default for Container {
       dflag: false,
       iflag: true,
       sflag: true,
+
+      word_table: None,
     }
   }
 }
@@ -152,6 +157,17 @@ impl Container {
     f.push(String::from("f"));
     f.push(String::from("ing"));
     Some(f)
+  }
+  //TODO: needs work
+  pub fn add_word(&mut self, v: Value, name: &'static str) {
+    match &mut self.word_table {
+      Some(wt) => { wt.insert(String::from(name), v); },
+      None => {
+        let mut wt = WordTable::with_capacity(DEFAULT_WORD_TABLE_SIZE);
+        wt.insert(String::from(name), v);
+        self.word_table = Some(wt);
+      },
+    }
   }
 }
 
@@ -228,7 +244,7 @@ impl VFLLib {
     VFLLib{ fllib, str_word: None }
   }
   pub fn with_nop() -> VFLLib {
-    Self::with_fn(nop)
+    Self::with_fn(builtins::cog_nop)
   }
 }
 
@@ -295,6 +311,18 @@ impl Value {
     }
     fwrite_check!(f, end.as_bytes());
   }
+  pub fn metastack_container(&mut self) -> &mut Container {
+    let Value::Stack(vstack) = self else { panic!("Bad value on metastack") };
+    &mut vstack.container
+  }
+  pub fn metastack_container_ref(&self) -> &Container {
+    let Value::Stack(vstack) = self else { panic!("Bad value on metastack") };
+    &vstack.container
+  }
+  pub fn expect_word(&self, e: &'static str) -> &String {
+    let Value::Word(vword) = self else { panic!("{e}") };
+    &vword.str_word
+  }
 }
 
 pub struct Parser<'a> {
@@ -325,7 +353,7 @@ impl Parser<'_> {
   fn parse_word(&mut self, skipped: bool, state: &mut CognitionState) -> Option<Value> {
     let Some(c) = self.c else { return None };
     let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-    let Value::Word(vword) = &mut v else { panic!("Pool::get_vword failed") };
+    let Value::Word(vword) = &mut v else { panic!("Pool::get_vword() failed") };
     if state.issinglet(c) {
       vword.str_word.push(c);
       self.next();
@@ -353,7 +381,7 @@ impl Parser<'_> {
       None => None,
       Some(c) => {
         let mut v = state.pool.get_vword(c.len_utf8());
-        let Value::Word(vword) = &mut v else { panic!("Pool::get_vword failed") };
+        let Value::Word(vword) = &mut v else { panic!("Pool::get_vword() failed") };
         vword.str_word.push(c);
         self.next();
         Some(v)
@@ -374,7 +402,7 @@ pub struct CognitionState {
   pub exit_code: Option<String>,
   //root: &str,
   pub args: Strings,
-  pub pool: pool::Pool,
+  pub pool: Pool,
   pub i: i32, // to keep rust-analyser happy for the moment
 }
 
@@ -388,11 +416,16 @@ impl CognitionState {
           i: 0 }
   }
 
-  pub fn eval_error(&mut self, e: &'static str, w: Option<String>) {
-    let mut verror = self.pool.get_verror(24); // replace with len of e
-    let Value::Error(error) = &mut verror else { panic!("Pool::get_verror failed") };
+  pub fn eval_error(&mut self, e: &'static str, w: Option<&Value>) {
+    let mut verror = self.pool.get_verror(e.len());
+    let Value::Error(error) = &mut verror else { panic!("Pool::get_verror() failed") };
     error.error.push_str(e);
-    error.str_word = w;
+    error.str_word = match w {
+      None => None,
+      Some(v) => {
+        Some(v.expect_word("CognitionState::eval_error(): Bad argument type").clone())
+      },
+    };
     if let None = self.current_ref().err_stack {
       let temp = self.pool.get_stack(1);
       self.current().err_stack = Some(temp);
@@ -435,14 +468,10 @@ impl CognitionState {
   }
 
   pub fn current(&mut self) -> &mut Container {
-    let cur_v: &mut Value = self.stack.last_mut().expect("Cognition metastack was empty");
-    let Value::Stack(cur_vstack) = cur_v else { panic!("Bad value on metastack") };
-    &mut cur_vstack.container
+    self.stack.last_mut().expect("Cognition metastack was empty").metastack_container()
   }
   pub fn current_ref(&self) -> &Container {
-    let cur_v = self.stack.last().expect("Cognition metastack was empty");
-    let Value::Stack(cur_vstack) = cur_v else { panic!("Bad value on metastack") };
-    &cur_vstack.container
+    self.stack.last().expect("Cognition metastack was empty").metastack_container_ref()
   }
   pub fn pop_cur(&mut self) -> Value {
     self.stack.pop().expect("Cognition metastack was empty")
@@ -454,7 +483,7 @@ impl CognitionState {
 
   pub fn push_quoted(&mut self, v: Value) {
     let mut wrapper: Value = self.pool.get_vstack(1);
-    let Value::Stack(w) = &mut wrapper else { panic!("Pool::get_vstack failed") };
+    let Value::Stack(w) = &mut wrapper else { panic!("Pool::get_vstack() failed") };
     w.container.stack.push(v);
     self.current().stack.push(wrapper);
   }
@@ -477,8 +506,7 @@ impl CognitionState {
 
   fn crank(mut self) -> Self {
     let mut cur_v = self.pop_cur();
-    let Value::Stack(cur_vstack) = &mut cur_v else { panic!("BAD VALUE ON METASTACK") };
-    let cur = &mut cur_vstack.container;
+    let cur = cur_v.metastack_container();
 
     let cranks = match cur.cranks.as_mut() {
       None => return self.push_cur(cur_v),
@@ -534,5 +562,3 @@ impl CognitionState {
     self.crank()
   }
 }
-
-pub fn nop(_v: Value, state: CognitionState) -> CognitionState { state }

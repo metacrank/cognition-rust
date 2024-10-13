@@ -54,8 +54,8 @@ impl Pool {
   pub fn get_vcustom(&mut self) -> Value {
     Value::Custom(Box::new(VCustom::with_void()))
   }
-  pub fn get_vclib(&mut self) -> Value {
-    Value::FLLib(Box::new(VFLLib::with_nop()))
+  pub fn get_vfllib(&mut self, f: CognitionFunction) -> Value {
+    Value::FLLib(Box::new(VFLLib::with_fn(f)))
   }
 
   pub fn get_stack(&mut self, capacity: usize) -> Stack {
