@@ -69,4 +69,3 @@ macro_rules! add_func {
     //TODO: push $f into $wt with key derived from $name
   }
 }
-pub(crate) use add_func;
