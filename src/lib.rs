@@ -178,7 +178,7 @@ pub struct VStack {
   pub container: Container,
 }
 pub struct VMacro {
-  macro_stack: Stack,
+  pub macro_stack: Stack,
 }
 pub struct VError {
   error: String,
@@ -189,7 +189,7 @@ pub struct VCustom {
 }
 pub struct VFLLib {
   fllib: CognitionFunction,
-  str_word: Option<String>,
+  pub str_word: Option<String>,
 }
 
 impl VWord {
