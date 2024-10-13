@@ -47,9 +47,12 @@ fn main() -> ExitCode {
     return usage(3);
   }
 
+  // Initialize state
   let metastack = Stack::with_capacity(DEFAULT_STACK_SIZE);
   let mut state = CognitionState::new(metastack);
-  let initial_stack = Value::Stack(Box::new(VStack::with_capacity(DEFAULT_STACK_SIZE)));
+  let mut initial_stack = Value::Stack(Box::new(VStack::with_capacity(DEFAULT_STACK_SIZE)));
+  let Value::Stack(vstack) = &mut initial_stack else { panic!("fatal error") };
+  vstack.container.faliases = Container::default_faliases();
   state.stack.push(initial_stack);
 
   for i in 0..opts.s {
@@ -62,11 +65,9 @@ fn main() -> ExitCode {
     }
     let buffer: String = fs_result.unwrap();
     let mut parser = Parser::new(&buffer);
-    //state.parser = Some(parser);
 
     // Parse and eval loop
     loop {
-      //let Some(parser) = &mut state.parser else { break };
       let val = parser.get_next(&mut state);
       match val {
         Some(v) => state = state.eval(v),
@@ -74,7 +75,6 @@ fn main() -> ExitCode {
       }
       if state.exited { break; }
     }
-
   }
 
   if !opts.q { print_end(&state); }

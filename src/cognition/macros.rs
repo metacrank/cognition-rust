@@ -4,6 +4,7 @@ pub const HBLK: &[u8] = b"\x1B[90m";
 pub const COLOR_RESET: &[u8] = b"\x1B[0m";
 
 pub const DEFAULT_STACK_SIZE: usize = 24;
+pub const DEFAULT_STRING_LENGTH: usize = 24;
 
 macro_rules! default_fprint_error {
   ($e:literal) => {

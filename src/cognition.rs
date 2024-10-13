@@ -144,6 +144,12 @@ impl Container {
       }
     }
   }
+  pub fn default_faliases() -> Option<Faliases> {
+    let mut f = Faliases::with_capacity(2);
+    f.push(String::from("f"));
+    f.push(String::from("ing"));
+    Some(f)
+  }
 }
 
 pub struct VWord {
@@ -289,20 +295,58 @@ impl Value {
 }
 
 pub struct Parser<'a> {
-  c: Chars<'a>,
+  source: Chars<'a>,
+  c: Option<char>,
 }
 
 impl Parser<'_> {
   pub fn new(source: &String) -> Parser {
-    let c = source.chars();
-    Parser{ c }
+    let mut source = source.chars();
+    let c = source.next();
+    Parser{ source, c }
   }
-  pub fn next(&mut self) -> Option<<Chars<'_> as Iterator>::Item> {
-    self.c.next()
+  pub fn next(&mut self) {
+    self.c = self.source.next();
   }
-  // currently returns just the next character without delim/ignore/singlet behaviour
-  pub fn get_next(&mut self, state: &mut CognitionState) -> Option<Value> {
-    match self.next() {
+
+  fn skip_ignored(&mut self, state: &CognitionState) -> bool {
+    let mut skipped = false;
+    while let Some(c) = self.c {
+      if !state.isignore(c) { break };
+      skipped = true;
+      self.next();
+    }
+    skipped
+  }
+
+  fn parse_word(&mut self, skipped: bool, state: &mut CognitionState) -> Option<Value> {
+    let Some(c) = self.c else { return None };
+    let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
+    let Value::Word(vword) = &mut v else { panic!("Pool::get_vword failed") };
+    if state.issinglet(c) {
+      vword.str_word.push(c);
+      self.next();
+      return Some(v);
+    }
+    if !skipped {
+      vword.str_word.push(c);
+      self.next();
+    }
+    while let Some(c) = self.c {
+      if state.isdelim(c) { break };
+      vword.str_word.push(c);
+      self.next();
+      if state.issinglet(c) { return Some(v) };
+    }
+    Some(v)
+  }
+
+  // returns just the next character without delim/ignore/singlet behaviour
+  #[allow(dead_code)]
+  pub fn get_next_char(&mut self, state: &mut CognitionState) -> Option<Value> {
+    let ch = self.c;
+    self.next();
+    match ch {
       None => None,
       Some(c) => {
         let mut v = state.pool.get_vword(c.len_utf8());
@@ -312,6 +356,11 @@ impl Parser<'_> {
         Some(v)
       },
     }
+  }
+  /// Parse next token and return it as a word value option
+  pub fn get_next(&mut self, state: &mut CognitionState) -> Option<Value> {
+    let skipped = self.skip_ignored(&state);
+    self.parse_word(skipped, state)
   }
 }
 
@@ -347,6 +396,31 @@ impl CognitionState {
     }
     let estack: &mut Stack = &mut self.current().err_stack.as_mut().unwrap();
     estack.push(verror);
+  }
+
+  pub fn isdelim(&self, c: char) -> bool {
+    let cur = self.current_ref();
+    let found = match &cur.delims {
+      None => false,
+      Some(s) => s.chars().any(|x| x == c),
+    };
+    (found && cur.dflag) || (!found && !cur.dflag)
+  }
+  pub fn isignore(&self, c: char) -> bool {
+    let cur = self.current_ref();
+    let found = match &cur.ignored {
+      None => false,
+      Some(s) => s.chars().any(|x| x == c),
+    };
+    (found && cur.iflag) || (!found && !cur.iflag)
+  }
+  pub fn issinglet(&self, c: char) -> bool {
+    let cur = self.current_ref();
+    let found = match &cur.singlets {
+      None => false,
+      Some(s) => s.chars().any(|x| x == c),
+    };
+    (found && cur.sflag) || (!found && !cur.sflag)
   }
 
   pub fn isfalias(&self, v: &Value) -> bool {
