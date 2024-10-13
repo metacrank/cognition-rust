@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 pub const RED: &[u8] = b"\x1B[31m";
 pub const HBLK: &[u8] = b"\x1B[90m";
 //pub const COLOR_RESET: &[u8] = b"\x1B[39m";
@@ -25,6 +27,7 @@ macro_rules! fwrite_check_byte {
     }
   }
 }
+
 #[macro_export]
 macro_rules! fwrite_check {
   ($f:ident,$s:expr) => {
@@ -34,6 +37,8 @@ macro_rules! fwrite_check {
     }
   }
 }
+pub(crate) use fwrite_check;
+
 #[macro_export]
 macro_rules! fwrite_check_pretty {
   ($f:ident,$s:expr) => {
@@ -55,9 +60,13 @@ macro_rules! fwrite_check_pretty {
     }
   }
 }
+pub(crate) use fwrite_check_pretty;
 
+
+#[macro_export]
 macro_rules! add_func {
   ($wt:ident,$f:ident,$name:literal) => {
     //TODO: push $f into $wt with key derived from $name
   }
 }
+pub(crate) use add_func;
