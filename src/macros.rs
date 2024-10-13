@@ -51,3 +51,9 @@ macro_rules! fwrite_check_pretty {
     }
   }
 }
+
+macro_rules! add_func {
+  ($wt:ident,$f:ident,$name:literal) => {
+    //TODO: push $f into $wt with key derived from $name
+  }
+}
