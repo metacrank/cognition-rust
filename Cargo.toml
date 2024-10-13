@@ -1,5 +1,5 @@
 [package]
-name = "Cognition"
+name = "cognition"
 version = "0.1.0"
 edition = "2021"
 description = "Rust implementation of the Cognition programming language"
