@@ -20,7 +20,7 @@ pub type Stack = Vec<Value>;
 pub type Cranks = Vec<Crank>;
 pub type Strings = Vec<String>;
 pub type Faliases = Strings;
-pub type WordTable = HashMap<String, Value>;
+pub type WordTable = HashMap<String, WordDef>;
 
 
 pub trait Pretty {
@@ -107,7 +107,7 @@ pub struct Container {
 }
 
 impl Default for Container {
-  fn default() -> Container {
+  fn default() -> Self {
     Container {
       stack: Stack::new(),
       err_stack: None,
@@ -126,14 +126,13 @@ impl Default for Container {
 }
 
 impl Container {
-  pub fn with_stack(stack: Stack) -> Container {
-    Container{ stack,..Default::default() }
+  pub fn with_stack(stack: Stack) -> Self {
+    Container{ stack, ..Default::default() }
   }
-  pub fn with_capacity(capacity: usize) -> Container {
+  pub fn with_capacity(capacity: usize) -> Self {
     let stack = Stack::with_capacity(capacity);
     Self::with_stack(stack)
   }
-
   fn inc_crank(&mut self) {
     let Some(cranks) = &mut self.cranks else { return };
     for crank in cranks {
@@ -158,13 +157,14 @@ impl Container {
     f.push(String::from("ing"));
     Some(f)
   }
-  //TODO: needs work
   pub fn add_word(&mut self, v: Value, name: &'static str) {
     match &mut self.word_table {
-      Some(wt) => { wt.insert(String::from(name), v); },
+      Some(wt) => {
+        wt.insert(String::from(name), WordDef::Val(v));
+      },
       None => {
         let mut wt = WordTable::with_capacity(DEFAULT_WORD_TABLE_SIZE);
-        wt.insert(String::from(name), v);
+        wt.insert(String::from(name), WordDef::Val(v));
         self.word_table = Some(wt);
       },
     }
@@ -205,7 +205,7 @@ impl VStack {
   pub fn with_container(container: Container) -> VStack {
     VStack{ container }
   }
-  pub fn with_capacity(capacity: usize) -> VStack {
+  pub fn with_capacity(capacity: usize) -> Self {
     let stack = Stack::with_capacity(capacity);
     let container = Container::with_stack(stack);
     VStack{ container }
@@ -323,6 +323,13 @@ impl Value {
     let Value::Word(vword) = self else { panic!("{e}") };
     &vword.str_word
   }
+}
+
+// Can't use this properly with Ref:
+// immutable references have lifetime issues
+pub enum WordDef {
+  Val(Value),
+  //Ref(&Value),
 }
 
 pub struct Parser<'a> {
@@ -493,10 +500,23 @@ impl CognitionState {
     self
   }
 
-  fn evalstack(mut self, val: Value) -> Self {
-    let Value::Stack(mut _vstack) = val else { panic!("CognitionState::evalstack(): Bad argument type") };
-    //vstack.container.stack.push(Value::Stack(Box::new(VStack{ container: Container{..Default::default()} })));
+  fn eval_value(mut self, _val: &Value) -> Self {
     self.i = 0;
+    self
+  }
+
+  fn evalstack(mut self, val: Value) -> Self {
+    let Value::Stack(vstack) = &val else { panic!("CognitionState::evalstack(): Bad argument type") };
+    //vstack.container.stack.push(Value::Stack(Box::new(VStack{ container: Container{..Default::default()} })));
+    let stack = &vstack.container.stack;
+    let Some(v) = stack.first() else { return self };
+    self = self.eval_value(v);
+    let mut items = stack.iter();
+    items.next();
+    for v in items {
+      print!("val: ");
+      v.print("\n");
+    }
     self
   }
   fn evalmacro(mut self, _vmacro: Value) -> Self {
@@ -526,12 +546,9 @@ impl CognitionState {
     }
     let needseval = cur.stack.remove(fixedindex as usize);
     match needseval {
-      Value::Stack(_) =>
-        self.push_cur(cur_v).evalstack(needseval),
-      Value::Macro(_) =>
-        self.push_cur(cur_v).evalmacro(needseval),
-      _ =>
-        panic!("BAD VALUE ON STACK"),
+      Value::Stack(_) => self.push_cur(cur_v).evalstack(needseval),
+      Value::Macro(_) => self.push_cur(cur_v).evalmacro(needseval),
+      _ => panic!("Bad value on stack"),
     }
   }
 

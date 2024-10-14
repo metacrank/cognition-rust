@@ -1,27 +1,54 @@
 use crate::*;
 
-pub struct Pool {
-  i: i32,
+struct Tree<T> {
+  tree: Vec<T>,
+  left: Option<Box<Tree<T>>>,
+  right: Option<Box<Tree<T>>>,
 }
 
-// pub enum PoolType {
-//   VWord,
-//   VStack,
-//   VMacro,
-//   VError,
-//   VCustom,
-//   VClib,
+impl<T> Tree<T> {
+  fn new() -> Self {
+    Self{ tree: Vec::<T>::new(), left: None, right: None }
+  }
+}
 
-//   String,
-//   Stack,
-//   Strings,
-//   Cranks,
-//   WordTable,
-// }
+type VTree = Tree<Value>;
+
+pub struct Pool {
+  vwords: Tree<Value>,
+  vstacks: Tree<Value>,
+  vmacros: Tree<Value>,
+  verrors: Tree<Value>,
+  vcustoms: Stack,
+  vfllibs: Tree<Value>,
+
+  stacks: Tree<Stack>,
+  strings: Tree<String>,
+  stringss: Tree<Strings>,
+  cranks: Cranks,
+  word_tables: Vec<WordTable>,
+
+  i: i32, // to keep rust-analyzer happy for the moment
+}
 
 impl Pool {
   pub fn new() -> Pool {
-    Pool{ i: 0 }
+    Pool{
+      vwords: VTree::new(),
+      vstacks: VTree::new(),
+      vmacros: VTree::new(),
+      verrors: VTree::new(),
+      vcustoms: Stack::new(),
+      vfllibs: VTree::new(),
+
+      stacks: Tree::<Stack>::new(),
+      strings: Tree::<String>::new(),
+      stringss: Tree::<Strings>::new(),
+      cranks: Cranks::new(),
+      word_tables: Vec::<WordTable>::new(),
+
+      i: 0
+    }
   }
 
   pub fn add_val(&mut self, v: Value) {
@@ -34,6 +61,7 @@ impl Pool {
       Value::FLLib(_vclib) => { self.i = 5; }
     }
   }
+  pub fn add_stack(&mut self, _s: Stack) {}
   pub fn add_string(&mut self, _s: String) {}
   pub fn add_strings(&mut self, _ss: Strings) {}
   pub fn add_cranks(&mut self, _cs: Cranks) {}

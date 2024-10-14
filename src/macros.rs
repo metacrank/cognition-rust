@@ -93,7 +93,6 @@ macro_rules! build_macro {
 /// will mutate state (whether or not passed in as &mut) and insert a macro word into state
 /// current stack's word_table. If only one CognitionFunction parameter was given, then the
 /// resulting fllib str_word value will be derived from 'name'. Otherwise, it will be None.
-/// Finally, add_word will return the final state, which can be used or ignored as desired.
 /// Currently, add_word! only takes one CognitionFunction parameter.
 #[macro_export]
 macro_rules! add_word {
