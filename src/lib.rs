@@ -3,6 +3,7 @@
 
 #[macro_use]
 pub mod macros;
+pub mod tree;
 pub mod pool;
 pub mod builtins;
 
@@ -21,7 +22,7 @@ pub type Cranks = Vec<Crank>;
 pub type Strings = Vec<String>;
 pub type Faliases = Strings;
 pub type WordTable = HashMap<String, WordDef>;
-
+pub type Family = Vec<*const Value>;
 
 pub trait Pretty {
   fn print_pretty(&self);
@@ -91,6 +92,22 @@ pub struct Crank {
   pub base: i32,
 }
 
+pub enum RefState {
+  Independent,
+  Dependent,
+  Recycled,
+}
+
+impl Clone for RefState {
+  fn clone (&self) -> Self {
+    match self {
+      Self::Independent => Self::Independent,
+      Self::Dependent   => Self::Dependent,
+      Self::Recycled    => Self::Recycled,
+    }
+  }
+}
+
 pub struct Container {
   pub stack: Stack,
   pub err_stack: Option<Stack>,
@@ -102,6 +119,7 @@ pub struct Container {
   pub dflag: bool,
   pub iflag: bool,
   pub sflag: bool,
+  pub state: RefState,
 
   word_table: Option<WordTable>,
 }
@@ -119,6 +137,7 @@ impl Default for Container {
       dflag: false,
       iflag: true,
       sflag: true,
+      state: RefState::Independent,
 
       word_table: None,
     }
@@ -157,14 +176,21 @@ impl Container {
     f.push(String::from("ing"));
     Some(f)
   }
-  pub fn add_word(&mut self, v: Value, name: &'static str) {
+  pub fn isfalias(&self, v: &Value) -> bool {
+    let Value::Word(vw) = v else { return false };
+    match &self.faliases {
+      None => false,
+      Some(f) => f.iter().any(|s| *s == vw.str_word ),
+    }
+  }
+  pub fn add_word(&mut self, v: Value, name: String) {
     match &mut self.word_table {
       Some(wt) => {
-        wt.insert(String::from(name), WordDef::Val(v));
+        wt.insert(name, WordDef::Val(v));
       },
       None => {
         let mut wt = WordTable::with_capacity(DEFAULT_WORD_TABLE_SIZE);
-        wt.insert(String::from(name), WordDef::Val(v));
+        wt.insert(name, WordDef::Val(v));
         self.word_table = Some(wt);
       },
     }
@@ -325,11 +351,10 @@ impl Value {
   }
 }
 
-// Can't use this properly with Ref:
-// immutable references have lifetime issues
 pub enum WordDef {
   Val(Value),
-  //Ref(&Value),
+  DRef(*const Value),
+  MRef(*const Value),
 }
 
 pub struct Parser<'a> {
@@ -403,11 +428,10 @@ impl Parser<'_> {
 }
 
 pub struct CognitionState {
-  pub stack: Stack,
-  //pub parser: Option<Parser>,
+  pub chroots: Vec<Stack>, // meta metastack
+  pub stack: Stack, // metastack
   pub exited: bool,
   pub exit_code: Option<String>,
-  //root: &str,
   pub args: Strings,
   pub pool: Pool,
   pub i: i32, // to keep rust-analyser happy for the moment
@@ -415,7 +439,8 @@ pub struct CognitionState {
 
 impl CognitionState {
   pub fn new(stack: Stack) -> Self {
-    Self{ stack,
+    Self{ chroots: Vec::<Stack>::with_capacity(DEFAULT_STACK_SIZE),
+          stack,
           exited: false,
           exit_code: None,
           args: Strings::new(),
@@ -466,14 +491,6 @@ impl CognitionState {
     (found && cur.sflag) || (!found && !cur.sflag)
   }
 
-  pub fn isfalias(&self, v: &Value) -> bool {
-    let Value::Word(vw) = v else { return false };
-    match &self.current_ref().faliases {
-      None => false,
-      Some(f) => f.iter().any(|s| *s == vw.str_word ),
-    }
-  }
-
   pub fn current(&mut self) -> &mut Container {
     self.stack.last_mut().expect("Cognition metastack was empty").metastack_container()
   }
@@ -505,21 +522,144 @@ impl CognitionState {
     self
   }
 
-  fn evalstack(mut self, val: Value) -> Self {
-    let Value::Stack(vstack) = &val else { panic!("CognitionState::evalstack(): Bad argument type") };
-    //vstack.container.stack.push(Value::Stack(Box::new(VStack{ container: Container{..Default::default()} })));
-    let stack = &vstack.container.stack;
-    let Some(v) = stack.first() else { return self };
-    self = self.eval_value(v);
-    let mut items = stack.iter();
-    items.next();
-    for v in items {
+  fn evalstack_ref(mut self, _val: *const Value, callword: Option<&Value>, _family: &mut Family) -> Self {
+    if let None = callword { return self }
+    self.i = 0;
+    self
+  }
+  fn evalmacro_ref(mut self, _val: *const Value, callword: Option<&Value>, _family: &mut Family) -> Self {
+    if let None = callword { return self }
+    self.i = 0;
+    self
+  }
+
+  fn evalstack(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family) -> Self {
+    family.push(&val as *const Value);
+    let Value::Stack(vstack) = &mut val else { panic!("CognitionState::evalstack(): Bad argument type") };
+    let stack = &mut vstack.container.stack;
+
+    let mut local_family = self.pool.get_family();
+
+    stack.reverse();
+
+    let Some(v) = stack.pop() else { return self };
+    //self = self.eval_value(v);
+    match &v {
+      Value::Word(word) => {
+
+        let mut family_container: &Container;
+        self = loop {
+          let Some(family_stack) = family.pop() else {
+            self.push_quoted(v);
+            break self;
+          };
+          // Dereference read-only family stack pointer
+          // This points to a value which is currently
+          // being held in an evalstack() instance, so
+          // the memory is always available and static.
+          unsafe {
+            let Value::Stack(family_vstack) = &*family_stack else { panic!("Bad value in family stack") };
+            let family_vstack: &VStack = family_vstack; // debugging
+            family_container = &family_vstack.container;
+          }
+          if let Some(wt) = &family_container.word_table {
+            if let Some(wdef) = wt.get(&word.str_word) {
+              self.pool.add_val(v);
+              match wdef {
+                WordDef::Val(dval) => {
+                  match dval {
+                    Value::Stack(_) => break self.evalstack_ref(dval as *const Value, callword, family),
+                    Value::Macro(_) => break self.evalmacro_ref(dval as *const Value, callword, family),
+                    _ => panic!("Bad value type in word table"),
+                  }
+                },
+                WordDef::DRef(dval_pointer) => break self.evalstack_ref(dval_pointer.clone(), callword, family),
+                WordDef::MRef(mval_pointer) => break self.evalmacro_ref(mval_pointer.clone(), callword, family),
+              }
+            }
+          }
+          if family_container.isfalias(&v) {
+            self = 'crank: {
+              if let Some(cranks) = &self.current_ref().cranks {
+                if let Some(crank) = cranks.first() {
+                  if crank.modulo == 1 || crank.base == 1 {
+                    break 'crank self;
+                  }
+                }
+              }
+              self.evalf(&v)
+            };
+            self.pool.add_val(v);
+            break self;
+          }
+
+          local_family.push(family_stack);
+        };
+        while let Some(f) = local_family.pop() { family.push(f); }
+
+
+      },
+
+
+
+      _ => {
+        self.push_quoted(v);
+      }
+    }
+
+
+                // TODO: Replace with pool-aware hashtable when it comes available
+                //       The new hashtable will also return the original key with
+                //       remove() so that it can be used later in insertion
+                // let Some(WordDef::Val(definition)) = wt.remove(&w.str_word) else { unreachable!() };
+                // let mut tmpkey = self.pool.get_string(w.str_word.len());
+                // tmpkey.push_str(&w.str_word);
+                // match &definition {
+                //   Value::Stack(_) => {
+                //     wt.insert(tmpkey, WordDef::DRef(&definition as *const Value));
+                //     self = self.evalstack_ref(&definition as *const Value, family);
+
+                //   },
+                //   Value::Macro(_) => {
+                //     wt.insert(tmpkey, WordDef::MRef(&definition as *const Value));
+                //     self = self.evalmacro_ref(&definition as *const Value, family);
+
+                //   },
+                //   _ => panic!("Bad value type in word table"),
+                // };
+
+
+
+    for v in stack[1..].iter() {
       print!("val: ");
       v.print("\n");
     }
+
+
+
+    // if current container's word table had to be used:
+    let cur = self.current();
+    let original_cur_state = cur.state.clone();
+    cur.state = RefState::Dependent;
+    let original_cur_pointer = cur as *mut Container;
+
+
+    // stuff
+
+    unsafe {
+      if let RefState::Dependent = (*original_cur_pointer).state {
+        let Some(_wt) = &mut (*original_cur_pointer).word_table else { panic!("Current container: word table destroyed") };
+        //wt.insert(tmpkey, WordDef::Val(definition));
+        (*original_cur_pointer).inc_crank();
+        (*original_cur_pointer).state = original_cur_state;
+      }
+    }
+    // done
+
     self
   }
-  fn evalmacro(mut self, _vmacro: Value) -> Self {
+
+  fn evalmacro(mut self, _vmacro: Value, _callword: Option<Value>, _family: &mut Family) -> Self {
     self.i = 1;
     self
   }
@@ -545,35 +685,28 @@ impl CognitionState {
       return self.push_cur(cur_v);
     }
     let needseval = cur.stack.remove(fixedindex as usize);
+    let mut family = self.pool.get_family();
     match needseval {
-      Value::Stack(_) => self.push_cur(cur_v).evalstack(needseval),
-      Value::Macro(_) => self.push_cur(cur_v).evalmacro(needseval),
+      Value::Stack(_) => self.push_cur(cur_v).evalstack(needseval, None, &mut family),
+      Value::Macro(_) => self.push_cur(cur_v).evalmacro(needseval, None, &mut family),
       _ => panic!("Bad value on stack"),
     }
   }
 
-  fn evaluate(mut self, v: Value) -> Self {
-    self = self.evalf(&v);
-    self.pool.add_val(v);
-    self
-  }
-
   pub fn eval(mut self, v: Value) -> Self {
     let cur = self.current_ref();
-    if self.isfalias(&v) {
-      return match &cur.cranks {
-        None => self.evaluate(v),
-        Some(cranks) => {
-          if cranks.len() == 0 {
-            self.evaluate(v)
-          } else if cranks[0].base != 1 && cranks[0].modulo != 1 { // if base==0, then modulo==0
-            self.evaluate(v)
-          } else {
-            self.pool.add_val(v);
-            self
+    if cur.isfalias(&v) {
+      self = match &cur.cranks {
+        None => self.evalf(&v),
+        Some(cranks) => 'crank: {
+          if let Some(crank) = cranks.first() {
+            if crank.base == 1 || crank.modulo == 1 { break 'crank self; }
           }
+          self.evalf(&v)
         },
-      }
+      };
+      self.pool.add_val(v);
+      return self;
     }
     self.push_quoted(v);
     self.crank()

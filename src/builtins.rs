@@ -1,3 +1,4 @@
+pub mod multithreading;
 pub mod stackops;
 
 use crate::CognitionState;

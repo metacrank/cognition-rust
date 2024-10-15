@@ -98,11 +98,11 @@ macro_rules! build_macro {
 macro_rules! add_word {
   ($state:ident,$name:literal,$f:ident) => {
     let m = build_macro!($state, $name, $f);
-    $state.current().add_word(m, $name);
+    $state.current().add_word(m, std::string::String::from($name));
   };
   ($state:ident,$name:literal,($f:ident),*) => {
     let m = build_macro!($state, ($f),*)
-    $state.current().add_word(m, $name);
+    $state.current().add_word(m, std::string::String::from($name));
   }
 }
 // pub(crate) use add_word;

@@ -1,64 +1,75 @@
 use crate::*;
+use crate::tree::*;
 
-struct Tree<T> {
-  tree: Vec<T>,
-  left: Option<Box<Tree<T>>>,
-  right: Option<Box<Tree<T>>>,
-}
-
-impl<T> Tree<T> {
-  fn new() -> Self {
-    Self{ tree: Vec::<T>::new(), left: None, right: None }
-  }
-}
-
-type VTree = Tree<Value>;
+type ITree<T> = Tree<usize, T>;
+type VTree = ITree<Value>;
 
 pub struct Pool {
-  vwords: Tree<Value>,
-  vstacks: Tree<Value>,
-  vmacros: Tree<Value>,
-  verrors: Tree<Value>,
-  vcustoms: Stack,
-  vfllibs: Tree<Value>,
+  vwords: Option<VTree>,
+  vstacks: Option<VTree>,
+  vmacros: Option<VTree>,
+  verrors: Option<VTree>,
+  vcustoms: Option<Stack>,
+  vfllibs: Option<Stack>,
 
-  stacks: Tree<Stack>,
-  strings: Tree<String>,
-  stringss: Tree<Strings>,
-  cranks: Cranks,
-  word_tables: Vec<WordTable>,
+  stacks: Option<Tree<usize, Stack>>,
+  strings: Option<Tree<usize, String>>,
+  stringss: Option<Tree<usize, Strings>>,
+  crankss: Option<Cranks>,
+  word_tables: Option<Vec<WordTable>>,
+  families: Option<Vec<Family>>,
 
   i: i32, // to keep rust-analyzer happy for the moment
+}
+
+macro_rules! pool_insert_val {
+  ($v:ident,$capacity:expr,$self:ident,$tree:expr) => {
+    let mut ptree = $tree.take();
+    if ptree.is_none() { ptree = Some(VTree::new()) }
+    let tree = ptree.as_mut().unwrap();
+    tree.insert($capacity, $v, Self::get_stack_for_pool, $self);
+    $tree = ptree;
+  };
+}
+macro_rules! pool_push_val {
+  ($v:ident,$self:ident,$stack:expr) => {
+    let mut pstack = $stack.take();
+    if pstack.is_none() { pstack = Some($self.get_stack_for_pool()) }
+    let stack = pstack.as_mut().unwrap();
+    stack.push($v);
+    $stack = pstack;
+  };
 }
 
 impl Pool {
   pub fn new() -> Pool {
     Pool{
-      vwords: VTree::new(),
-      vstacks: VTree::new(),
-      vmacros: VTree::new(),
-      verrors: VTree::new(),
-      vcustoms: Stack::new(),
-      vfllibs: VTree::new(),
+      vwords: None,
+      vstacks: None,
+      vmacros: None,
+      verrors: None,
+      vcustoms: None,
+      vfllibs: None,
 
-      stacks: Tree::<Stack>::new(),
-      strings: Tree::<String>::new(),
-      stringss: Tree::<Strings>::new(),
-      cranks: Cranks::new(),
-      word_tables: Vec::<WordTable>::new(),
+      stacks: None,
+      strings: None,
+      stringss: None,
+      crankss: None,
+      word_tables: None,
+      families: None,
 
       i: 0
     }
   }
 
-  pub fn add_val(&mut self, v: Value) {
-    match v {
-      Value::Word(_vword) => { self.i = 0; }
-      Value::Stack(_vstack) => { self.i = 1; }
-      Value::Macro(_vmacro) => { self.i = 2; }
-      Value::Error(_verr) => { self.i = 3; }
-      Value::Custom(_vcustom) => { self.i = 4; }
-      Value::FLLib(_vclib) => { self.i = 5; }
+  pub fn add_val(&mut self, mut v: Value) {
+    match &mut v {
+      Value::Word(vword)   => { pool_insert_val!(v, vword.str_word.capacity(), self, self.vwords); },
+      Value::Stack(vstack) => { pool_insert_val!(v, vstack.container.stack.capacity(), self, self.vstacks); },
+      Value::Macro(vmacro) => { pool_insert_val!(v, vmacro.macro_stack.capacity(), self, self.vstacks); },
+      Value::Error(verror) => { pool_insert_val!(v, verror.error.capacity(), self, self.verrors); },
+      Value::Custom(_)     => { pool_push_val!(v, self, self.vcustoms); },
+      Value::FLLib(_)      => { pool_push_val!(v, self, self.vfllibs); },
     }
   }
   pub fn add_stack(&mut self, _s: Stack) {}
@@ -71,7 +82,15 @@ impl Pool {
     Value::Word(Box::new(VWord::with_capacity(capacity)))
   }
   pub fn get_vstack(&mut self, capacity: usize) -> Value {
-    Value::Stack(Box::new(VStack::with_capacity(capacity)))
+    if let Some(mut tree) = self.vstacks.take() {
+      if let Some(mut retval) = tree.remove_at_least(capacity, Self::add_stack, self) {
+        let Value::Stack(vstack) = &mut retval else { panic!("Bad value type in pool tree") };
+        vstack.container.state = RefState::Recycled;
+        return retval;
+      }
+      self.vstacks = Some(tree);
+    }
+    Value::Stack(Box::new(VStack::with_container(Container::with_stack(self.get_stack(capacity)))))
   }
   pub fn get_vmacro(&mut self, capacity: usize) -> Value {
     Value::Macro(Box::new(VMacro::with_capacity(capacity)))
@@ -88,5 +107,28 @@ impl Pool {
 
   pub fn get_stack(&mut self, capacity: usize) -> Stack {
     Stack::with_capacity(capacity)
+  }
+  pub fn get_stack_for_pool(&mut self) -> Stack {
+    self.get_stack(DEFAULT_STACK_SIZE)
+  }
+  pub fn get_string(&mut self, capacity: usize) -> String {
+    String::with_capacity(capacity)
+  }
+  pub fn get_strings(&mut self, capacity: usize) -> Strings {
+    Strings::with_capacity(capacity)
+  }
+  pub fn get_cranks(&mut self, capacity: usize) -> Cranks {
+    Cranks::with_capacity(capacity)
+  }
+  pub fn get_word_table(&mut self) -> WordTable {
+    WordTable::new()
+  }
+  pub fn get_family(&mut self) -> Family {
+    if let Some(stack) = &mut self.families {
+      if let Some(family) = stack.pop() {
+        return family;
+      }
+    }
+    Family::with_capacity(DEFAULT_STACK_SIZE)
   }
 }
