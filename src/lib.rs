@@ -16,12 +16,12 @@ use std::io::Write;
 use std::io::stdout;
 use std::str::Chars;
 
-pub type CognitionFunction = fn(CognitionState, &Value) -> CognitionState;
+pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type Stack = Vec<Value>;
 pub type Cranks = Vec<Crank>;
 pub type Strings = Vec<String>;
 pub type Faliases = Strings;
-pub type WordTable = HashMap<String, WordDef>;
+pub type WordTable = HashMap<String, Option<WordDef>>;
 pub type Family = Vec<*const Value>;
 
 pub trait Pretty {
@@ -108,6 +108,21 @@ impl Clone for RefState {
   }
 }
 
+trait WTCrankFuncs {
+  fn insert_stolen_value(&mut self, key: &String, word_def:  Option<WordDef>);
+}
+
+impl WTCrankFuncs for WordTable {
+  fn insert_stolen_value(&mut self, key: &String, word_def: Option<WordDef>) {
+    let Some(current_def) = self.get_mut(key) else { return };
+    match current_def.as_ref() {
+      None                  => { return },                  // removed from all existence
+      Some(WordDef::Val(_)) => { return },                  // redefined by some other function
+      Some(WordDef::Ref(_)) => { *current_def = word_def }, // replace reference with stolen value
+    }
+  }
+}
+
 pub struct Container {
   pub stack: Stack,
   pub err_stack: Option<Stack>,
@@ -186,11 +201,11 @@ impl Container {
   pub fn add_word(&mut self, v: Value, name: String) {
     match &mut self.word_table {
       Some(wt) => {
-        wt.insert(name, WordDef::Val(v));
+        wt.insert(name, Some(WordDef::Val(v)));
       },
       None => {
         let mut wt = WordTable::with_capacity(DEFAULT_WORD_TABLE_SIZE);
-        wt.insert(name, WordDef::Val(v));
+        wt.insert(name, Some(WordDef::Val(v)));
         self.word_table = Some(wt);
       },
     }
@@ -351,10 +366,14 @@ impl Value {
   }
 }
 
+pub enum DefRef {
+  D(*const Value),
+  M(*const Value),
+}
+
 pub enum WordDef {
   Val(Value),
-  DRef(*const Value),
-  MRef(*const Value),
+  Ref(DefRef),
 }
 
 pub struct Parser<'a> {
@@ -437,6 +456,19 @@ pub struct CognitionState {
   pub i: i32, // to keep rust-analyser happy for the moment
 }
 
+macro_rules! eval_value_if_cranked {
+  ($self:ident,$v:ident,$callword:ident,$family:ident,$local_family:expr,$do_crank:expr) => {
+    if let Some(cranks) = &$self.current_ref().cranks {
+      if let Some(crank) = cranks.first() {
+        if crank.modulo == 0 && crank.base != 0 {
+          $self = $self.eval_value($v, $callword, $family, $local_family, false, false, $do_crank);
+          continue;
+        }
+      }
+    }
+  };
+}
+
 impl CognitionState {
   pub fn new(stack: Stack) -> Self {
     Self{ chroots: Vec::<Stack>::with_capacity(DEFAULT_STACK_SIZE),
@@ -454,9 +486,7 @@ impl CognitionState {
     error.error.push_str(e);
     error.str_word = match w {
       None => None,
-      Some(v) => {
-        Some(v.expect_word("CognitionState::eval_error(): Bad argument type").clone())
-      },
+      Some(v) => Some(v.expect_word("CognitionState::eval_error(): Bad argument type").clone()),
     };
     if let None = self.current_ref().err_stack {
       let temp = self.pool.get_stack(1);
@@ -491,6 +521,64 @@ impl CognitionState {
     (found && cur.sflag) || (!found && !cur.sflag)
   }
 
+  pub fn contain_copy(&mut self, old: &Container, new: &mut Container) {
+    for v in old.stack.iter() {
+      new.stack.push(self.value_copy(v));
+    }
+    if let Some(err_stack) = &old.err_stack {
+      new.err_stack = Some(self.pool.get_stack(err_stack.len()));
+      let new_err_stack = new.err_stack.as_mut().unwrap();
+      for v in err_stack.iter() {
+        new_err_stack.push(self.value_copy(v));
+      }
+    }
+    // TODO: finish list
+  }
+
+  pub fn value_copy(&mut self, v: &Value) -> Value {
+    match v {
+      Value::Word(vword) => {
+        let mut new_v = self.pool.get_vword(vword.str_word.len());
+        let Value::Word(new_vword) = &mut new_v else { panic!("Pool::get_vword failed") };
+        new_vword.str_word.push_str(&vword.str_word);
+        new_v
+      },
+      Value::Stack(vstack) => {
+        let mut new_v = self.pool.get_vstack(vstack.container.stack.len());
+        let Value::Stack(new_vstack) = &mut new_v else { panic!("Pool:get_vstack failed") };
+        self.contain_copy(&vstack.container, &mut new_vstack.container);
+        new_v
+      },
+      Value::Macro(vmacro) => {
+        let mut new_v = self.pool.get_vmacro(vmacro.macro_stack.len());
+        let Value::Macro(new_vmacro) = &mut new_v else { panic!("Pool:get_vmacro failed") };
+        for v in vmacro.macro_stack.iter() {
+          new_vmacro.macro_stack.push(self.value_copy(v));
+        }
+        new_v
+      },
+      Value::Error(verror) => {
+        let mut new_v = self.pool.get_verror(verror.error.len());
+        let Value::Error(new_verror) = &mut new_v else { panic!("Pool::get_verror failed") };
+        new_verror.error.push_str(&verror.error);
+        if let Some(ref word) = verror.str_word {
+          let mut new_word = self.pool.get_string(word.len());
+          new_word.push_str(word);
+          new_verror.str_word = Some(new_word);
+        }
+        new_v
+      },
+      Value::Custom(vcustom) => {
+        let new_v = self.pool.get_vcustom(vcustom.custom.copyfunc());
+        new_v
+      },
+      Value::FLLib(vfllib) => {
+        let new_v = self.pool.get_vfllib(vfllib.fllib);
+        new_v
+      },
+    }
+  }
+
   pub fn current(&mut self) -> &mut Container {
     self.stack.last_mut().expect("Cognition metastack was empty").metastack_container()
   }
@@ -512,24 +600,216 @@ impl CognitionState {
     self.current().stack.push(wrapper);
   }
 
+  // don't increment crank
   pub fn evalf(mut self, _v: &Value) -> Self {
     self.i = 0;
     self
   }
-
-  fn eval_value(mut self, _val: &Value) -> Self {
-    self.i = 0;
+  fn try_evalf(mut self, v: Value, always_evalf: bool) -> Self {
+    self = 'crank: {
+      if !always_evalf {
+        if let Some(cranks) = &self.current_ref().cranks {
+          if let Some(crank) = cranks.first() {
+            if crank.modulo == 1 || crank.base == 1 {
+              break 'crank self;
+            }
+          }
+        }
+      }
+      self.evalf(&v)
+    };
+    self.pool.add_val(v);
     self
   }
 
-  fn evalstack_ref(mut self, _val: *const Value, callword: Option<&Value>, _family: &mut Family) -> Self {
-    if let None = callword { return self }
-    self.i = 0;
+  fn evalword_in_cur(mut self, v: Value, callword: Option<&Value>, family: &mut Family,
+                     always_evalf: bool, only_evalf: bool, do_crank: bool, not_cranked: &mut bool,
+                     word_def: &mut Option<WordDef>, word_key: &mut Option<String>) -> Self {
+
+    let Value::Word(word) = &v else { panic!("CognitionState::evalword(): Bad argument type") };
+    let cur = self.current();
+    if !only_evalf {
+      if let Some(wt) = &mut cur.word_table {
+        if let Some(wdef) = wt.get_mut(&word.str_word) {
+
+          *word_def = wdef.take();
+
+          if let Some(WordDef::Val(_)) = word_def {
+            *word_key = Some(word.str_word.clone());
+            let Some(WordDef::Val(dval)) = &word_def else { unreachable!() };
+
+            match dval {
+              Value::Stack(_) => {
+                *wdef = Some(WordDef::Ref(DefRef::D(dval as *const Value)));
+                self.pool.add_val(v);
+                return self.evalstack_ref(dval as *const Value, callword, family);
+              },
+              Value::Macro(_) => {
+                *wdef = Some(WordDef::Ref(DefRef::M(dval as *const Value)));
+                self.pool.add_val(v);
+                return self.evalmacro_ref(dval as *const Value, callword, family);
+              },
+              _ => panic!("Bad value type in word table")
+            }
+          }
+
+          else if let Some(WordDef::Ref(ref defref)) = word_def {
+            match defref {
+              DefRef::D(dval_pointer) => {
+                let defptr = dval_pointer.clone();
+                *wdef = word_def.take();
+                self.pool.add_val(v);
+                return self.evalstack_ref(defptr, callword, family);
+              },
+              DefRef::M(mval_pointer) => {
+                let defptr = mval_pointer.clone();
+                *wdef = word_def.take();
+                self.pool.add_val(v);
+                return self.evalmacro_ref(defptr, callword, family);
+              },
+            }
+          }
+        }
+      }
+    }
+    if cur.isfalias(&v) { return self.try_evalf(v, always_evalf); }
+    self.push_quoted(v);
+    if do_crank { *not_cranked = false; self.crank() }
+    else { self }
+  }
+
+  fn evalword(mut self, v: Value, callword: Option<&Value>, family: &mut Family,
+              local_family: &mut Family,  always_evalf: bool, only_evalf: bool, do_crank: bool,
+              not_cranked: &mut bool, word_def: &mut Option<WordDef>, word_key: &mut Option<String>) -> Self {
+
+    let Value::Word(word) = &v else { panic!("CognitionState::evalword(): Bad argument type") };
+    loop {
+      let Some(family_stack) = family.pop() else {
+        // Assuming family stack has failed
+        break self.evalword_in_cur(v, callword, family, always_evalf, only_evalf,
+                                   do_crank, not_cranked, word_def, word_key);
+      };
+
+      // Dereference read-only family stack pointer
+      // This points to a value which is currently
+      // being held in an evalstack() instance, so
+      // the memory is always available and static.
+      let family_container = unsafe {
+        let Value::Stack(ref family_vstack) = *family_stack else { panic!("Bad value in family stack") };
+        let family_vstack: &VStack = family_vstack; // debugging
+        &family_vstack.container
+      };
+      if !only_evalf {
+        if let Some(wt) = &family_container.word_table {
+          if let Some(Some(wdef)) = wt.get(&word.str_word) {
+            self.pool.add_val(v);
+            match wdef {
+              WordDef::Val(dval) => {
+                match dval {
+                  Value::Stack(_) => break self.evalstack_ref(dval as *const Value, callword, family),
+                  Value::Macro(_) => break self.evalmacro_ref(dval as *const Value, callword, family),
+                  _ => panic!("Bad value type in word table"),
+                }
+              },
+              WordDef::Ref(DefRef::D(dval_pointer)) => break self.evalstack_ref(dval_pointer.clone(), callword, family),
+              WordDef::Ref(DefRef::M(mval_pointer)) => break self.evalmacro_ref(mval_pointer.clone(), callword, family),
+            }
+          }
+        }
+      }
+      if family_container.isfalias(&v) {
+        break self.try_evalf(v, always_evalf);
+      }
+      local_family.push(family_stack);
+    }
+  }
+
+  fn eval_value(mut self, v: Value, callword: Option<&Value>, family: &mut Family,
+                local_family: &mut Family, always_evalf: bool, only_evalf: bool, do_crank: bool) -> Self {
+
+    // Ensure the current container doesn't die so we can increment the crank later
+    let cur = self.current();
+    let original_cur_state = cur.state.clone();
+    cur.state = RefState::Dependent;
+    let original_cur_pointer = cur as *mut Container;
+
+    let mut not_cranked: bool = true;
+    let mut word_def: Option<WordDef> = None;
+    let mut word_key: Option<String> = None;
+    self = match &v {
+      Value::Word(_) => self.evalword(v, callword, family, local_family, always_evalf, only_evalf,
+                                      do_crank, &mut not_cranked, &mut word_def, &mut word_key),
+      Value::Error(_) => panic!("VError on stack"),
+      Value::Custom(_) => {
+        self.push_quoted(v);
+        if do_crank { not_cranked = false; self.crank() }
+        else { self }
+      },
+      Value::FLLib(vfllib) => {
+        let fllib = vfllib.fllib.clone();
+        self.pool.add_val(v);
+        fllib(self, callword.clone())
+      },
+      _ => {
+        self.current().stack.push(v);
+        if do_crank { not_cranked = false; self.crank() }
+        else { self }
+      },
+    };
+
+    while let Some(f) = local_family.pop() { family.push(f); }
+
+    // Access the original current container
+    unsafe {
+      if let RefState::Dependent = (*original_cur_pointer).state {
+        if let Some(ref key) = word_key {
+          if let Some(wt) = (*original_cur_pointer).word_table.as_mut() {  // take *mut WordTable pointer?
+            wt.insert_stolen_value(key, word_def); } }
+        if do_crank && not_cranked { (*original_cur_pointer).inc_crank(); }
+        (*original_cur_pointer).state = original_cur_state;
+      }
+    }
     self
   }
-  fn evalmacro_ref(mut self, _val: *const Value, callword: Option<&Value>, _family: &mut Family) -> Self {
-    if let None = callword { return self }
-    self.i = 0;
+
+  // don't crank last value
+  fn evalstack_ref(mut self, val: *const Value, callword: Option<&Value>, family: &mut Family) -> Self {
+    family.push(val);
+    // Evalword promises this pointer is a valid and unique reference
+    let Value::Stack(vstack) = (unsafe {&*val}) else { panic!("CognitionState::evalstack_ref(): Bad argument type") };
+    let stack = &vstack.container.stack;
+    let mut local_family = self.pool.get_family();
+
+    if let Some(v) = stack.first() {
+      // First value always evaluated
+      let new_v = self.value_copy(v);
+      self = self.eval_value(new_v, callword, family, &mut local_family, true, false, stack.len() > 1);
+      // Loop over stack, not cranking last value
+      let n = stack.len();
+      for i in 1..n {
+        let new_v = self.value_copy(&stack[i]);
+        eval_value_if_cranked!(self, new_v, callword, family, &mut local_family, i != n - 1);
+        self = self.eval_value(new_v, callword, family, &mut local_family, false, true, i != n - 1);
+      }
+    }
+
+    self.pool.add_family(local_family);
+    family.pop();
+    self
+  }
+  // don't crank
+  fn evalmacro_ref(mut self, val: *const Value, callword: Option<&Value>, family: &mut Family) -> Self {
+    // Evalword promises this pointer is a valid and unique reference
+    let Value::Macro(vmacro) = (unsafe {&*val}) else { panic!("CognitionState::evalmacro_ref(): Bad argument type") };
+    let macro_stack = &vmacro.macro_stack;
+    let mut local_family = self.pool.get_family();
+
+    for v in macro_stack.iter() {
+      let new_v = self.value_copy(v);
+      self = self.eval_value(new_v, callword, family, &mut local_family, true, false, false);
+    }
+
+    self.pool.add_family(local_family);
     self
   }
 
@@ -537,130 +817,41 @@ impl CognitionState {
     family.push(&val as *const Value);
     let Value::Stack(vstack) = &mut val else { panic!("CognitionState::evalstack(): Bad argument type") };
     let stack = &mut vstack.container.stack;
-
     let mut local_family = self.pool.get_family();
 
     stack.reverse();
 
-    let Some(v) = stack.pop() else { return self };
-    //self = self.eval_value(v);
-    match &v {
-      Value::Word(word) => {
-
-        let mut family_container: &Container;
-        self = loop {
-          let Some(family_stack) = family.pop() else {
-            self.push_quoted(v);
-            break self;
-          };
-          // Dereference read-only family stack pointer
-          // This points to a value which is currently
-          // being held in an evalstack() instance, so
-          // the memory is always available and static.
-          unsafe {
-            let Value::Stack(family_vstack) = &*family_stack else { panic!("Bad value in family stack") };
-            let family_vstack: &VStack = family_vstack; // debugging
-            family_container = &family_vstack.container;
-          }
-          if let Some(wt) = &family_container.word_table {
-            if let Some(wdef) = wt.get(&word.str_word) {
-              self.pool.add_val(v);
-              match wdef {
-                WordDef::Val(dval) => {
-                  match dval {
-                    Value::Stack(_) => break self.evalstack_ref(dval as *const Value, callword, family),
-                    Value::Macro(_) => break self.evalmacro_ref(dval as *const Value, callword, family),
-                    _ => panic!("Bad value type in word table"),
-                  }
-                },
-                WordDef::DRef(dval_pointer) => break self.evalstack_ref(dval_pointer.clone(), callword, family),
-                WordDef::MRef(mval_pointer) => break self.evalmacro_ref(mval_pointer.clone(), callword, family),
-              }
-            }
-          }
-          if family_container.isfalias(&v) {
-            self = 'crank: {
-              if let Some(cranks) = &self.current_ref().cranks {
-                if let Some(crank) = cranks.first() {
-                  if crank.modulo == 1 || crank.base == 1 {
-                    break 'crank self;
-                  }
-                }
-              }
-              self.evalf(&v)
-            };
-            self.pool.add_val(v);
-            break self;
-          }
-
-          local_family.push(family_stack);
-        };
-        while let Some(f) = local_family.pop() { family.push(f); }
-
-
-      },
-
-
-
-      _ => {
-        self.push_quoted(v);
-      }
+    // First value is always evaluated
+    if let Some(v) = stack.pop() {
+      self = self.eval_value(v, callword, family, &mut local_family, true, false, true);
+    }
+    // Loop over stack
+    while let Some(v) = stack.pop() {
+      eval_value_if_cranked!(self, v, callword, family, &mut local_family, true);
+      self = self.eval_value(v, callword, family, &mut local_family, false, true, true);
     }
 
-
-                // TODO: Replace with pool-aware hashtable when it comes available
-                //       The new hashtable will also return the original key with
-                //       remove() so that it can be used later in insertion
-                // let Some(WordDef::Val(definition)) = wt.remove(&w.str_word) else { unreachable!() };
-                // let mut tmpkey = self.pool.get_string(w.str_word.len());
-                // tmpkey.push_str(&w.str_word);
-                // match &definition {
-                //   Value::Stack(_) => {
-                //     wt.insert(tmpkey, WordDef::DRef(&definition as *const Value));
-                //     self = self.evalstack_ref(&definition as *const Value, family);
-
-                //   },
-                //   Value::Macro(_) => {
-                //     wt.insert(tmpkey, WordDef::MRef(&definition as *const Value));
-                //     self = self.evalmacro_ref(&definition as *const Value, family);
-
-                //   },
-                //   _ => panic!("Bad value type in word table"),
-                // };
-
-
-
-    for v in stack[1..].iter() {
-      print!("val: ");
-      v.print("\n");
-    }
-
-
-
-    // if current container's word table had to be used:
-    let cur = self.current();
-    let original_cur_state = cur.state.clone();
-    cur.state = RefState::Dependent;
-    let original_cur_pointer = cur as *mut Container;
-
-
-    // stuff
-
-    unsafe {
-      if let RefState::Dependent = (*original_cur_pointer).state {
-        let Some(_wt) = &mut (*original_cur_pointer).word_table else { panic!("Current container: word table destroyed") };
-        //wt.insert(tmpkey, WordDef::Val(definition));
-        (*original_cur_pointer).inc_crank();
-        (*original_cur_pointer).state = original_cur_state;
-      }
-    }
-    // done
-
+    self.pool.add_family(local_family);
+    family.pop();
     self
   }
 
-  fn evalmacro(mut self, _vmacro: Value, _callword: Option<Value>, _family: &mut Family) -> Self {
-    self.i = 1;
+  // crank once
+  fn evalmacro(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family) -> Self {
+    let Value::Macro(vmacro) = &mut val else { panic!("CognitionState::evalmacro(): Bad argument type") };
+    let macro_stack = &mut vmacro.macro_stack;
+    let mut local_family = self.pool.get_family();
+
+    macro_stack.reverse();
+
+    while let Some(v) = macro_stack.pop() {
+      match macro_stack.len() {
+        0 => self = self.eval_value(v, callword, family, &mut local_family, true, false, true),
+        _ => self = self.eval_value(v, callword, family, &mut local_family, true, false, false),
+      }
+    }
+
+    self.pool.add_family(local_family);
     self
   }
 
