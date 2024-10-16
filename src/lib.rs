@@ -601,8 +601,15 @@ impl CognitionState {
   }
 
   // don't increment crank
-  pub fn evalf(mut self, _v: &Value) -> Self {
-    self.i = 0;
+  pub fn evalf(mut self, alias: &Value) -> Self {
+    let Some(v) = self.current().stack.pop() else { self.eval_error("EMPTY STACK", Some(alias)); return self };
+    let mut family = self.pool.get_family();
+    self = match &v {
+      Value::Stack(_) => self.evalstack(v, None, &mut family, false),
+      Value::Macro(_) => self.evalmacro(v, None, &mut family, false),
+      _ => panic!("Bad value on stack"),
+    };
+    self.pool.add_family(family);
     self
   }
   fn try_evalf(mut self, v: Value, always_evalf: bool) -> Self {
@@ -813,7 +820,7 @@ impl CognitionState {
     self
   }
 
-  fn evalstack(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family) -> Self {
+  fn evalstack(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family, crank_last: bool) -> Self {
     family.push(&val as *const Value);
     let Value::Stack(vstack) = &mut val else { panic!("CognitionState::evalstack(): Bad argument type") };
     let stack = &mut vstack.container.stack;
@@ -823,12 +830,12 @@ impl CognitionState {
 
     // First value is always evaluated
     if let Some(v) = stack.pop() {
-      self = self.eval_value(v, callword, family, &mut local_family, true, false, true);
+      self = self.eval_value(v, callword, family, &mut local_family, true, false, crank_last || stack.len() != 0);
     }
     // Loop over stack
     while let Some(v) = stack.pop() {
-      eval_value_if_cranked!(self, v, callword, family, &mut local_family, true);
-      self = self.eval_value(v, callword, family, &mut local_family, false, true, true);
+      eval_value_if_cranked!(self, v, callword, family, &mut local_family, crank_last || stack.len() != 0);
+      self = self.eval_value(v, callword, family, &mut local_family, false, true, crank_last || stack.len() != 0);
     }
 
     self.pool.add_family(local_family);
@@ -837,7 +844,7 @@ impl CognitionState {
   }
 
   // crank once
-  fn evalmacro(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family) -> Self {
+  fn evalmacro(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family, crank_last: bool) -> Self {
     let Value::Macro(vmacro) = &mut val else { panic!("CognitionState::evalmacro(): Bad argument type") };
     let macro_stack = &mut vmacro.macro_stack;
     let mut local_family = self.pool.get_family();
@@ -845,10 +852,7 @@ impl CognitionState {
     macro_stack.reverse();
 
     while let Some(v) = macro_stack.pop() {
-      match macro_stack.len() {
-        0 => self = self.eval_value(v, callword, family, &mut local_family, true, false, true),
-        _ => self = self.eval_value(v, callword, family, &mut local_family, true, false, false),
-      }
+      self = self.eval_value(v, callword, family, &mut local_family, true, false, macro_stack.len() == 0 && crank_last);
     }
 
     self.pool.add_family(local_family);
@@ -878,8 +882,8 @@ impl CognitionState {
     let needseval = cur.stack.remove(fixedindex as usize);
     let mut family = self.pool.get_family();
     match needseval {
-      Value::Stack(_) => self.push_cur(cur_v).evalstack(needseval, None, &mut family),
-      Value::Macro(_) => self.push_cur(cur_v).evalmacro(needseval, None, &mut family),
+      Value::Stack(_) => self.push_cur(cur_v).evalstack(needseval, None, &mut family, true),
+      Value::Macro(_) => self.push_cur(cur_v).evalmacro(needseval, None, &mut family, true),
       _ => panic!("Bad value on stack"),
     }
   }
