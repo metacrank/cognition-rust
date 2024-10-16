@@ -10,6 +10,11 @@ pub const DEFAULT_STRING_LENGTH: usize = 24;
 pub const DEFAULT_WORD_TABLE_SIZE: usize = 576;
 
 #[macro_export]
+macro_rules! bad_value_err {
+  () => { panic!("Bad value on stack") };
+}
+
+#[macro_export]
 macro_rules! default_fprint_error {
   ($e:literal) => {
     print!("Value::fprint(): error: ");

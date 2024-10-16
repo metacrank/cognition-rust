@@ -11,10 +11,9 @@ pub fn cog_clear(mut state: CognitionState, _v: Option<&Value>) -> CognitionStat
 
 pub fn cog_drop(mut state: CognitionState, v: Option<&Value>) -> CognitionState {
   match state.current().stack.pop() {
-    Some(v1) => state.pool.add_val(v1),
-    None => state.eval_error("", v),
+    Some(v1) => { state.pool.add_val(v1); state },
+    None     => { state.eval_error("", v) },
   }
-  state
 }
 
 pub fn add_words(state: &mut CognitionState) {

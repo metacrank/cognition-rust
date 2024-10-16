@@ -209,6 +209,11 @@ fn print_end(state: &CognitionState) {
     println!("uninitialized crank");
   }
   println!("");
+
+  println!("Pool:");
+  state.pool.print();
+  println!("");
+
   if let Some(code) = &state.exit_code {
     print!("Exit code: '");
     code.print_pretty();

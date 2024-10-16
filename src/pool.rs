@@ -18,18 +18,18 @@ pub struct Pool {
   crankss: Option<ITree<Cranks>>,
   word_tables: Option<Vec<WordTable>>,
   families: Option<Vec<Family>>,
-
-  i: i32, // to keep rust-analyzer happy for the moment
 }
 
 trait DisregardPool {
   fn pnew(_p: &mut Pool) -> Self;
+  fn pdrop(_p: &mut Pool, _v: Self);
 }
 
 impl<T> DisregardPool for Vec<T> {
   fn pnew(_p: &mut Pool) -> Self {
     Self::with_capacity(DEFAULT_STACK_SIZE)
   }
+  fn pdrop(_p: &mut Pool, _v: Self) {}
 }
 
 macro_rules! pool_insert {
@@ -60,6 +60,30 @@ macro_rules! pool_push_val {
     pool_push!($v,$self,$stack,$self.get_stack_for_pool());
   }
 }
+macro_rules! pool_remove_word {
+  ($self:ident,$tree:expr,$capacity:expr,$letpattern:pat,$mod:block) => {
+    if let Some(mut tree) = $tree.take() {
+      if let Some(mut retval) = tree.remove_at_least($capacity, Self::add_stack, $self) {
+        let $letpattern = &mut retval else { panic!("Bad value type in pool tree") };
+        $mod;
+        $tree = Some(tree);
+        return retval;
+      }
+      $tree = Some(tree);
+    }
+  }
+}
+macro_rules! pool_pop_word {
+  ($stack:expr,$letpattern:pat,$mod:block) => {
+    if let Some(stack) = &mut $stack {
+      if let Some(mut v) = stack.pop() {
+        let $letpattern = &mut v else { panic!("Bad value type in pool tree") };
+        $mod;
+        return v;
+      }
+    }
+  };
+}
 
 impl Pool {
   pub fn new() -> Pool {
@@ -77,8 +101,54 @@ impl Pool {
       crankss: None,
       word_tables: None,
       families: None,
+    }
+  }
 
-      i: 0
+  pub fn print(&self) {
+    if let Some(ref vwords) = self.vwords {
+      println!("vwords:");
+      vwords.print();
+    }
+    if let Some(ref vstacks) = self.vstacks {
+      println!("vstacks:");
+      vstacks.print();
+    }
+    if let Some(ref vmacros) = self.vmacros {
+      println!("vmacros:");
+      vmacros.print();
+    }
+    if let Some(ref verrors) = self.verrors {
+      println!("verrors:");
+      verrors.print();
+    }
+    if let Some(ref vcustoms) = self.vcustoms {
+      println!("vcustoms: {}", vcustoms.len());
+    }
+    if let Some(ref vfllibs) = self.vfllibs {
+      println!("vfllibs: {}", vfllibs.len());
+    }
+
+    if let Some(ref stacks) = self.stacks {
+      println!("stacks:");
+      stacks.print();
+    }
+    if let Some(ref strings) = self.strings {
+      println!("strings:");
+      strings.print();
+    }
+    if let Some(ref stringss) = self.stringss {
+      println!("stringss:");
+      stringss.print();
+    }
+    if let Some(ref crankss) = self.crankss {
+      println!("crankss:");
+      crankss.print();
+    }
+    if let Some(ref word_tables) = self.word_tables {
+      println!("word_tables: {}", word_tables.len());
+    }
+    if let Some(ref families) = self.families {
+      println!("families: {}", families.len());
     }
   }
 
@@ -113,56 +183,145 @@ impl Pool {
   }
 
   pub fn get_vword(&mut self, capacity: usize) -> Value {
+    pool_remove_word!(self, self.vwords, capacity, Value::Word(vword), {
+      vword.str_word.clear();
+    });
     Value::Word(Box::new(VWord::with_capacity(capacity)))
   }
   pub fn get_vstack(&mut self, capacity: usize) -> Value {
-    if let Some(mut tree) = self.vstacks.take() {
-      if let Some(mut retval) = tree.remove_at_least(capacity, Self::add_stack, self) {
-        let Value::Stack(vstack) = &mut retval else { panic!("Bad value type in pool tree") };
-        vstack.container.state = RefState::Recycled;
-        return retval;
+    pool_remove_word!(self, self.vstacks, capacity, Value::Stack(vstack), {
+      let container = &mut vstack.container;
+      while let Some(v) = container.stack.pop() {
+        self.add_val(v);
       }
-      self.vstacks = Some(tree);
-    }
+      if container.err_stack.is_some() {
+        self.add_stack(container.err_stack.take().unwrap());
+      }
+      if container.cranks.is_some() {
+        self.add_cranks(container.cranks.take().unwrap());
+      }
+      if container.faliases.is_some() {
+        self.add_strings(container.faliases.take().unwrap());
+      }
+      if container.delims.is_some() {
+        self.add_string(container.delims.take().unwrap());
+      }
+      if container.ignored.is_some() {
+        self.add_string(container.ignored.take().unwrap());
+      }
+      if container.singlets.is_some() {
+        self.add_string(container.singlets.take().unwrap());
+      }
+      container.dflag = false;
+      container.iflag = true;
+      container.sflag = true;
+      container.state = RefState::Recycled;
+      if container.word_table.is_some() {
+        self.add_word_table(container.word_table.take().unwrap());
+      }
+    });
     Value::Stack(Box::new(VStack::with_container(Container::with_stack(self.get_stack(capacity)))))
   }
   pub fn get_vmacro(&mut self, capacity: usize) -> Value {
+    pool_remove_word!(self, self.vmacros, capacity, Value::Macro(vmacro), {
+      while let Some(v) = vmacro.macro_stack.pop() {
+        self.add_val(v);
+      }
+    });
     Value::Macro(Box::new(VMacro::with_capacity(capacity)))
   }
   pub fn get_verror(&mut self, capacity: usize) -> Value {
+    pool_remove_word!(self, self.verrors, capacity, Value::Error(verror), {
+      verror.error.clear();
+      if verror.str_word.is_some() {
+        self.add_string(verror.str_word.take().unwrap());
+      }
+    });
     Value::Error(Box::new(VError::with_capacity(capacity)))
   }
   pub fn get_vcustom(&mut self, custom: Box<dyn Custom>) -> Value {
+    pool_pop_word!(self.vcustoms, Value::Custom(vcustom), {
+      vcustom.custom = custom;
+    });
     Value::Custom(Box::new(VCustom { custom }))
   }
   pub fn get_vfllib(&mut self, f: CognitionFunction) -> Value {
+    pool_pop_word!(self.vfllibs, Value::FLLib(vfllib), {
+      vfllib.fllib = f;
+    });
     Value::FLLib(Box::new(VFLLib::with_fn(f)))
   }
 
   pub fn get_stack(&mut self, capacity: usize) -> Stack {
+    if let Some(mut tree) = self.stacks.take() {
+      if let Some(mut retval) = tree.remove_at_least(capacity, Vec::<Stack>::pdrop, self) {
+        while let Some(v) = retval.pop() {
+          self.add_val(v);
+        }
+        self.stacks = Some(tree);
+        return retval;
+      }
+      self.stacks = Some(tree);
+    }
     Stack::with_capacity(capacity)
   }
   pub fn get_stack_for_pool(&mut self) -> Stack {
     self.get_stack(DEFAULT_STACK_SIZE)
   }
   pub fn get_string(&mut self, capacity: usize) -> String {
+    if let Some(mut tree) = self.strings.take() {
+      if let Some(mut retval) = tree.remove_at_least(capacity, Self::add_strings, self) {
+        retval.clear();
+        self.strings = Some(tree);
+        return retval;
+      }
+      self.strings = Some(tree);
+    }
     String::with_capacity(capacity)
   }
   pub fn get_strings(&mut self, capacity: usize) -> Strings {
+    if let Some(mut tree) = self.stringss.take() {
+      if let Some(mut retval) = tree.remove_at_least(capacity, Vec::<Strings>::pdrop, self) {
+        while let Some(s) = retval.pop() {
+          self.add_string(s);
+        }
+        self.stringss = Some(tree);
+        return retval;
+      }
+      self.stringss = Some(tree);
+    }
     Strings::with_capacity(capacity)
   }
   pub fn get_strings_for_pool(&mut self) -> Strings {
     self.get_strings(DEFAULT_STACK_SIZE)
   }
   pub fn get_cranks(&mut self, capacity: usize) -> Cranks {
+    if let Some(mut tree) = self.crankss.take() {
+      if let Some(mut retval) = tree.remove_at_least(capacity, Vec::<Cranks>::pdrop, self) {
+        retval.clear();
+        self.crankss= Some(tree);
+        return retval;
+      }
+      self.crankss = Some(tree);
+    }
     Cranks::with_capacity(capacity)
   }
   pub fn get_word_table(&mut self) -> WordTable {
+    if let Some(word_tables) = &mut self.word_tables {
+      if let Some(mut wt) = word_tables.pop() {
+        for (key, word_def) in wt.drain() {
+          self.add_string(key);
+          if let Some(WordDef::Val(v)) = word_def { self.add_val(v); }
+        }
+        return wt;
+      }
+    }
     WordTable::new()
   }
   pub fn get_family(&mut self) -> Family {
     if let Some(stack) = &mut self.families {
       if let Some(mut family) = stack.pop() {
+        // Families should be pushed to the pool already empty, but just in case
         family.clear();
         return family;
       }
