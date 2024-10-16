@@ -2,7 +2,6 @@ use crate::*;
 
 pub fn cog_crank(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   // minimal crank, only handles crank 1
-
   let cur = state.current();
   let Some(v) = cur.stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let stack = v.value_stack_ref();

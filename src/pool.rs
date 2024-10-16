@@ -182,6 +182,12 @@ impl Pool {
     pool_push!(f, self, self.families, Vec::<Family>::with_capacity(DEFAULT_STACK_SIZE));
   }
 
+  pub fn add_def(&mut self, definition: (Option<String>, Option<WordDef>)) {
+    self.add_string(definition.0.unwrap());
+    let Some(WordDef::Val(val)) = definition.1 else { panic!("Pool::add_def(): definition lost") };
+    self.add_val(val);
+  }
+
   pub fn get_vword(&mut self, capacity: usize) -> Value {
     pool_remove_word!(self, self.vwords, capacity, Value::Word(vword), {
       vword.str_word.clear();
@@ -215,7 +221,7 @@ impl Pool {
       container.dflag = false;
       container.iflag = true;
       container.sflag = true;
-      container.state = RefState::Recycled;
+      container.dependent = false;
       if container.word_table.is_some() {
         self.add_word_table(container.word_table.take().unwrap());
       }
@@ -239,7 +245,7 @@ impl Pool {
     });
     Value::Error(Box::new(VError::with_capacity(capacity)))
   }
-  pub fn get_vcustom(&mut self, custom: Box<dyn Custom>) -> Value {
+  pub fn get_vcustom(&mut self, custom: Box<dyn Custom + Send>) -> Value {
     pool_pop_word!(self.vcustoms, Value::Custom(vcustom), {
       vcustom.custom = custom;
     });
