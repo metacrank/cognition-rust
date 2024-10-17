@@ -328,7 +328,7 @@ impl Pool {
     if let Some(stack) = &mut self.families {
       if let Some(mut family) = stack.pop() {
         // Families should be pushed to the pool already empty, but just in case
-        family.clear();
+        family.stack.clear();
         return family;
       }
     }

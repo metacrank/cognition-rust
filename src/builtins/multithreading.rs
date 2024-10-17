@@ -1,6 +1,18 @@
 use crate::*;
-//use std::thread;
+use std::thread;
 //use std::time::Duration;
+
+struct ThreadCustom { handle: thread::JoinHandle<CognitionState> }
+impl Custom for ThreadCustom {
+  fn printfunc(&self, f: &mut dyn Write) {
+    fwrite_check_pretty!(f, b"(thread)");
+  }
+  fn copyfunc(&self) -> Box<dyn Custom + Send> {
+    Box::new(Void{})
+  }
+}
+/// Never use! Never send a ThreadCustom to another thread
+unsafe impl Send for ThreadCustom {}
 
 // [  ] spawn -> [ (thread) ]
 // Takes a stack and turns it into a new cognition instance running in another thread
@@ -18,6 +30,7 @@ pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState
 
   let mut metastack = state.pool.get_stack(DEFAULT_STACK_SIZE);
   metastack.push(v);
+
   let mut cogstate = CognitionState::new(metastack);
   state.args.reverse();
   while let Some(arg) = state.args.pop() {
@@ -27,9 +40,10 @@ pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     let new_arg = state.string_copy(arg);
     state.args.push(new_arg);
   }
-  // let handle = thread::spawn(move || {
-  //   cogstate.crank();
-  // });
+  let _handle = thread::spawn(move || {
+    cogstate.crank()
+  });
+
   state
 }
 

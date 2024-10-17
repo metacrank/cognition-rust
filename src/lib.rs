@@ -22,7 +22,19 @@ pub type Cranks = Vec<Crank>;
 pub type Strings = Vec<String>;
 pub type Faliases = Strings;
 pub type WordTable = HashMap<String, Option<WordDef>>;
-pub type Family = Vec<*const Value>;
+
+pub struct Family { stack: Vec<*const Value> }
+
+impl Family {
+  fn new() -> Self { Self { stack: Vec::<*const Value>::new() } }
+  fn with_capacity(capacity: usize) -> Self {
+    Self { stack: Vec::<*const Value>::with_capacity(capacity) }
+  }
+}
+
+/// Only send families which are going to be
+/// completely reused: families in a pool
+unsafe impl Send for Family {}
 
 pub trait Pretty {
   fn print_pretty(&self);
@@ -755,7 +767,7 @@ impl CognitionState {
 
     let Value::Word(word) = &v else { panic!("CognitionState::evalword(): Bad argument type") };
     loop {
-      let Some(family_stack) = family.pop() else {
+      let Some(family_stack) = family.stack.pop() else {
         // Assuming family stack has failed
         break self.evalword_in_cur(v, family, always_evalf, only_evalf, definition);
       };
@@ -791,7 +803,7 @@ impl CognitionState {
       if family_container.isfalias(&v) {
         break self.try_evalf(v, always_evalf);
       }
-      local_family.push(family_stack);
+      local_family.stack.push(family_stack);
     }
   }
 
@@ -826,7 +838,7 @@ impl CognitionState {
       },
     };
 
-    while let Some(f) = local_family.pop() { family.push(f); }
+    while let Some(f) = local_family.stack.pop() { family.stack.push(f); }
 
     // Access the original current container
     // Refactor this code into more safe functions
@@ -848,7 +860,7 @@ impl CognitionState {
 
   // don't crank last value
   fn evalstack_ref(mut self, val: *const Value, callword: Option<&Value>, family: &mut Family) -> Self {
-    family.push(val);
+    family.stack.push(val);
     // Evalword promises this pointer is a valid and unique reference
     let Value::Stack(vstack) = (unsafe {&*val}) else { panic!("CognitionState::evalstack_ref(): Bad argument type") };
     let stack = &vstack.container.stack;
@@ -870,7 +882,7 @@ impl CognitionState {
     }
 
     self.pool.add_family(local_family);
-    family.pop();
+    family.stack.pop();
     self
   }
   // don't crank
@@ -891,7 +903,7 @@ impl CognitionState {
   }
 
   fn evalstack(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family, crank_last: bool) -> Self {
-    family.push(&val as *const Value);
+    family.stack.push(&val as *const Value);
     let Value::Stack(vstack) = &mut val else { panic!("CognitionState::evalstack(): Bad argument type") };
     let stack = &mut vstack.container.stack;
     let mut local_family = self.pool.get_family();
@@ -912,7 +924,7 @@ impl CognitionState {
 
     self.pool.add_family(local_family);
     self.pool.add_val(val);
-    family.pop();
+    family.stack.pop();
     self
   }
 
@@ -934,7 +946,6 @@ impl CognitionState {
     self
   }
 
-  // Somehow overflows stack while trying to crank stuff
   fn crank(mut self) -> Self {
     let mut cur_v = self.pop_cur();
     let cur = cur_v.metastack_container();
