@@ -68,13 +68,40 @@ macro_rules! fwrite_check_pretty {
 }
 // pub(crate) use fwrite_check_pretty;
 
+/// build_macro! ensures that the macro stack requested from the pool is of appropriate
+/// length no matter the number of function pointer arguments. It does this by keeping
+/// a running 'Peano' count (0+1+1+1+..) as it recursively reverses the order of those
+/// arguments. It then passes the reversed list to itself to recursively build the macro.
 #[macro_export]
 macro_rules! build_macro {
-  ($state:ident) => {
-    $state.pool.get_vmacro($crate::macros::DEFAULT_STACK_SIZE)
+  // base case
+  ($state:ident,$n:expr) => {
+    $state.pool.get_vmacro($n)
   };
-  ($state:ident,$name:literal, $f:ident) => {{
-    let mut m = build_macro!($state);
+  // handle recursion
+  ($state:ident,$n:expr,$fn:ident $(,$fi:ident)*) => {{
+    let mut m = build_macro!($state, $n $(,$fi)*);
+    let $crate::Value::Macro(vmacro) = &mut m else { panic!("Pool::get_vmacro() failed") };
+    let v = $state.pool.get_vfllib($fn);
+    vmacro.macro_stack.push(v);
+    m
+  }};
+  // reverse and count arguments
+  ($state:ident,$n:expr,[] $($fr:ident)*) => {
+    build_macro!($state, $n $(,$fr)*)
+  };
+  ($state:ident,$n:expr,[$fn:ident $($fi:ident)*] $($fr:ident)*) => {
+    build_macro!($state, $n + 1, [$($fi)*] $fn $($fr)*)
+  }
+}
+/// add_word!(state: CognitionState, name: &'static str, f1, f2, ..., fn: CognitionFunction)
+/// mutates state and inserts a macro word containing f1, f2, ..., fn as vfllibs into state
+/// current stack's word_table. If only one CognitionFunction parameter was given, then the
+/// resulting vfllib str_word value is derived from 'name'. Otherwise, they are all nameless.
+#[macro_export]
+macro_rules! add_word {
+  ($state:ident,$name:literal,$f:ident) => {
+    let mut m = build_macro!($state, 1);
     let $crate::Value::Macro(vmacro) = &mut m else { panic!("Pool::get_vmacro() failed") };
 
     let mut v = $state.pool.get_vfllib($f);
@@ -82,31 +109,10 @@ macro_rules! build_macro {
     vfllib.str_word = Some(String::from($name));
 
     vmacro.macro_stack.push(v);
-    m
-  }};
-  ($state:ident,($fi:ident),*,$fn:ident) => {
-    let mut m = build_macro!($state, ($fi),*);
-    let $crate::Value::Macro(vmacro) = &mut m else { panic!("Pool::get_vmacro() failed") };
-
-    let v = $state.pool.get_vfllib($fn);
-    vmacro.macro_stack.push(v);
-    m
-  }
-}
-
-/// add_word!(state: CognitionState, name: &'static str, f1, f2, ... fn: CognitionFunction);
-/// will mutate state (whether or not passed in as &mut) and insert a macro word into state
-/// current stack's word_table. If only one CognitionFunction parameter was given, then the
-/// resulting fllib str_word value will be derived from 'name'. Otherwise, it will be None.
-/// Currently, add_word! only takes one CognitionFunction parameter.
-#[macro_export]
-macro_rules! add_word {
-  ($state:ident,$name:literal,$f:ident) => {
-    let m = build_macro!($state, $name, $f);
     $state.current().add_word(m, std::string::String::from($name));
   };
-  ($state:ident,$name:literal,($f:ident),*) => {
-    let m = build_macro!($state, ($f),*)
+  ($state:ident,$name:literal$ (,$f:ident)*) => {
+    let m = build_macro!($state, 0, [$($f)*]);
     $state.current().add_word(m, std::string::String::from($name));
   }
 }

@@ -38,7 +38,7 @@ pub fn cog_dup(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
 pub fn cog_ssize(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
   let size = state.current_ref().stack.len();
   let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-  let Value::Word(vword) = &mut v else { panic!("Pool::get_vword failed") };
+  let Value::Word(vword) = &mut v else { panic!("Pool::get_vword() failed") };
   vword.str_word.push_str(&size.to_string());
   state.push_quoted(v);
   state
@@ -50,4 +50,7 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "swap", cog_swap);
   add_word!(state, "dup", cog_dup);
   add_word!(state, "ssize", cog_ssize);
+  // test add_word functionality
+  add_word!(state, "dropswap", cog_drop, cog_swap);
+  add_word!(state, "dropswapdupdupssize", cog_drop, cog_swap, cog_dup, cog_dup, cog_ssize);
 }

@@ -324,10 +324,10 @@ impl Value {
           Some(ref word) => {
             fwrite_check_pretty!(f, b"'");
             word.fprint_pretty(f);
-            fwrite_check_pretty!(f, b"'");
+            fwrite_check_pretty!(f, b"':");
           }
           None => {
-            fwrite_check_pretty!(f, b"(none)");
+            fwrite_check_pretty!(f, b"(none):");
           }
         }
         fwrite_check_pretty!(f, RED);

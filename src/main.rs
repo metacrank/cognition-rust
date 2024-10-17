@@ -51,7 +51,7 @@ fn main() -> ExitCode {
   vstack.container.faliases = Container::default_faliases();
   state.stack.push(initial_stack);
 
-  state = cognition::builtins::add_builtins(state);
+  cognition::builtins::add_builtins(&mut state);
 
   for i in 0..opts.s {
     // Read code from file
