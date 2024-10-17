@@ -80,11 +80,10 @@ macro_rules! build_macro {
   };
   // handle recursion
   ($state:ident,$n:expr,$fn:ident $(,$fi:ident)*) => {{
-    let mut m = build_macro!($state, $n $(,$fi)*);
-    let $crate::Value::Macro(vmacro) = &mut m else { panic!("Pool::get_vmacro() failed") };
+    let mut vmacro = build_macro!($state, $n $(,$fi)*);
     let v = $state.pool.get_vfllib($fn);
-    vmacro.macro_stack.push(v);
-    m
+    vmacro.macro_stack.push($crate::Value::FLLib(v));
+    vmacro
   }};
   // reverse and count arguments
   ($state:ident,$n:expr,[] $($fr:ident)*) => {
@@ -101,19 +100,17 @@ macro_rules! build_macro {
 #[macro_export]
 macro_rules! add_word {
   ($state:ident,$name:literal,$f:ident) => {
-    let mut m = build_macro!($state, 1);
-    let $crate::Value::Macro(vmacro) = &mut m else { panic!("Pool::get_vmacro() failed") };
+    let mut vmacro = build_macro!($state, 1);
 
-    let mut v = $state.pool.get_vfllib($f);
-    let $crate::Value::FLLib(vfllib) = &mut v else { panic!("Pool::get_vfllib() failed") };
+    let mut vfllib = $state.pool.get_vfllib($f);
     vfllib.str_word = Some(String::from($name));
 
-    vmacro.macro_stack.push(v);
-    $state.current().add_word(m, std::string::String::from($name));
+    vmacro.macro_stack.push($crate::Value::FLLib(vfllib));
+    $state.current().add_word($crate::Value::Macro(vmacro), std::string::String::from($name));
   };
   ($state:ident,$name:literal$ (,$f:ident)*) => {
-    let m = build_macro!($state, 0, [$($f)*]);
-    $state.current().add_word(m, std::string::String::from($name));
+    let vmacro = build_macro!($state, 0, [$($f)*]);
+    $state.current().add_word($crate::Value::Macro(vmacro), std::string::String::from($name));
   }
 }
 // pub(crate) use add_word;

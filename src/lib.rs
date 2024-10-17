@@ -192,10 +192,9 @@ impl Container {
     Some(f)
   }
   pub fn isfalias(&self, v: &Value) -> bool {
-    let Value::Word(vw) = v else { return false };
     match &self.faliases {
       None => false,
-      Some(f) => f.iter().any(|s| *s == vw.str_word ),
+      Some(f) => f.iter().any(|s| *s == v.vword_ref().str_word ),
     }
   }
   pub fn add_word(&mut self, v: Value, name: String) {
@@ -298,6 +297,10 @@ pub enum Value {
   FLLib(Box<VFLLib>),
 }
 
+macro_rules! return_value_type {
+  ($self:ident,$letpat:pat,$v:tt) => {{ let $letpat = $self else { panic!("Value type assumed") }; $v }};
+}
+
 impl Value {
   pub fn print(&self, end: &'static str) {
     self.fprint(&mut stdout(), end);
@@ -378,6 +381,24 @@ impl Value {
       _ => bad_value_err!(),
     }
   }
+  pub fn vword(self) -> Box<VWord> { return_value_type!(self, Value::Word(v), v) }
+  pub fn vstack(self) -> Box<VStack> { return_value_type!(self, Value::Stack(v), v) }
+  pub fn vmacro(self) -> Box<VMacro> { return_value_type!(self, Value::Macro(v), v) }
+  pub fn verror(self) -> Box<VError> { return_value_type!(self, Value::Error(v), v) }
+  pub fn vcustom(self) -> Box<VCustom> { return_value_type!(self, Value::Custom(v), v) }
+  pub fn vfllib(self) -> Box<VFLLib> { return_value_type!(self, Value::FLLib(v), v) }
+  pub fn vword_ref(&self) -> &Box<VWord> { return_value_type!(self, Value::Word(v), v) }
+  pub fn vstack_ref(&self) -> &Box<VStack> { return_value_type!(self, Value::Stack(v), v) }
+  pub fn vmacro_ref(&self) -> &Box<VMacro> { return_value_type!(self, Value::Macro(v), v) }
+  pub fn verror_ref(&self) -> &Box<VError> { return_value_type!(self, Value::Error(v), v) }
+  pub fn vcustom_ref(&self) -> &Box<VCustom> { return_value_type!(self, Value::Custom(v), v) }
+  pub fn vfllib_ref(&self) -> &Box<VFLLib> { return_value_type!(self, Value::FLLib(v), v) }
+  pub fn vword_mut(&mut self) -> &mut Box<VWord> { return_value_type!(self, Value::Word(v), v) }
+  pub fn vstack_mut(&mut self) -> &mut Box<VStack> { return_value_type!(self, Value::Stack(v), v) }
+  pub fn vmacro_mut(&mut self) -> &mut Box<VMacro> { return_value_type!(self, Value::Macro(v), v) }
+  pub fn verror_mut(&mut self) -> &mut Box<VError> { return_value_type!(self, Value::Error(v), v) }
+  pub fn vcustom_mut(&mut self) -> &mut Box<VCustom> { return_value_type!(self, Value::Custom(v), v) }
+  pub fn vfllib_mut(&mut self) -> &mut Box<VFLLib> { return_value_type!(self, Value::FLLib(v), v) }
 }
 
 pub enum DefRef {
@@ -451,36 +472,34 @@ impl Parser<'_> {
   fn parse_word(&mut self, skipped: bool, state: &mut CognitionState) -> Option<Value> {
     let Some(c) = self.c else { return None };
     let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-    let Value::Word(vword) = &mut v else { panic!("Pool::get_vword() failed") };
     if state.issinglet(c) {
-      vword.str_word.push(c);
+      v.str_word.push(c);
       self.next();
-      return Some(v);
+      return Some(Value::Word(v));
     }
     if !skipped {
-      vword.str_word.push(c);
+      v.str_word.push(c);
       self.next();
     }
     while let Some(c) = self.c {
       if state.isdelim(c) { break };
-      vword.str_word.push(c);
+      v.str_word.push(c);
       self.next();
-      if state.issinglet(c) { return Some(v) };
+      if state.issinglet(c) { return Some(Value::Word(v)) };
     }
-    Some(v)
+    Some(Value::Word(v))
   }
 
   // returns just the next character without delim/ignore/singlet behaviour
   #[allow(dead_code)]
-  pub fn get_next_char(&mut self, state: &mut CognitionState) -> Option<Value> {
+  pub fn get_next_char(&mut self, state: &mut CognitionState) -> Option<Box<VWord>> {
     let ch = self.c;
     self.next();
     match ch {
       None => None,
       Some(c) => {
         let mut v = state.pool.get_vword(c.len_utf8());
-        let Value::Word(vword) = &mut v else { panic!("Pool::get_vword() failed") };
-        vword.str_word.push(c);
+        v.str_word.push(c);
         self.next();
         Some(v)
       },
@@ -524,18 +543,17 @@ impl CognitionState {
 
   pub fn eval_error(mut self, e: &'static str, w: Option<&Value>) -> Self {
     let mut verror = self.pool.get_verror(e.len());
-    let Value::Error(error) = &mut verror else { panic!("Pool::get_verror() failed") };
-    error.error.push_str(e);
-    error.str_word = match w {
+    verror.error.push_str(e);
+    verror.str_word = match w {
       None => None,
-      Some(v) => Some(v.expect_word("CognitionState::eval_error(): Bad argument type").clone()),
+      Some(v) => Some(self.string_copy(&v.vword_ref().str_word)),
     };
     if let None = self.current_ref().err_stack {
       let temp = self.pool.get_stack(1);
       self.current().err_stack = Some(temp);
     }
     let estack: &mut Stack = &mut self.current().err_stack.as_mut().unwrap();
-    estack.push(verror);
+    estack.push(Value::Error(verror));
     self
   }
 
@@ -624,64 +642,52 @@ impl CognitionState {
   pub fn value_copy(&mut self, v: &Value) -> Value {
     match v {
       Value::Word(vword) => {
-        let mut new_v = self.pool.get_vword(vword.str_word.len());
-        let Value::Word(new_vword) = &mut new_v else { panic!("Pool::get_vword failed") };
+        let mut new_vword = self.pool.get_vword(vword.str_word.len());
         new_vword.str_word.push_str(&vword.str_word);
-        new_v
+        Value::Word(new_vword)
       },
       Value::Stack(vstack) => {
-        let mut new_v = self.pool.get_vstack(vstack.container.stack.len());
-        let Value::Stack(new_vstack) = &mut new_v else { panic!("Pool:get_vstack failed") };
+        let mut new_vstack = self.pool.get_vstack(vstack.container.stack.len());
         self.contain_copy(&vstack.container, &mut new_vstack.container);
-        new_v
+        Value::Stack(new_vstack)
       },
       Value::Macro(vmacro) => {
-        let mut new_v = self.pool.get_vmacro(vmacro.macro_stack.len());
-        let Value::Macro(new_vmacro) = &mut new_v else { panic!("Pool:get_vmacro failed") };
+        let mut new_vmacro = self.pool.get_vmacro(vmacro.macro_stack.len());
         for v in vmacro.macro_stack.iter() {
           new_vmacro.macro_stack.push(self.value_copy(v));
         }
-        new_v
+        Value::Macro(new_vmacro)
       },
       Value::Error(verror) => {
-        let mut new_v = self.pool.get_verror(verror.error.len());
-        let Value::Error(new_verror) = &mut new_v else { panic!("Pool::get_verror failed") };
+        let mut new_verror = self.pool.get_verror(verror.error.len());
         new_verror.error.push_str(&verror.error);
         if let Some(ref word) = verror.str_word {
           new_verror.str_word = Some(self.string_copy(word));
         }
-        new_v
+        Value::Error(new_verror)
       },
-      Value::Custom(vcustom) => {
-        let new_v = self.pool.get_vcustom(vcustom.custom.copyfunc());
-        new_v
-      },
-      Value::FLLib(vfllib) => {
-        let new_v = self.pool.get_vfllib(vfllib.fllib);
-        new_v
-      },
+      Value::Custom(vcustom) => Value::Custom(self.pool.get_vcustom(vcustom.custom.copyfunc())),
+      Value::FLLib(vfllib) => Value::FLLib(self.pool.get_vfllib(vfllib.fllib)),
     }
   }
 
   pub fn current(&mut self) -> &mut Container {
-    self.stack.last_mut().expect("Cognition metastack was empty").metastack_container()
+    &mut self.stack.last_mut().expect("Cognition metastack was empty").vstack_mut().container
   }
   pub fn current_ref(&self) -> &Container {
-    self.stack.last().expect("Cognition metastack was empty").metastack_container_ref()
+    &self.stack.last().expect("Cognition metastack was empty").vstack_ref().container
   }
   pub fn pop_cur(&mut self) -> Value {
     self.stack.pop().expect("Cognition metastack was empty")
   }
   pub fn push_cur(mut self, v: Value) -> Self {
-    self.stack.push(v);
-    self
+    self.stack.push(v); self
   }
 
   pub fn push_quoted(&mut self, v: Value) {
-    let mut wrapper: Value = self.pool.get_vstack(1);
-    let Value::Stack(w) = &mut wrapper else { panic!("Pool::get_vstack() failed") };
-    w.container.stack.push(v);
-    self.current().stack.push(wrapper);
+    let mut wrapper = self.pool.get_vstack(1);
+    wrapper.container.stack.push(v);
+    self.current().stack.push(Value::Stack(wrapper));
   }
 
   // don't increment crank
@@ -716,14 +722,12 @@ impl CognitionState {
   fn evalword_in_cur(mut self, v: Value, family: &mut Family, always_evalf: bool,
                      only_evalf: bool, definition: &mut (Option<String>, Option<WordDef>)) -> Self {
 
-    let Value::Word(word) = &v else { panic!("CognitionState::evalword(): Bad argument type") };
-    let cur = self.current();
     if !only_evalf {
-      if let Some(wt) = &mut cur.word_table {
-        if let Some(wdef) = wt.get_mut(&word.str_word) {
+      if let Some(wt) = &mut self.current().word_table {
+        if let Some(wdef) = wt.get_mut(&v.vword_ref().str_word) {
           definition.1 = wdef.take();
           if let Some(WordDef::Val(ref dval)) = definition.1 {
-            definition.0 = Some(word.str_word.clone());
+            definition.0 = Some(v.vword_ref().str_word.clone());
             self = match dval {
               Value::Stack(_) => {
                 *wdef = Some(WordDef::Ref(DefRef::D(dval as *const Value)));
@@ -757,7 +761,7 @@ impl CognitionState {
         }
       }
     }
-    if cur.isfalias(&v) { return self.try_evalf(v, always_evalf); }
+    if self.current().isfalias(&v) { return self.try_evalf(v, always_evalf); }
     self.push_quoted(v);
     self
   }
@@ -765,7 +769,6 @@ impl CognitionState {
   fn evalword(mut self, v: Value, family: &mut Family, local_family: &mut Family,
               always_evalf: bool, only_evalf: bool, definition: &mut (Option<String>, Option<WordDef>)) -> Self {
 
-    let Value::Word(word) = &v else { panic!("CognitionState::evalword(): Bad argument type") };
     loop {
       let Some(family_stack) = family.stack.pop() else {
         // Assuming family stack has failed
@@ -777,13 +780,12 @@ impl CognitionState {
       // being held in an evalstack() instance, so
       // the memory is always available and static.
       let family_container = unsafe {
-        let Value::Stack(ref family_vstack) = *family_stack else { panic!("Bad value in family stack") };
-        let family_vstack: &VStack = family_vstack; // debugging
+        let family_vstack: &VStack = &(*family_stack).vstack_ref();
         &family_vstack.container
       };
       if !only_evalf {
         if let Some(wt) = &family_container.word_table {
-          if let Some(Some(wdef)) = wt.get(&word.str_word) {
+          if let Some(Some(wdef)) = wt.get(&v.vword_ref().str_word) {
             self = match wdef {
               WordDef::Val(dval) => {
                 match dval {
@@ -862,7 +864,7 @@ impl CognitionState {
   fn evalstack_ref(mut self, val: *const Value, callword: Option<&Value>, family: &mut Family) -> Self {
     family.stack.push(val);
     // Evalword promises this pointer is a valid and unique reference
-    let Value::Stack(vstack) = (unsafe {&*val}) else { panic!("CognitionState::evalstack_ref(): Bad argument type") };
+    let vstack = { unsafe{&*val} }.vstack_ref();
     let stack = &vstack.container.stack;
     let mut local_family = self.pool.get_family();
 
@@ -888,7 +890,7 @@ impl CognitionState {
   // don't crank
   fn evalmacro_ref(mut self, val: *const Value, callword: Option<&Value>, family: &mut Family) -> Self {
     // Evalword promises this pointer is a valid and unique reference
-    let Value::Macro(vmacro) = (unsafe {&*val}) else { panic!("CognitionState::evalmacro_ref(): Bad argument type") };
+    let vmacro = { unsafe{&*val} }.vmacro_ref();
     let macro_stack = &vmacro.macro_stack;
     let mut local_family = self.pool.get_family();
 
@@ -904,7 +906,7 @@ impl CognitionState {
 
   fn evalstack(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family, crank_last: bool) -> Self {
     family.stack.push(&val as *const Value);
-    let Value::Stack(vstack) = &mut val else { panic!("CognitionState::evalstack(): Bad argument type") };
+    let vstack = val.vstack_mut();
     let stack = &mut vstack.container.stack;
     let mut local_family = self.pool.get_family();
 
@@ -930,7 +932,7 @@ impl CognitionState {
 
   // crank once
   fn evalmacro(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family, crank_last: bool) -> Self {
-    let Value::Macro(vmacro) = &mut val else { panic!("CognitionState::evalmacro(): Bad argument type") };
+    let vmacro = val.vmacro_mut();
     let macro_stack = &mut vmacro.macro_stack;
     let mut local_family = self.pool.get_family();
 

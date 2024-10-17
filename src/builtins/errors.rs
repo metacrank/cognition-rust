@@ -12,24 +12,23 @@ pub fn cog_eclean(mut state: CognitionState, _w: Option<&Value>) -> CognitionSta
 pub fn cog_epeek(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   if let Some(estack) = &mut state.current().err_stack {
     if let Some(v) = estack.pop() {
-      let Value::Error(ref e) = v else { panic!("Bad value on error stack") };
+      let e = v.verror_ref();
       let mut v1 = state.pool.get_vword(e.error.len());
-      let Value::Word(v1word) = &mut v1 else { panic!("Pool::get_vword() failed") };
-      v1word.str_word.push_str(&e.error);
-      state.push_quoted(v1);
+      v1.str_word.push_str(&e.error);
+      state.push_quoted(Value::Word(v1));
       match e.str_word {
         Some(ref s) => {
           let mut v2 = state.pool.get_vword(s.len());
-          let Value::Word(v2word) = &mut v2 else { panic!("Pool::get_vword() failed") };
-          v2word.str_word.push_str(s);
-          state.push_quoted(v2);
+          v2.str_word.push_str(s);
+          state.push_quoted(Value::Word(v2));
         },
         None => {
           let v2 = state.pool.get_vstack(0);
-          state.current().stack.push(v2);
+          state.current().stack.push(Value::Stack(v2));
         },
       }
       state.current().err_stack.as_mut().unwrap().push(v);
+      return state;
     }
   }
   cog_epop(state.eval_error("NO ERRORS", w), w)
@@ -38,24 +37,23 @@ pub fn cog_epeek(mut state: CognitionState, w: Option<&Value>) -> CognitionState
 pub fn cog_epop(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   if let Some(estack) = &mut state.current().err_stack {
     if let Some(v) = estack.pop() {
-      let Value::Error(ref e) = v else { panic!("Bad value on error stack") };
+      let e = v.verror_ref();
       let mut v1 = state.pool.get_vword(e.error.len());
-      let Value::Word(v1word) = &mut v1 else { panic!("Pool::get_vword() failed") };
-      v1word.str_word.push_str(&e.error);
-      state.push_quoted(v1);
+      v1.str_word.push_str(&e.error);
+      state.push_quoted(Value::Word(v1));
       match e.str_word {
         Some(ref s) => {
           let mut v2 = state.pool.get_vword(s.len());
-          let Value::Word(v2word) = &mut v2 else { panic!("Pool::get_vword() failed") };
-          v2word.str_word.push_str(s);
-          state.push_quoted(v2);
+          v2.str_word.push_str(s);
+          state.push_quoted(Value::Word(v2));
         },
         None => {
           let v2 = state.pool.get_vstack(0);
-          state.current().stack.push(v2);
+          state.current().stack.push(Value::Stack(v2));
         },
       }
       state.pool.add_val(v);
+      return state;
     }
   }
   cog_epop(state.eval_error("NO ERRORS", w), w)
@@ -79,9 +77,8 @@ pub fn cog_epush(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   }
   let Value::Word(ref v1word) = w1 else { return state.eval_error("BAD ARGUMENT TYPE", w) };
   let mut v = state.pool.get_verror(v1word.str_word.len());
-  let Value::Error(e) = &mut v else { panic!("Pool::get_verror() failed") };
-  e.error.push_str(&v1word.str_word);
-  e.str_word = match w2 {
+  v.error.push_str(&v1word.str_word);
+  v.str_word = match w2 {
     Some(Value::Word(ref v2word)) => Some(state.string_copy(&v2word.str_word)),
     None => None,
     _ => unreachable!(),
@@ -90,10 +87,10 @@ pub fn cog_epush(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   state.pool.add_val(v2);
   let mut err_stack = state.current().err_stack.take();
   match &mut err_stack {
-    Some(estack) => estack.push(v),
+    Some(estack) => estack.push(Value::Error(v)),
     None => {
       err_stack = Some(state.pool.get_stack(1));
-      err_stack.as_mut().unwrap().push(v)
+      err_stack.as_mut().unwrap().push(Value::Error(v))
     },
   }
   state.current().err_stack = err_stack.take();
