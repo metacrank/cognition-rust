@@ -15,6 +15,7 @@ use std::default::Default;
 use std::io::Write;
 use std::io::stdout;
 use std::str::Chars;
+//use std::any::Any;
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type Stack = Vec<Value>;
@@ -300,6 +301,9 @@ pub enum Value {
 macro_rules! return_value_type {
   ($self:ident,$letpat:pat,$v:tt) => {{ let $letpat = $self else { panic!("Value type assumed") }; $v }};
 }
+macro_rules! is_value_type {
+  ($self:ident,$letpat:pat) => { if let $letpat = $self { true } else { false } }
+}
 
 impl Value {
   pub fn print(&self, end: &'static str) {
@@ -381,6 +385,7 @@ impl Value {
       _ => bad_value_err!(),
     }
   }
+
   pub fn vword(self) -> Box<VWord> { return_value_type!(self, Value::Word(v), v) }
   pub fn vstack(self) -> Box<VStack> { return_value_type!(self, Value::Stack(v), v) }
   pub fn vmacro(self) -> Box<VMacro> { return_value_type!(self, Value::Macro(v), v) }
@@ -399,6 +404,13 @@ impl Value {
   pub fn verror_mut(&mut self) -> &mut Box<VError> { return_value_type!(self, Value::Error(v), v) }
   pub fn vcustom_mut(&mut self) -> &mut Box<VCustom> { return_value_type!(self, Value::Custom(v), v) }
   pub fn vfllib_mut(&mut self) -> &mut Box<VFLLib> { return_value_type!(self, Value::FLLib(v), v) }
+
+  pub fn is_word(&self) -> bool { is_value_type!(self, Value::Word(_)) }
+  pub fn is_stack(&self) -> bool { is_value_type!(self, Value::Stack(_)) }
+  pub fn is_macro(&self) -> bool { is_value_type!(self, Value::Macro(_)) }
+  pub fn is_error(&self) -> bool { is_value_type!(self, Value::Error(_)) }
+  pub fn is_custom(&self) -> bool { is_value_type!(self, Value::Custom(_)) }
+  pub fn is_fllib(&self) -> bool { is_value_type!(self, Value::FLLib(_)) }
 }
 
 pub enum DefRef {
@@ -625,7 +637,7 @@ impl CognitionState {
     new.dflag = old.dflag;
     new.iflag = old.iflag;
     new.sflag = old.sflag;
-    new.dependent = old.dependent;
+    new.dependent = false;
 
     if let Some(ref word_table) = old.word_table {
       new.word_table = Some(self.pool.get_word_table());
