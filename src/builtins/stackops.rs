@@ -50,6 +50,5 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "dup", cog_dup);
   add_word!(state, "ssize", cog_ssize);
   // test add_word functionality
-  add_word!(state, "dropswap", cog_drop, cog_swap);
   add_word!(state, "dropswapdupdupssize", cog_drop, cog_swap, cog_dup, cog_dup, cog_ssize);
 }

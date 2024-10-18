@@ -8,6 +8,7 @@ pub const COLOR_RESET: &[u8] = b"\x1B[0m";
 pub const DEFAULT_STACK_SIZE: usize = 24;
 pub const DEFAULT_STRING_LENGTH: usize = 24;
 pub const DEFAULT_WORD_TABLE_SIZE: usize = 576;
+pub const DEFAULT_FALIASES_SIZE: usize = 24;
 
 #[macro_export]
 macro_rules! bad_value_err {

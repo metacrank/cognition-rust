@@ -10,6 +10,7 @@ pub mod builtins;
 use crate::pool::Pool;
 use crate::macros::*;
 
+use std::collections::HashSet;
 use std::collections::HashMap;
 use std::default::Default;
 use std::io::Write;
@@ -21,7 +22,7 @@ pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionStat
 pub type Stack = Vec<Value>;
 pub type Cranks = Vec<Crank>;
 pub type Strings = Vec<String>;
-pub type Faliases = Strings;
+pub type Faliases = HashSet<String>;
 pub type WordTable = HashMap<String, Option<WordDef>>;
 
 pub struct Family { stack: Vec<*const Value> }
@@ -187,15 +188,15 @@ impl Container {
     }
   }
   pub fn default_faliases() -> Option<Faliases> {
-    let mut f = Faliases::with_capacity(2);
-    f.push(String::from("f"));
-    f.push(String::from("ing"));
+    let mut f = Faliases::with_capacity(DEFAULT_FALIASES_SIZE);
+    f.insert(String::from("f"));
+    f.insert(String::from("ing"));
     Some(f)
   }
   pub fn isfalias(&self, v: &Value) -> bool {
     match &self.faliases {
       None => false,
-      Some(f) => f.iter().any(|s| *s == v.vword_ref().str_word ),
+      Some(f) => f.contains(&v.vword_ref().str_word),
     }
   }
   pub fn add_word(&mut self, v: Value, name: String) {
@@ -619,10 +620,10 @@ impl CognitionState {
       }
     }
     if let Some(ref faliases) = old.faliases {
-      new.faliases = Some(self.pool.get_strings(faliases.len()));
+      new.faliases = Some(self.pool.get_faliases());
       let new_faliases = new.faliases.as_mut().unwrap();
       for alias in faliases.iter() {
-        new_faliases.push(self.string_copy(alias));
+        new_faliases.insert(self.string_copy(alias));
       }
     }
     if let Some(ref delims) = old.delims {

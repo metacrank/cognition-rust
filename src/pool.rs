@@ -18,6 +18,7 @@ pub struct Pool {
   crankss: Option<ITree<Cranks>>,
   word_tables: Option<Vec<WordTable>>,
   families: Option<Vec<Family>>,
+  faliasess: Option<Vec<Faliases>>
 }
 
 trait DisregardPool {
@@ -77,8 +78,8 @@ macro_rules! pool_remove_val {
 macro_rules! pool_pop_val {
   ($stack:expr,$letpattern:pat,$retval:tt,$mod:block) => {
     if let Some(stack) = &mut $stack {
-      if let Some(mut v) = stack.pop() {
-        let $letpattern = &mut v else { panic!("Bad value type in pool tree") };
+      if let Some(v) = stack.pop() {
+        let $letpattern = v else { panic!("Bad value type in pool vec") };
         $mod;
         return $retval;
       }
@@ -102,6 +103,7 @@ impl Pool {
       crankss: None,
       word_tables: None,
       families: None,
+      faliasess: None,
     }
   }
 
@@ -201,6 +203,9 @@ impl Pool {
   pub fn add_family(&mut self, f: Family) {
     pool_push!(f, self, self.families, Vec::<Family>::with_capacity(DEFAULT_STACK_SIZE));
   }
+  pub fn add_faliases(&mut self, f: Faliases) {
+    pool_push!(f, self, self.faliasess, Vec::<Faliases>::with_capacity(DEFAULT_STACK_SIZE));
+  }
 
   pub fn add_def(&mut self, definition: (Option<String>, Option<WordDef>)) {
     self.add_string(definition.0.unwrap());
@@ -215,7 +220,7 @@ impl Pool {
     Box::new(VWord::with_capacity(capacity))
   }
   pub fn get_vstack(&mut self, capacity: usize) -> Box<VStack> {
-    pool_remove_val!(self, self.vstacks, capacity, Value::Stack(vstack), {
+    pool_remove_val!(self, self.vstacks, capacity, Value::Stack(mut vstack), vstack, {
       let container = &mut vstack.container;
       while let Some(v) = container.stack.pop() {
         self.add_val(v);
@@ -227,7 +232,7 @@ impl Pool {
         self.add_cranks(container.cranks.take().unwrap());
       }
       if container.faliases.is_some() {
-        self.add_strings(container.faliases.take().unwrap());
+        self.add_faliases(container.faliases.take().unwrap());
       }
       if container.delims.is_some() {
         self.add_string(container.delims.take().unwrap());
@@ -249,7 +254,7 @@ impl Pool {
     Box::new(VStack::with_container(Container::with_stack(self.get_stack(capacity))))
   }
   pub fn get_vmacro(&mut self, capacity: usize) -> Box<VMacro> {
-    pool_remove_val!(self, self.vmacros, capacity, Value::Macro(vmacro), {
+    pool_remove_val!(self, self.vmacros, capacity, Value::Macro(mut vmacro), vmacro, {
       while let Some(v) = vmacro.macro_stack.pop() {
         self.add_val(v);
       }
@@ -257,7 +262,7 @@ impl Pool {
     Box::new(VMacro::with_capacity(capacity))
   }
   pub fn get_verror(&mut self, capacity: usize) -> Box<VError> {
-    pool_remove_val!(self, self.verrors, capacity, Value::Error(verror), {
+    pool_remove_val!(self, self.verrors, capacity, Value::Error(mut verror), verror, {
       verror.error.clear();
       if verror.str_word.is_some() {
         self.add_string(verror.str_word.take().unwrap());
@@ -266,13 +271,13 @@ impl Pool {
     Box::new(VError::with_capacity(capacity))
   }
   pub fn get_vcustom(&mut self, custom: Box<dyn Custom + Send>) -> Box<VCustom> {
-    pool_pop_val!(self.vcustoms, Value::Custom(vcustom), {
+    pool_pop_val!(self.vcustoms, Value::Custom(mut vcustom), vcustom, {
       vcustom.custom = custom;
     });
     Box::new(VCustom { custom })
   }
   pub fn get_vfllib(&mut self, f: CognitionFunction) -> Box<VFLLib> {
-    pool_pop_val!(self.vfllibs, Value::FLLib(vfllib), {
+    pool_pop_val!(self.vfllibs, Value::FLLib(mut vfllib), vfllib, {
       vfllib.fllib = f;
     });
     Box::new(VFLLib::with_fn(f))
@@ -353,5 +358,16 @@ impl Pool {
       }
     }
     Family::with_capacity(DEFAULT_STACK_SIZE)
+  }
+  pub fn get_faliases(&mut self) -> Faliases {
+    if let Some(stack) = &mut self.faliasess {
+      if let Some(mut faliases) = stack.pop() {
+        for s in faliases.drain() {
+          self.add_string(s);
+        }
+        return faliases;
+      }
+    }
+    Faliases::with_capacity(DEFAULT_FALIASES_SIZE)
   }
 }
