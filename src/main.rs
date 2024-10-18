@@ -50,6 +50,7 @@ fn main() -> ExitCode {
   let Value::Stack(vstack) = &mut initial_stack else { panic!("fatal error") };
   vstack.container.faliases = Container::default_faliases();
   state.stack.push(initial_stack);
+  state.parser = Some(Parser::new(None));
 
   cognition::builtins::add_builtins(&mut state);
 
@@ -61,18 +62,22 @@ fn main() -> ExitCode {
       println!("Could not open file for reading: {filename}: {e}");
       return ExitCode::from(4);
     }
-    let buffer: String = fs_result.unwrap();
-    let mut parser = Parser::new(&buffer);
+    let source: String = fs_result.unwrap();
+    let mut parser = state.parser.take().unwrap();
+    if let Some(s) = parser.source() { state.pool.add_string(s) }
+    parser.reset(source);
 
     // Parse and eval loop
     loop {
-      let val = parser.get_next(&mut state);
-      match val {
+      let w = parser.get_next(&mut state);
+      match w {
         Some(v) => state = state.eval(v),
         None => break,
       }
-      if state.exited { break; }
+      if state.exited { break }
     }
+
+    state.parser = Some(parser);
   }
 
   if !opts.q { print_end(&state); }

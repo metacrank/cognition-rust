@@ -282,6 +282,124 @@ pub fn cog_singlet(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   state
 }
 
+pub fn cog_undelim(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let cur = state.current();
+  let Some(v) = cur.stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let stack = v.value_stack_ref();
+  if stack.len() != 1 {
+    cur.stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  let word_val = &stack[0];
+  let Value::Word(vword) = word_val else {
+    cur.stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  if let Some(delims) = &mut state.current().delims {
+    for c in vword.str_word.chars() { delims.retain(|x| x != c); }
+  }
+  state.pool.add_val(v);
+  state
+}
+
+pub fn cog_unignore(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let cur = state.current();
+  let Some(v) = cur.stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let stack = v.value_stack_ref();
+  if stack.len() != 1 {
+    cur.stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  let word_val = &stack[0];
+  let Value::Word(vword) = word_val else {
+    cur.stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  if let Some(ignored) = &mut state.current().ignored {
+    for c in vword.str_word.chars() { ignored.retain(|x| x != c); }
+  }
+  state.pool.add_val(v);
+  state
+}
+
+pub fn cog_unsinglet(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let cur = state.current();
+  let Some(v) = cur.stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let stack = v.value_stack_ref();
+  if stack.len() != 1 {
+    cur.stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  let word_val = &stack[0];
+  let Value::Word(vword) = word_val else {
+    cur.stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  if let Some(singlets) = &mut state.current().singlets {
+    for c in vword.str_word.chars() { singlets.retain(|x| x != c); }
+  }
+  state.pool.add_val(v);
+  state
+}
+
+pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let stack = v.value_stack_ref();
+  if stack.len() == 0 {
+    state.pool.add_val(v);
+    return state;
+  }
+  if stack.iter().any(|x| !x.is_word()) {
+    state.current().stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  if v.is_stack() {
+    state.family.stack.push(&v as *const Value);
+  }
+  for v in stack.iter() {
+    let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)));
+    loop {
+      let w = parser.get_next(&mut state);
+      match w {
+        Some(v) => state = state.eval(v),
+        None => break,
+      }
+      if state.exited { break }
+    }
+    state.pool.add_parser(parser);
+  }
+  if v.is_stack() { state.family.stack.pop(); }
+  state.pool.add_val(v);
+  state
+}
+
+pub fn cog_strstack(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let stack = v.value_stack_ref();
+  if stack.len() == 0 {
+    state.pool.add_val(v);
+    return state;
+  }
+  if stack.iter().any(|x| !x.is_word()) {
+    state.current().stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  let mut quot = state.pool.get_vstack(DEFAULT_STACK_SIZE);
+  for v in stack.iter() {
+    let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)));
+    loop {
+      let w = parser.get_next(&mut state);
+      match w {
+        Some(v) => quot.container.stack.push(v),
+        None => break,
+      }
+    }
+  }
+  state.current().stack.push(Value::Stack(quot));
+  state.pool.add_val(v);
+  state
+}
+
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "getf", cog_getf);
   add_word!(state, "setf", cog_setf);
@@ -299,4 +417,9 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "delim", cog_delim);
   add_word!(state, "ignore", cog_ignore);
   add_word!(state, "singlet", cog_singlet);
+  add_word!(state, "undelim", cog_undelim);
+  add_word!(state, "unignore", cog_unignore);
+  add_word!(state, "unsinglet", cog_unsinglet);
+  add_word!(state, "evalstr", cog_evalstr);
+  add_word!(state, "strstack", cog_strstack);
 }

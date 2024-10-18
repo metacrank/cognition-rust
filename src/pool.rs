@@ -18,7 +18,8 @@ pub struct Pool {
   crankss: Option<ITree<Cranks>>,
   word_tables: Option<Vec<WordTable>>,
   families: Option<Vec<Family>>,
-  faliasess: Option<Vec<Faliases>>
+  faliasess: Option<Vec<Faliases>>,
+  parsers: Option<Vec<Parser>>,
 }
 
 trait DisregardPool {
@@ -104,6 +105,7 @@ impl Pool {
       word_tables: None,
       families: None,
       faliasess: None,
+      parsers: None,
     }
   }
 
@@ -205,6 +207,9 @@ impl Pool {
   }
   pub fn add_faliases(&mut self, f: Faliases) {
     pool_push!(f, self, self.faliasess, Vec::<Faliases>::with_capacity(DEFAULT_STACK_SIZE));
+  }
+  pub fn add_parser(&mut self, p: Parser) {
+    pool_push!(p, self, self.parsers, Vec::<Parser>::with_capacity(DEFAULT_STACK_SIZE));
   }
 
   pub fn add_def(&mut self, definition: (Option<String>, Option<WordDef>)) {
@@ -369,5 +374,14 @@ impl Pool {
       }
     }
     Faliases::with_capacity(DEFAULT_FALIASES_SIZE)
+  }
+  pub fn get_parser(&mut self) -> Parser {
+    if let Some(stack) = &mut self.parsers {
+      if let Some(mut parser) = stack.pop() {
+        if let Some(s) = parser.source() { self.add_string(s) }
+        return parser;
+      }
+    }
+    Parser::new(None)
   }
 }

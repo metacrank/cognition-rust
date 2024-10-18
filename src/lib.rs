@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::default::Default;
 use std::io::Write;
 use std::io::stdout;
-use std::str::Chars;
+//use std::str::Chars;
 //use std::any::Any;
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
@@ -457,20 +457,47 @@ impl WordDef {
   }
 }
 
-pub struct Parser<'a> {
-  source: Chars<'a>,
+pub struct Parser {
+  source: Option<String>,
+  i: usize,
   c: Option<char>,
+  line: usize,
+  column: usize,
 }
 
-impl Parser<'_> {
-  pub fn new(source: &String) -> Parser {
-    let mut source = source.chars();
-    let c = source.next();
-    Parser{ source, c }
+impl Parser {
+  pub fn new(source: Option<String>) -> Parser {
+    if source.is_none() { return Parser{ source: None, i: 0, c: None, line: 1, column: 0 } }
+    let c = match source.as_ref().unwrap().get(..) { Some(st) => st.chars().next(), None => None };
+    Parser{ source, i: 0, c, line: 1, column: 0 }
   }
   pub fn next(&mut self) {
-    self.c = self.source.next();
+    if self.c.is_none() || self.source.is_none() { return }
+    self.i += self.c.unwrap().len_utf8();
+    self.c = match self.source.as_ref().unwrap().get(self.i..) {
+      Some(st) => st.chars().next(),
+      None => None
+    };
+    self.column += 1;
+    if self.c == Some('\n') {
+      self.line += 1;
+      self.column = 0;
+    }
   }
+
+  pub fn reset(&mut self, source: String) {
+    self.column = 0;
+    self.line = 1;
+    self.c = match source.get(..) { Some(st) => st.chars().next(), None => None };
+    self.i = 0;
+    self.source = Some(source);
+  }
+
+  pub fn source(&mut self) -> Option<String> {
+    self.source.take()
+  }
+  pub fn line(&self) -> usize { self.line }
+  pub fn column(&self) -> usize { self.column }
 
   fn skip_ignored(&mut self, state: &CognitionState) -> bool {
     let mut skipped = false;
@@ -528,6 +555,8 @@ impl Parser<'_> {
 pub struct CognitionState {
   pub chroots: Vec<Stack>, // meta metastack
   pub stack: Stack, // metastack
+  pub family: Family, // for reuse
+  pub parser: Option<Parser>,
   pub returned: bool,
   pub exited: bool,
   pub exit_code: Option<String>,
@@ -536,11 +565,11 @@ pub struct CognitionState {
 }
 
 macro_rules! eval_value_if_cranked {
-  ($self:ident,$v:ident,$callword:ident,$family:ident,$local_family:expr,$do_crank:expr) => {
+  ($self:ident,$v:ident,$callword:ident,$local_family:expr,$do_crank:expr) => {
     if let Some(cranks) = &$self.current_ref().cranks {
       if let Some(crank) = cranks.first() {
         if crank.modulo == 0 && crank.base != 0 {
-          $self = $self.eval_value($v, $callword, $family, $local_family, false, false, $do_crank, false);
+          $self = $self.eval_value($v, $callword, $local_family, false, false, $do_crank, false);
           continue;
         }
       }
@@ -550,8 +579,10 @@ macro_rules! eval_value_if_cranked {
 
 impl CognitionState {
   pub fn new(stack: Stack) -> Self {
-    Self{ chroots: Vec::<Stack>::with_capacity(DEFAULT_STACK_SIZE), stack, returned: false,
-          exited: false, exit_code: None, args: Strings::new(), pool: Pool::new(), }
+    Self{ chroots: Vec::<Stack>::with_capacity(DEFAULT_STACK_SIZE), stack,
+          family: Family::with_capacity(DEFAULT_STACK_SIZE), parser: None,
+          returned: false, exited: false, exit_code: None, args: Strings::new(),
+          pool: Pool::new(), }
   }
 
   pub fn eval_error(mut self, e: &'static str, w: Option<&Value>) -> Self {
@@ -706,13 +737,11 @@ impl CognitionState {
   // don't increment crank
   pub fn evalf(mut self, alias: &Value) -> Self {
     let Some(v) = self.current().stack.pop() else { return self.eval_error("EMPTY STACK", Some(alias)) };
-    let mut family = self.pool.get_family();
     self = match &v {
-      Value::Stack(_) => self.evalstack(v, None, &mut family, false),
-      Value::Macro(_) => self.evalmacro(v, None, &mut family, false),
+      Value::Stack(_) => self.evalstack(v, None, false),
+      Value::Macro(_) => self.evalmacro(v, None, false),
       _ => bad_value_err!(),
     };
-    self.pool.add_family(family);
     self
   }
   fn try_evalf(mut self, v: Value, always_evalf: bool) -> Self {
@@ -732,8 +761,8 @@ impl CognitionState {
     self
   }
 
-  fn evalword_in_cur(mut self, v: Value, family: &mut Family, always_evalf: bool,
-                     only_evalf: bool, definition: &mut (Option<String>, Option<WordDef>)) -> Self {
+  fn evalword_in_cur(mut self, v: Value, always_evalf: bool, only_evalf: bool,
+                     definition: &mut (Option<String>, Option<WordDef>)) -> Self {
 
     if !only_evalf {
       if let Some(wt) = &mut self.current().word_table {
@@ -744,11 +773,11 @@ impl CognitionState {
             self = match dval {
               Value::Stack(_) => {
                 *wdef = Some(WordDef::Ref(DefRef::D(dval as *const Value)));
-                self.evalstack_ref(dval as *const Value, Some(&v), family)
+                self.evalstack_ref(dval as *const Value, Some(&v))
               },
               Value::Macro(_) => {
                 *wdef = Some(WordDef::Ref(DefRef::M(dval as *const Value)));
-                self.evalmacro_ref(dval as *const Value, Some(&v), family)
+                self.evalmacro_ref(dval as *const Value, Some(&v))
               },
               _ => panic!("Bad value type in word table")
             };
@@ -760,12 +789,12 @@ impl CognitionState {
               DefRef::D(dval_pointer) => {
                 let defptr = dval_pointer.clone();
                 *wdef = definition.1.take();
-                self.evalstack_ref(defptr, Some(&v), family)
+                self.evalstack_ref(defptr, Some(&v))
               },
               DefRef::M(mval_pointer) => {
                 let defptr = mval_pointer.clone();
                 *wdef = definition.1.take();
-                self.evalmacro_ref(defptr, Some(&v), family)
+                self.evalmacro_ref(defptr, Some(&v))
               },
             };
             self.pool.add_val(v);
@@ -779,13 +808,13 @@ impl CognitionState {
     self
   }
 
-  fn evalword(mut self, v: Value, family: &mut Family, local_family: &mut Family,
-              always_evalf: bool, only_evalf: bool, definition: &mut (Option<String>, Option<WordDef>)) -> Self {
+  fn evalword(mut self, v: Value, local_family: &mut Family, always_evalf: bool,
+              only_evalf: bool, definition: &mut (Option<String>, Option<WordDef>)) -> Self {
 
     loop {
-      let Some(family_stack) = family.stack.pop() else {
+      let Some(family_stack) = self.family.stack.pop() else {
         // Assuming family stack has failed
-        break self.evalword_in_cur(v, family, always_evalf, only_evalf, definition);
+        break self.evalword_in_cur(v, always_evalf, only_evalf, definition);
       };
 
       // Dereference read-only family stack pointer
@@ -802,13 +831,13 @@ impl CognitionState {
             self = match wdef {
               WordDef::Val(dval) => {
                 match dval {
-                  Value::Stack(_) => self.evalstack_ref(dval as *const Value, Some(&v), family),
-                  Value::Macro(_) => self.evalmacro_ref(dval as *const Value, Some(&v), family),
+                  Value::Stack(_) => self.evalstack_ref(dval as *const Value, Some(&v)),
+                  Value::Macro(_) => self.evalmacro_ref(dval as *const Value, Some(&v)),
                   _ => panic!("Bad value type in word table"),
                 }
               },
-              WordDef::Ref(DefRef::D(dval_pointer)) => self.evalstack_ref(dval_pointer.clone(), Some(&v), family),
-              WordDef::Ref(DefRef::M(mval_pointer)) => self.evalmacro_ref(mval_pointer.clone(), Some(&v), family),
+              WordDef::Ref(DefRef::D(dval_pointer)) => self.evalstack_ref(dval_pointer.clone(), Some(&v)),
+              WordDef::Ref(DefRef::M(mval_pointer)) => self.evalmacro_ref(mval_pointer.clone(), Some(&v)),
             };
             self.pool.add_val(v);
             break self;
@@ -822,7 +851,7 @@ impl CognitionState {
     }
   }
 
-  fn eval_value(mut self, v: Value, callword: Option<&Value>, family: &mut Family, local_family: &mut Family,
+  fn eval_value(mut self, v: Value, callword: Option<&Value>, local_family: &mut Family,
                 always_evalf: bool, only_evalf: bool, do_crank: bool, crank_on_return: bool) -> Self {
 
     // Ensure the current container doesn't die so we can increment the crank later
@@ -834,7 +863,7 @@ impl CognitionState {
     let mut not_cranked: bool = true;
     let mut definition: (Option<String>, Option<WordDef>) = (None, None);
     self = match &v {
-      Value::Word(_) => self.evalword(v, family, local_family, always_evalf, only_evalf, &mut definition),
+      Value::Word(_) => self.evalword(v, local_family, always_evalf, only_evalf, &mut definition),
       Value::Error(_) => panic!("VError on stack"),
       Value::Custom(_) => {
         self.push_quoted(v);
@@ -853,7 +882,7 @@ impl CognitionState {
       },
     };
 
-    while let Some(f) = local_family.stack.pop() { family.stack.push(f); }
+    while let Some(f) = local_family.stack.pop() { self.family.stack.push(f); }
 
     // Access the original current container
     // Refactor this code into more safe functions
@@ -874,8 +903,8 @@ impl CognitionState {
   }
 
   // don't crank last value
-  fn evalstack_ref(mut self, val: *const Value, callword: Option<&Value>, family: &mut Family) -> Self {
-    family.stack.push(val);
+  fn evalstack_ref(mut self, val: *const Value, callword: Option<&Value>) -> Self {
+    self.family.stack.push(val);
     // Evalword promises this pointer is a valid and unique reference
     let vstack = { unsafe{&*val} }.vstack_ref();
     let stack = &vstack.container.stack;
@@ -884,24 +913,24 @@ impl CognitionState {
     if let Some(v) = stack.first() {
       // First value always evaluated
       let new_v = self.value_copy(v);
-      self = self.eval_value(new_v, callword, family, &mut local_family, true, false, stack.len() > 1, false);
+      self = self.eval_value(new_v, callword, &mut local_family, true, false, stack.len() > 1, false);
       // Loop over stack, not cranking last value
       let n = stack.len();
       for i in 1..n {
         if self.returned { break }
         let new_v = self.value_copy(&stack[i]);
-        eval_value_if_cranked!(self, new_v, callword, family, &mut local_family, i != n - 1);
-        self = self.eval_value(new_v, callword, family, &mut local_family, false, true, i != n - 1, false);
+        eval_value_if_cranked!(self, new_v, callword, &mut local_family, i != n - 1);
+        self = self.eval_value(new_v, callword, &mut local_family, false, true, i != n - 1, false);
       }
       if self.returned { self.returned = false }
     }
 
     self.pool.add_family(local_family);
-    family.stack.pop();
+    self.family.stack.pop();
     self
   }
   // don't crank
-  fn evalmacro_ref(mut self, val: *const Value, callword: Option<&Value>, family: &mut Family) -> Self {
+  fn evalmacro_ref(mut self, val: *const Value, callword: Option<&Value>) -> Self {
     // Evalword promises this pointer is a valid and unique reference
     let vmacro = { unsafe{&*val} }.vmacro_ref();
     let macro_stack = &vmacro.macro_stack;
@@ -909,7 +938,7 @@ impl CognitionState {
 
     for v in macro_stack.iter() {
       let new_v = self.value_copy(v);
-      self = self.eval_value(new_v, callword, family, &mut local_family, true, false, false, false);
+      self = self.eval_value(new_v, callword, &mut local_family, true, false, false, false);
       if self.returned { self.returned = false; break }
     }
 
@@ -917,8 +946,8 @@ impl CognitionState {
     self
   }
 
-  fn evalstack(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family, crank_last: bool) -> Self {
-    family.stack.push(&val as *const Value);
+  fn evalstack(mut self, mut val: Value, callword: Option<&Value>, crank_last: bool) -> Self {
+    self.family.stack.push(&val as *const Value);
     let vstack = val.vstack_mut();
     let stack = &mut vstack.container.stack;
     let mut local_family = self.pool.get_family();
@@ -927,24 +956,24 @@ impl CognitionState {
 
     // First value is always evaluated
     if let Some(v) = stack.pop() {
-      self = self.eval_value(v, callword, family, &mut local_family, true, false, crank_last || stack.len() != 0, false);
+      self = self.eval_value(v, callword, &mut local_family, true, false, crank_last || stack.len() != 0, false);
     }
     // Loop over stack
     while let Some(v) = stack.pop() {
       if self.returned { break }
-      eval_value_if_cranked!(self, v, callword, family, &mut local_family, crank_last || stack.len() != 0);
-      self = self.eval_value(v, callword, family, &mut local_family, false, true, crank_last || stack.len() != 0, false);
+      eval_value_if_cranked!(self, v, callword, &mut local_family, crank_last || stack.len() != 0);
+      self = self.eval_value(v, callword, &mut local_family, false, true, crank_last || stack.len() != 0, false);
     }
     if self.returned { self.returned = false }
 
     self.pool.add_family(local_family);
     self.pool.add_val(val);
-    family.stack.pop();
+    self.family.stack.pop();
     self
   }
 
   // crank once
-  fn evalmacro(mut self, mut val: Value, callword: Option<&Value>, family: &mut Family, crank_last: bool) -> Self {
+  fn evalmacro(mut self, mut val: Value, callword: Option<&Value>, crank_last: bool) -> Self {
     let vmacro = val.vmacro_mut();
     let macro_stack = &mut vmacro.macro_stack;
     let mut local_family = self.pool.get_family();
@@ -952,7 +981,7 @@ impl CognitionState {
     macro_stack.reverse();
 
     while let Some(v) = macro_stack.pop() {
-      self = self.eval_value(v, callword, family, &mut local_family, true, false, macro_stack.len() == 0 && crank_last, crank_last);
+      self = self.eval_value(v, callword, &mut local_family, true, false, macro_stack.len() == 0 && crank_last, crank_last);
       if self.returned { self.returned = false; break }
     }
 
@@ -982,13 +1011,11 @@ impl CognitionState {
       return self.push_cur(cur_v);
     }
     let needseval = cur.stack.remove(fixedindex as usize);
-    let mut family = self.pool.get_family();
     self = match needseval {
-      Value::Stack(_) => self.push_cur(cur_v).evalstack(needseval, None, &mut family, true),
-      Value::Macro(_) => self.push_cur(cur_v).evalmacro(needseval, None, &mut family, true),
+      Value::Stack(_) => self.push_cur(cur_v).evalstack(needseval, None, true),
+      Value::Macro(_) => self.push_cur(cur_v).evalmacro(needseval, None, true),
       _ => bad_value_err!(),
     };
-    self.pool.add_family(family);
     self
   }
 
