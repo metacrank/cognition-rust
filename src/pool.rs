@@ -61,10 +61,10 @@ macro_rules! pool_push_val {
   }
 }
 macro_rules! pool_remove_val {
-  ($self:ident,$tree:expr,$capacity:expr,$letpattern:pat,$retval:pat,$mod:block) => {
+  ($self:ident,$tree:expr,$capacity:expr,$letpattern:pat,$retval:tt,$mod:block) => {
     if let Some(mut tree) = $tree.take() {
-      if let Some(mut retval) = tree.remove_at_least($capacity, Self::add_stack, $self) {
-        let $letpattern = &mut retval else { panic!("Bad value type in pool tree") };
+      if let Some(retval) = tree.remove_at_least($capacity, Self::add_stack, $self) {
+        let $letpattern = retval else { panic!("Bad value type in pool tree") };
         $mod;
         $tree = Some(tree);
         return $retval;
@@ -209,72 +209,72 @@ impl Pool {
   }
 
   pub fn get_vword(&mut self, capacity: usize) -> Box<VWord> {
-    // pool_remove_val!(self, self.vwords, capacity, Value::Word(vword), vword, {
-    //   vword.str_word.clear();
-    // });
+    pool_remove_val!(self, self.vwords, capacity, Value::Word(mut vword), vword, {
+      vword.str_word.clear();
+    });
     Box::new(VWord::with_capacity(capacity))
   }
   pub fn get_vstack(&mut self, capacity: usize) -> Box<VStack> {
-    // pool_remove_word!(self, self.vstacks, capacity, Value::Stack(vstack), {
-    //   let container = &mut vstack.container;
-    //   while let Some(v) = container.stack.pop() {
-    //     self.add_val(v);
-    //   }
-    //   if container.err_stack.is_some() {
-    //     self.add_stack(container.err_stack.take().unwrap());
-    //   }
-    //   if container.cranks.is_some() {
-    //     self.add_cranks(container.cranks.take().unwrap());
-    //   }
-    //   if container.faliases.is_some() {
-    //     self.add_strings(container.faliases.take().unwrap());
-    //   }
-    //   if container.delims.is_some() {
-    //     self.add_string(container.delims.take().unwrap());
-    //   }
-    //   if container.ignored.is_some() {
-    //     self.add_string(container.ignored.take().unwrap());
-    //   }
-    //   if container.singlets.is_some() {
-    //     self.add_string(container.singlets.take().unwrap());
-    //   }
-    //   container.dflag = false;
-    //   container.iflag = true;
-    //   container.sflag = true;
-    //   container.dependent = false;
-    //   if container.word_table.is_some() {
-    //     self.add_word_table(container.word_table.take().unwrap());
-    //   }
-    // });
+    pool_remove_val!(self, self.vstacks, capacity, Value::Stack(vstack), {
+      let container = &mut vstack.container;
+      while let Some(v) = container.stack.pop() {
+        self.add_val(v);
+      }
+      if container.err_stack.is_some() {
+        self.add_stack(container.err_stack.take().unwrap());
+      }
+      if container.cranks.is_some() {
+        self.add_cranks(container.cranks.take().unwrap());
+      }
+      if container.faliases.is_some() {
+        self.add_strings(container.faliases.take().unwrap());
+      }
+      if container.delims.is_some() {
+        self.add_string(container.delims.take().unwrap());
+      }
+      if container.ignored.is_some() {
+        self.add_string(container.ignored.take().unwrap());
+      }
+      if container.singlets.is_some() {
+        self.add_string(container.singlets.take().unwrap());
+      }
+      container.dflag = false;
+      container.iflag = true;
+      container.sflag = true;
+      container.dependent = false;
+      if container.word_table.is_some() {
+        self.add_word_table(container.word_table.take().unwrap());
+      }
+    });
     Box::new(VStack::with_container(Container::with_stack(self.get_stack(capacity))))
   }
   pub fn get_vmacro(&mut self, capacity: usize) -> Box<VMacro> {
-    // pool_remove_word!(self, self.vmacros, capacity, Value::Macro(vmacro), {
-    //   while let Some(v) = vmacro.macro_stack.pop() {
-    //     self.add_val(v);
-    //   }
-    // });
+    pool_remove_val!(self, self.vmacros, capacity, Value::Macro(vmacro), {
+      while let Some(v) = vmacro.macro_stack.pop() {
+        self.add_val(v);
+      }
+    });
     Box::new(VMacro::with_capacity(capacity))
   }
   pub fn get_verror(&mut self, capacity: usize) -> Box<VError> {
-    // pool_remove_word!(self, self.verrors, capacity, Value::Error(verror), {
-    //   verror.error.clear();
-    //   if verror.str_word.is_some() {
-    //     self.add_string(verror.str_word.take().unwrap());
-    //   }
-    // });
+    pool_remove_val!(self, self.verrors, capacity, Value::Error(verror), {
+      verror.error.clear();
+      if verror.str_word.is_some() {
+        self.add_string(verror.str_word.take().unwrap());
+      }
+    });
     Box::new(VError::with_capacity(capacity))
   }
   pub fn get_vcustom(&mut self, custom: Box<dyn Custom + Send>) -> Box<VCustom> {
-    // pool_pop_word!(self.vcustoms, Value::Custom(vcustom), {
-    //   vcustom.custom = custom;
-    // });
+    pool_pop_val!(self.vcustoms, Value::Custom(vcustom), {
+      vcustom.custom = custom;
+    });
     Box::new(VCustom { custom })
   }
   pub fn get_vfllib(&mut self, f: CognitionFunction) -> Box<VFLLib> {
-    // pool_pop_word!(self.vfllibs, Value::FLLib(vfllib), {
-    //   vfllib.fllib = f;
-    // });
+    pool_pop_val!(self.vfllibs, Value::FLLib(vfllib), {
+      vfllib.fllib = f;
+    });
     Box::new(VFLLib::with_fn(f))
   }
 
