@@ -6,6 +6,7 @@ use std::fs;
 
 use cognition::*;
 use cognition::macros::*;
+use cognition::math::Math;
 
 // to be reimplemented properly
 fn isint(_n: &String) -> bool { true }
@@ -30,6 +31,20 @@ fn string_to_i32(_n: &String) -> Result<i32, &'static str> { Ok(2) }
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
   let argc = args.len();
+
+  // temporary
+  if argc > 1 {
+    if args[1].as_str() == "test_math" {
+      let mut math = Math::new();
+      let digits = String::from("0123456789");
+      math.set_digits(&digits);
+      math.set_negc('\u{0305}');
+      math.set_radix('.');
+      math.set_delim(',');
+      math.set_base(12);
+      return ExitCode::SUCCESS;
+    }
+  }
 
   let parse = parse_configs(&args, argc);
   let opts = match parse {
@@ -163,7 +178,7 @@ fn help() -> ExitCode {
 }
 
 fn version() -> ExitCode {
-  println!("Authors: Preston Pan, Matthew Hinton, MIT License 2024");
+  println!("Authors: Matthew Hinton, Preston Pan, MIT License 2024");
   println!("cognition, version 1.0 alpha");
   ExitCode::from(0)
 }

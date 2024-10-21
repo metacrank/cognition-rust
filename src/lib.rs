@@ -5,10 +5,12 @@
 pub mod macros;
 pub mod tree;
 pub mod pool;
+pub mod math;
 pub mod builtins;
 
 use crate::pool::Pool;
 use crate::macros::*;
+use crate::math::Math;
 
 use std::collections::HashSet;
 use std::collections::HashMap;
@@ -70,14 +72,9 @@ pub trait Custom {
 /// Example of a rust library that would utilise Custom
 /// If the type has to be unsafely allocated, or is a C
 /// library, implement the Drop trait to free memory
+#[derive(Clone)]
 struct ExampleCustom {
   i: String,
-}
-
-impl Clone for ExampleCustom {
-  fn clone(&self) -> Self {
-    ExampleCustom{ i: self.i.clone() }
-  }
 }
 
 impl Custom for ExampleCustom {
@@ -101,13 +98,10 @@ impl Custom for Void {
   }
 }
 
+#[derive(Clone)]
 pub struct Crank {
   pub modulo: i32,
   pub base: i32,
-}
-
-impl Clone for Crank {
-  fn clone (&self) -> Self { Self{ modulo: self.modulo, base: self.base } }
 }
 
 trait WTCrankFuncs {
@@ -129,6 +123,7 @@ pub struct Container {
   pub stack: Stack,
   pub err_stack: Option<Stack>,
   pub cranks: Option<Cranks>,
+  pub math: Option<Math>,
   pub faliases: Option<Faliases>,
   pub delims: Option<String>,
   pub ignored: Option<String>,
@@ -147,6 +142,7 @@ impl Default for Container {
       stack: Stack::new(),
       err_stack: None,
       cranks: None,
+      math: None,
       faliases: None,
       delims: None,
       ignored: None,
@@ -414,18 +410,10 @@ impl Value {
   pub fn is_fllib(&self) -> bool { is_value_type!(self, Value::FLLib(_)) }
 }
 
+#[derive(Clone)]
 pub enum DefRef {
   D(*const Value),
   M(*const Value),
-}
-
-impl Clone for DefRef {
-  fn clone(&self) -> Self {
-    match self {
-      Self::D(r) => Self::D(r.clone()),
-      Self::M(r) => Self::M(r.clone()),
-    }
-  }
 }
 
 impl DefRef {
@@ -649,6 +637,11 @@ impl CognitionState {
       for crank in cranks.iter() {
         new_cranks.push(crank.clone());
       }
+    }
+    if let Some(ref math) = old.math {
+      new.math = Some(self.pool.get_math(math.base()));
+      let new_math = new.math.as_mut().unwrap();
+      math.copy_into(new_math, self);
     }
     if let Some(ref faliases) = old.faliases {
       new.faliases = Some(self.pool.get_faliases());

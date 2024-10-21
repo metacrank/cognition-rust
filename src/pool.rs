@@ -1,5 +1,6 @@
 use crate::*;
 use crate::tree::*;
+use crate::math::*;
 
 type ITree<T> = Tree<usize, T>;
 type VTree = ITree<Value>;
@@ -16,10 +17,19 @@ pub struct Pool {
   strings: Option<ITree<String>>,
   stringss: Option<ITree<Strings>>,
   crankss: Option<ITree<Cranks>>,
+  maths: Option<ITree<Math>>,
+  digitss: Option<ITree<Digits>>,
+  intss: Option<ITree<Vec<i32>>>,
+
   word_tables: Option<Vec<WordTable>>,
   families: Option<Vec<Family>>,
   faliasess: Option<Vec<Faliases>>,
   parsers: Option<Vec<Parser>>,
+
+  un_ops: Option<Vec<UnaryOp>>,
+  pub bin_ops: Option<Vec<BinaryOp>>,
+  pub str_ops: Option<Vec<StrOp>>,
+  pub custom_ops: Option<Vec<CustomOp>>,
 }
 
 trait DisregardPool {
@@ -62,6 +72,18 @@ macro_rules! pool_push_val {
     pool_push!($v,$self,$stack,$self.get_stack_for_pool());
   }
 }
+macro_rules! pool_remove {
+  ($self:ident,$tree:expr,$capacity:expr,$var:pat,$retval:tt,$destruct:expr,$mod:block) => {
+    if let Some(mut tree) = $tree.take() {
+      if let Some($var) = tree.remove_at_least($capacity, $destruct, $self) {
+        $mod;
+        $tree = Some(tree);
+        return $retval;
+      }
+      $tree = Some(tree);
+    }
+  };
+}
 macro_rules! pool_remove_val {
   ($self:ident,$tree:expr,$capacity:expr,$letpattern:pat,$retval:tt,$mod:block) => {
     if let Some(mut tree) = $tree.take() {
@@ -75,7 +97,16 @@ macro_rules! pool_remove_val {
     }
   }
 }
-
+macro_rules! pool_pop {
+  ($stack:expr,$var:pat,$retval:tt,$mod:block) => {
+    if let Some(stack) = &mut $stack {
+      if let Some($var) = stack.pop() {
+        $mod;
+        return $retval;
+      }
+    }
+  };
+}
 macro_rules! pool_pop_val {
   ($stack:expr,$letpattern:pat,$retval:tt,$mod:block) => {
     if let Some(stack) = &mut $stack {
@@ -102,10 +133,19 @@ impl Pool {
       strings: None,
       stringss: None,
       crankss: None,
+      maths: None,
+      digitss: None,
+      intss: None,
+
       word_tables: None,
       families: None,
       faliasess: None,
       parsers: None,
+
+      un_ops: None,
+      bin_ops: None,
+      str_ops: None,
+      custom_ops: None,
     }
   }
 
@@ -149,11 +189,39 @@ impl Pool {
       println!("crankss:");
       crankss.print();
     }
+    if let Some(ref maths) = self.maths {
+      println!("maths:");
+      maths.print();
+    }
+    if let Some(ref digitss) = self.digitss {
+      println!("digitss:");
+      digitss.print();
+    }
+
     if let Some(ref word_tables) = self.word_tables {
       println!("word_tables: {}", word_tables.len());
     }
     if let Some(ref families) = self.families {
       println!("families: {}", families.len());
+    }
+    if let Some(ref faliasess) = self.faliasess {
+      println!("faliasess: {}", faliasess.len());
+    }
+    if let Some(ref parsers) = self.parsers {
+      println!("parsers: {}", parsers.len());
+    }
+
+    if let Some(ref un_ops) = self.un_ops {
+      println!("un_ops: {}", un_ops.len());
+    }
+    if let Some(ref bin_ops) = self.bin_ops {
+      println!("bin_ops: {}", bin_ops.len());
+    }
+    if let Some(ref str_ops) = self.str_ops {
+      println!("str_ops: {}", str_ops.len());
+    }
+    if let Some(ref custom_ops) = self.custom_ops {
+      println!("custom_ops: {}", custom_ops.len());
     }
   }
 
@@ -199,6 +267,16 @@ impl Pool {
   pub fn add_cranks(&mut self, cs: Cranks) {
     pool_insert!(cs, cs.capacity(), self, self.crankss, Cranks, Vec::<Cranks>::pnew);
   }
+  pub fn add_math(&mut self, m: Math) {
+    pool_insert!(m, m.base() as usize, self, self.maths, Math, Vec::<Math>::pnew);
+  }
+  pub fn add_digits(&mut self, d: Digits) {
+    pool_insert!(d, d.capacity(), self, self.digitss, Digits, Vec::<Digits>::pnew);
+  }
+  pub fn add_ints(&mut self, i: Vec<i32>) {
+    pool_insert!(i, i.capacity(), self, self.intss, Vec<i32>, Vec::<Vec<i32>>::pnew);
+  }
+
   pub fn add_word_table(&mut self, wt: WordTable) {
     pool_push!(wt, self, self.word_tables, Vec::<WordTable>::with_capacity(DEFAULT_STACK_SIZE));
   }
@@ -210,6 +288,19 @@ impl Pool {
   }
   pub fn add_parser(&mut self, p: Parser) {
     pool_push!(p, self, self.parsers, Vec::<Parser>::with_capacity(DEFAULT_STACK_SIZE));
+  }
+
+  pub fn add_un_ops(&mut self, o: UnaryOp) {
+    pool_push!(o, self, self.un_ops, Vec::<UnaryOp>::with_capacity(DEFAULT_STACK_SIZE));
+  }
+  pub fn add_bin_ops(&mut self, o: BinaryOp) {
+    pool_push!(o, self, self.bin_ops, Vec::<BinaryOp>::with_capacity(DEFAULT_STACK_SIZE));
+  }
+  pub fn add_str_ops(&mut self, o: StrOp) {
+    pool_push!(o, self, self.str_ops, Vec::<StrOp>::with_capacity(DEFAULT_STACK_SIZE));
+  }
+  pub fn add_custom_ops(&mut self, o: CustomOp) {
+    pool_push!(o, self, self.custom_ops, Vec::<CustomOp>::with_capacity(DEFAULT_STACK_SIZE));
   }
 
   pub fn add_def(&mut self, definition: (Option<String>, Option<WordDef>)) {
@@ -236,6 +327,9 @@ impl Pool {
       if container.cranks.is_some() {
         self.add_cranks(container.cranks.take().unwrap());
       }
+      if container.math.is_some() {
+        self.add_math(container.math.take().unwrap());
+      }
       if container.faliases.is_some() {
         self.add_faliases(container.faliases.take().unwrap());
       }
@@ -260,9 +354,7 @@ impl Pool {
   }
   pub fn get_vmacro(&mut self, capacity: usize) -> Box<VMacro> {
     pool_remove_val!(self, self.vmacros, capacity, Value::Macro(mut vmacro), vmacro, {
-      while let Some(v) = vmacro.macro_stack.pop() {
-        self.add_val(v);
-      }
+      while let Some(v) = vmacro.macro_stack.pop() { self.add_val(v) }
     });
     Box::new(VMacro::with_capacity(capacity))
   }
@@ -276,9 +368,7 @@ impl Pool {
     Box::new(VError::with_capacity(capacity))
   }
   pub fn get_vcustom(&mut self, custom: Box<dyn Custom + Send>) -> Box<VCustom> {
-    pool_pop_val!(self.vcustoms, Value::Custom(mut vcustom), vcustom, {
-      vcustom.custom = custom;
-    });
+    pool_pop_val!(self.vcustoms, Value::Custom(mut vcustom), vcustom, { vcustom.custom = custom; });
     Box::new(VCustom { custom })
   }
   pub fn get_vfllib(&mut self, f: CognitionFunction) -> Box<VFLLib> {
@@ -289,99 +379,85 @@ impl Pool {
   }
 
   pub fn get_stack(&mut self, capacity: usize) -> Stack {
-    if let Some(mut tree) = self.stacks.take() {
-      if let Some(mut retval) = tree.remove_at_least(capacity, Vec::<Stack>::pdrop, self) {
-        while let Some(v) = retval.pop() {
-          self.add_val(v);
-        }
-        self.stacks = Some(tree);
-        return retval;
-      }
-      self.stacks = Some(tree);
-    }
+    pool_remove!(self, self.stacks, capacity, mut stack, stack, Vec::<Stack>::pdrop, {
+      while let Some(v) = stack.pop() { self.add_val(v) }
+    });
     Stack::with_capacity(capacity)
   }
   pub fn get_stack_for_pool(&mut self) -> Stack {
     self.get_stack(DEFAULT_STACK_SIZE)
   }
   pub fn get_string(&mut self, capacity: usize) -> String {
-    if let Some(mut tree) = self.strings.take() {
-      if let Some(mut retval) = tree.remove_at_least(capacity, Self::add_strings, self) {
-        retval.clear();
-        self.strings = Some(tree);
-        return retval;
-      }
-      self.strings = Some(tree);
-    }
+    pool_remove!(self, self.strings, capacity, mut s, s, Self::add_strings, { s.clear() });
     String::with_capacity(capacity)
   }
   pub fn get_strings(&mut self, capacity: usize) -> Strings {
-    if let Some(mut tree) = self.stringss.take() {
-      if let Some(mut retval) = tree.remove_at_least(capacity, Vec::<Strings>::pdrop, self) {
-        while let Some(s) = retval.pop() {
-          self.add_string(s);
-        }
-        self.stringss = Some(tree);
-        return retval;
-      }
-      self.stringss = Some(tree);
-    }
+    pool_remove!(self, self.stringss, capacity, mut ss, ss, Vec::<Strings>::pdrop, {
+      while let Some(s) = ss.pop() { self.add_string(s) }
+    });
     Strings::with_capacity(capacity)
   }
   pub fn get_strings_for_pool(&mut self) -> Strings {
     self.get_strings(DEFAULT_STACK_SIZE)
   }
   pub fn get_cranks(&mut self, capacity: usize) -> Cranks {
-    if let Some(mut tree) = self.crankss.take() {
-      if let Some(mut retval) = tree.remove_at_least(capacity, Vec::<Cranks>::pdrop, self) {
-        retval.clear();
-        self.crankss= Some(tree);
-        return retval;
-      }
-      self.crankss = Some(tree);
-    }
+    pool_remove!(self, self.crankss, capacity, mut cs, cs, Vec::<Cranks>::pdrop, { cs.clear() });
     Cranks::with_capacity(capacity)
   }
+  pub fn get_math(&mut self, mut base: i32) -> Math {
+    if base < 0 { base = 0 }
+    pool_remove!(self, self.maths, base as usize, mut m, m, Vec::<Math>::pdrop, { m.clean() });
+    Math::new()
+  }
+  pub fn get_digits(&mut self, capacity: usize) -> Digits {
+    pool_remove!(self, self.digitss, capacity, mut d, d, Vec::<Digits>::pdrop, { d.clear() });
+    Digits::with_capacity(capacity)
+  }
+  pub fn get_ints(&mut self, capacity: usize) -> Vec<i32> {
+    pool_remove!(self, self.intss, capacity, mut i, i, Vec::<Vec<i32>>::pdrop, { i.clear() });
+    Vec::<i32>::with_capacity(capacity)
+  }
+
   pub fn get_word_table(&mut self) -> WordTable {
-    if let Some(word_tables) = &mut self.word_tables {
-      if let Some(mut wt) = word_tables.pop() {
-        for (key, word_def) in wt.drain() {
-          self.add_string(key);
-          if let Some(WordDef::Val(v)) = word_def { self.add_val(v); }
-        }
-        return wt;
+    pool_pop!(self.word_tables, mut wt, wt, {
+      for (key, word_def) in wt.drain() {
+        self.add_string(key);
+        if let Some(WordDef::Val(v)) = word_def { self.add_val(v) }
       }
-    }
+    });
     WordTable::new()
   }
   pub fn get_family(&mut self) -> Family {
-    if let Some(stack) = &mut self.families {
-      if let Some(mut family) = stack.pop() {
-        // Families should be pushed to the pool already empty, but just in case
-        family.stack.clear();
-        return family;
-      }
-    }
+    pool_pop!(self.families, mut family, family, { family.stack.clear(); });
     Family::with_capacity(DEFAULT_STACK_SIZE)
   }
   pub fn get_faliases(&mut self) -> Faliases {
-    if let Some(stack) = &mut self.faliasess {
-      if let Some(mut faliases) = stack.pop() {
-        for s in faliases.drain() {
-          self.add_string(s);
-        }
-        return faliases;
-      }
-    }
+    pool_pop!(self.faliasess, mut faliases, faliases, {
+      for s in faliases.drain() { self.add_string(s); }
+    });
     Faliases::with_capacity(DEFAULT_FALIASES_SIZE)
   }
   pub fn get_parser(&mut self) -> Parser {
-    if let Some(stack) = &mut self.parsers {
-      if let Some(mut parser) = stack.pop() {
-        if let Some(s) = parser.source() { self.add_string(s) }
-        return parser;
-      }
-    }
+    pool_pop!(self.parsers, mut parser, parser, {
+      if let Some(s) = parser.source() { self.add_string(s) }
+    });
     Parser::new(None)
+  }
+
+  pub fn get_un_op(&mut self) -> UnaryOp {
+    pool_pop!(self.un_ops, mut op, op, { op.drain() });
+    UnaryOp::new()
+  }
+  pub fn get_bin_op(&mut self) -> BinaryOp {
+    pool_pop!(self.bin_ops, mut op, op, { op.drain() });
+    BinaryOp::new()
+  }
+  pub fn get_str_op(&mut self) -> StrOp {
+    pool_pop!(self.str_ops, mut op, op, { op.drain() });
+    StrOp::new()
+  }
+  pub fn get_custom_op(&mut self) -> CustomOp {
+    pool_pop!(self.custom_ops, mut op, op, { op.drain() });
+    CustomOp::new()
   }
 }
