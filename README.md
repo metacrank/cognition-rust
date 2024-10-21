@@ -13,3 +13,9 @@ Here we provide the installation instructions for supported operating systems an
 ```sh
 nix install
 ```
+### GNU Guix
+
+``` sh
+guix package -f cognition.scm
+```
+

@@ -33,3 +33,5 @@
        into something like the AST without having to explicitly program a rigid syntax.")
      (home-page "https://www.gnu.org/software/hello/")
      (license expat))))
+
+cognition
