@@ -36,7 +36,7 @@ fn main() -> ExitCode {
   if argc > 1 {
     if args[1].as_str() == "test_math" {
       let mut math = Math::new();
-      let digits = String::from("0123456789↊↋🜘");
+      let digits = String::from("abcdefghijklmnopqrstuvwxyz");
       math.set_digits(&digits);
       math.set_negc('n');
       math.set_radix('.');
@@ -49,6 +49,8 @@ fn main() -> ExitCode {
 
       let Ok(i1) = math.stoi(&s1) else { panic!("stoi failed") };
       println!("\"{}\" -> {}", s1, i1);
+
+      math.set_negc('\u{0305}');
 
       let Ok(s2) = math.itos(i1, &mut state) else { panic!("itos failed") };
       println!("{} -> \"{}\"", i1, s2);
@@ -251,7 +253,7 @@ fn print_end(state: &CognitionState) {
     println!("");
     print!("negc: ");
     match math.get_negc() {
-      Some(c) => println!("'{c}'"),
+      Some(c) => println!("'{}\u{00A0}'", c),
       None => println!("(none)"),
     }
     print!("radix: ");
@@ -264,6 +266,7 @@ fn print_end(state: &CognitionState) {
       Some(c) => println!("'{c}'"),
       None => println!("(none)"),
     }
+    println!("");
   } else {
     println!("uninitialized math\n");
   }

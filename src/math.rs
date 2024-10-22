@@ -4,6 +4,8 @@ use std::str::Chars;
 //use std::iter::Rev;
 //use std::slice::IterMut;
 
+pub const BASE_MAX: i32 = 0x110000 - (0xE000 - 0xD800);
+
 pub type Digits = Vec<Digit>;
 pub type UnaryOp = HashMap<Digit, Digit>;
 pub type BinaryOp = HashMap<(Digit, Digit), (Digit, Digit)>;
@@ -107,32 +109,32 @@ impl Operand {
   // }
 }
 
-macro_rules! push_next {
-  ($c:ident,$iter:ident,$tmp:ident,$negc:expr,$radix:expr,$delim:expr) => {
-    if $c == $negc {
-      let Some(c) = $iter.next() else { return Some("INVALID NUMBER STRING") };
-      $tmp.push(Digit{ digit: c, neg: true }); (true, false)
-    }
-    else if $c == $radix { (false, true) }
-    else if $c == $delim { (false, false) }
-    else { $tmp.push(Digit{ digit: $c, neg: false }); (true, false) }
-  };
-}
-macro_rules! push_next_int {
-  ($self:ident,$c:ident,$iter:ident,$tmp:ident,$negc:expr,$radix:expr,$delim:expr) => {
-    if $c == $negc {
-      let Some(c) = $iter.next() else { return Err("INVALID NUMBER STRING") };
-      let Some(i) = $self.d_idx.get(&c) else { return Err("INVALID NUMBER STRING") };
-      $tmp.push(-(*i)); (true, false)
-    }
-    else if $c == $radix { (false, true) }
-    else if $c == $delim { (false, false) }
-    else {
-      let Some(i) = $self.d_idx.get(&$c) else { return Err("INVALID NUMBER STRING") };
-      $tmp.push(*i); (true, false)
-    }
-  };
-}
+// macro_rules! push_next {
+//   ($c:ident,$iter:ident,$tmp:ident,$negc:expr,$radix:expr,$delim:expr) => {
+//     if $c == $negc {
+//       let Some(c) = $iter.next() else { return Some("INVALID NUMBER STRING") };
+//       $tmp.push(Digit{ digit: c, neg: true }); (true, false)
+//     }
+//     else if $c == $radix { (false, true) }
+//     else if $c == $delim { (false, false) }
+//     else { $tmp.push(Digit{ digit: $c, neg: false }); (true, false) }
+//   };
+// }
+// macro_rules! push_next_int {
+//   ($self:ident,$c:ident,$iter:ident,$tmp:ident,$negc:expr,$radix:expr,$delim:expr) => {
+//     if $c == $negc {
+//       let Some(c) = $iter.next() else { return Err("INVALID NUMBER STRING") };
+//       let Some(i) = $self.d_idx.get(&c) else { return Err("INVALID NUMBER STRING") };
+//       $tmp.push(-(*i)); (true, false)
+//     }
+//     else if $c == $radix { (false, true) }
+//     else if $c == $delim { (false, false) }
+//     else {
+//       let Some(i) = $self.d_idx.get(&$c) else { return Err("INVALID NUMBER STRING") };
+//       $tmp.push(*i); (true, false)
+//     }
+//   };
+// }
 
 pub struct Math {
   base: i32,
@@ -248,6 +250,7 @@ impl Math {
     if self.radix.is_none() { return Some("MATH RADIX UNINITIALIZED") }
     if self.delim.is_none() { return Some("MATH DELIM UNINITIALIZED") }
     self.base = base;
+    self.mul.drain();
     self.init_mul();
     // TODO: init chebyshev polynomial coefficients
     None
@@ -256,6 +259,7 @@ impl Math {
   pub fn base(&self) -> i32 { self.base }
 
   fn init_mul(&mut self) {
+    if self.base == 0 { return }
     let radius = self.base / 2 + 1;
     for i in 0..radius {
       for j in 0..radius {
@@ -270,52 +274,63 @@ impl Math {
       }
     }
 
-    println!("Multiplication table:");
-    for i in 0..radius {
-      for j in 0..radius {
-        let Some((product, carry)) = self.mul.get(&(self.digits[i as usize], self.digits[j as usize])) else { unreachable!() };
-        print!("{}", self.digits[*carry as usize]);
-        if *product < 0 { print!("{}{} ", self.negc.unwrap(), self.digits[-(*product) as usize]) }
-        else { print!("{} ", self.digits[*product as usize]); }
-      }
-      println!("");
-    }
+    // println!("Multiplication table:");
+    // for i in 0..radius {
+    //   for j in 0..radius {
+    //     let Some((product, carry)) = self.mul.get(&(self.digits[i as usize], self.digits[j as usize])) else { unreachable!() };
+    //     print!("{}", self.digits[*carry as usize]);
+    //     if *product < 0 { print!("{}{} ", self.negc.unwrap(), self.digits[-(*product) as usize]) }
+    //     else { print!("{} ", self.digits[*product as usize]); }
+    //   }
+    //   println!("");
+    // }
   }
 
-  pub fn len(&self, s: &str) -> Result<usize, &'static str> {
-    let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
-    let Some(ref radix) = self.radix else { return Err("MATH RADIX UNINITIALIZED") };
-    let mut l: usize = 0;
-    let mut s_iter = s.chars();
-    loop {
-      let Some(c) = s_iter.next() else { break Ok(l) };
-      if c == *negc {
-        if s_iter.next() == self.radix { break Ok(l + 1) }
-      } else if c == *radix { break Ok(l) }
-      l += 1
-    }
-  }
+  // pub fn len(&self, s: &str) -> Result<usize, &'static str> {
+  //   let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
+  //   let Some(ref radix) = self.radix else { return Err("MATH RADIX UNINITIALIZED") };
+  //   let mut l: usize = 0;
+  //   let mut s_iter = s.chars();
+  //   loop {
+  //     let Some(c) = s_iter.next() else { break Ok(l) };
+  //     if c == *negc {
+  //       if s_iter.next() == self.radix { break Ok(l) }
+  //     } else if c == *radix { break Ok(l) }
+  //     l += 1
+  //   }
+  // }
 
   /// Converts a string to a signed integer
   pub fn stoi(&self, s: &str) -> Result<isize, &'static str> {
-    let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
-    let mut agg: isize = 0;
+    let negc = if let Some(ref c) = self.negc { c.clone() } else { return Err("MATH NEGC UNINITIALIZED") };
     let mut iter = s.chars();
-    while let Some(c) = iter.next() {
-      if c == *negc {
-        let Some(c) = iter.next() else { return Err("INVALID NUMBER STRING") };
+    let Some(mut c) = iter.next() else { return Ok(0) };
+    let mut agg: isize = 0;
+    loop {
+      let Some(c_new) = iter.next() else {
         let Some(i) = self.d_idx.get(&c) else { return Err("INVALID NUMBER STRING") };
-        agg = agg * self.base as isize - *i as isize;
-        continue
-      }
+        agg = agg * self.base as isize + *i as isize;
+        break
+      };
       let Some(i) = self.d_idx.get(&c) else { return Err("INVALID NUMBER STRING") };
-      agg = agg * self.base as isize + *i as isize
+      if c_new == negc {
+        agg = agg * self.base as isize - *i as isize;
+        let Some(c_new) = iter.next() else { break };
+        c = c_new;
+      }
+      else {
+        agg = agg * self.base as isize + *i as isize;
+        c = c_new;
+      }
     }
     Ok(agg)
   }
   /// Converts a signed integer to a string
   pub fn itos(&self, mut i: isize, state: &mut CognitionState) -> Result<String, &'static str> {
-    let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
+    let negc = if let Some(ref c) = self.negc { c.clone() } else { return Err("MATH NEGC UNINITIALIZED") };
+    if self.base == 0 { return Err("MATH BASE ZERO") };
+    if i == 0 { return Ok(state.pool.get_string(0)) }
+    if self.base == 1 { return Err("MATH BASE ONE") };
     let radius = self.base / 2 + 1;
     let mut digits = state.pool.get_digits(DEFAULT_STACK_SIZE);
     let mut neg = i < 0;
@@ -332,8 +347,8 @@ impl Math {
     }
     let mut result = state.pool.get_string(digits.len() + neg_count);
     while let Some(d) = digits.pop() {
-      if d.neg { result.push(*negc) }
-      result.push(d.digit)
+      result.push(d.digit);
+      if d.neg { result.push(negc) }
     }
     state.pool.add_digits(digits);
     Ok(result)
@@ -342,14 +357,19 @@ impl Math {
   fn into_digits(&self, s: &str, v: &mut Vec<Digit>) {
     let negc = self.negc.expect("negc uninitialized");
     let mut iter = s.chars();
-    while let Some(c) = iter.next() {
-      if c == negc {
-        let Some(d) = iter.next() else { break };
-        v.push(Digit{ digit: d, neg: true });
-        continue
+    let Some(mut c) = iter.next() else { return };
+    while let Some(c_new) = iter.next() {
+      if c_new == negc {
+        v.push(Digit{ digit: c, neg: true });
+        let Some(c_new) = iter.next() else { break };
+        c = c_new;
       }
-      v.push(Digit{ digit: c, neg: false });
+      else {
+        v.push(Digit{ digit: c, neg: false });
+        c = c_new;
+      }
     }
+    v.push(Digit{ digit: c, neg: false });
   }
 
   // fn get_next_digit(&self, c1: &mut char, iter: &mut Rev<Chars>, negc: char) -> Result<(i32, bool), &'static str> {
@@ -564,42 +584,42 @@ impl Math {
   // }
 
 
-  fn pair_into_next_digits(&self, s1_iter: &mut Chars, s2_iter: &mut Chars, tmp1_digits: &mut Digits, tmp2_digits: &mut Digits) -> Option<&'static str> {
-    let Some(ref negc) = self.negc else { return Some("MATH NEGC UNINITIALIZED") };
-    let Some(ref radix) = self.radix else { return Some("MATH RADIX UNINITIALIZED") };
-    let Some(ref delim) = self.delim else { return Some("MATH DELIM UNINITIALIZED") };
+  // fn pair_into_next_digits(&self, s1_iter: &mut Chars, s2_iter: &mut Chars, tmp1_digits: &mut Digits, tmp2_digits: &mut Digits) -> Option<&'static str> {
+  //   let Some(ref negc) = self.negc else { return Some("MATH NEGC UNINITIALIZED") };
+  //   let Some(ref radix) = self.radix else { return Some("MATH RADIX UNINITIALIZED") };
+  //   let Some(ref delim) = self.delim else { return Some("MATH DELIM UNINITIALIZED") };
 
-    let (mut i_len1, mut i_len2, mut f_len1, mut f_len2) = (0,0,0,0);
+  //   let (mut i_len1, mut i_len2, mut f_len1, mut f_len2) = (0,0,0,0);
 
-    let (mut alive1, mut alive2) = (true, true);
-    let (mut frac1, mut frac2) = (false, false);
+  //   let (mut alive1, mut alive2) = (true, true);
+  //   let (mut frac1, mut frac2) = (false, false);
 
-    let get_next = | alive1: bool, alive2: bool, iter1: &mut Chars, iter2: &mut Chars, len1: &mut usize, len2: &mut usize |
-    (if alive1 { *len1 += 1; iter1.next() } else { None },
-     if alive2 { *len2 += 1; iter2.next() } else { None });
+  //   let get_next = | alive1: bool, alive2: bool, iter1: &mut Chars, iter2: &mut Chars, len1: &mut usize, len2: &mut usize |
+  //   (if alive1 { *len1 += 1; iter1.next() } else { None },
+  //    if alive2 { *len2 += 1; iter2.next() } else { None });
 
-    loop {
-      let (c1opt, c2opt) = get_next(alive1, alive2, s1_iter, s2_iter, &mut i_len1, &mut i_len2);
-      if let Some(c1) = c1opt { (alive1, frac1) = push_next!(c1, s1_iter, tmp1_digits, *negc, *radix, *delim); }
-      if let Some(c2) = c2opt { (alive2, frac2) = push_next!(c2, s2_iter, tmp2_digits, *negc, *radix, *delim); }
-      if (c1opt, c2opt) == (None, None) { break }
-    }
-    if frac1 { tmp1_digits.push(Digit{ digit: *radix, neg: false }) }
-    if frac2 { tmp2_digits.push(Digit{ digit: *radix, neg: false }) }
-    (alive1, alive2) = (frac1, frac2);
-    loop {
-      let (c1opt, c2opt) = get_next(alive1, alive2, s1_iter, s2_iter, &mut f_len1, &mut f_len2);
-      if let Some(c1) = c1opt {
-        (alive1, frac1) = push_next!(c1, s1_iter, tmp1_digits, *negc, *radix, *delim);
-        if frac1 { return Some("INVALID NUMBER STRING") }
-      }
-      if let Some(c2) = c2opt {
-        (alive2, frac2) = push_next!(c2, s2_iter, tmp2_digits, *negc, *radix, *delim);
-        if frac2 { return Some("INVALID NUMBER STRING") }
-      }
-      if (c1opt, c2opt) == (None, None) { break None }
-    }
-  }
+  //   loop {
+  //     let (c1opt, c2opt) = get_next(alive1, alive2, s1_iter, s2_iter, &mut i_len1, &mut i_len2);
+  //     if let Some(c1) = c1opt { (alive1, frac1) = push_next!(c1, s1_iter, tmp1_digits, *negc, *radix, *delim); }
+  //     if let Some(c2) = c2opt { (alive2, frac2) = push_next!(c2, s2_iter, tmp2_digits, *negc, *radix, *delim); }
+  //     if (c1opt, c2opt) == (None, None) { break }
+  //   }
+  //   if frac1 { tmp1_digits.push(Digit{ digit: *radix, neg: false }) }
+  //   if frac2 { tmp2_digits.push(Digit{ digit: *radix, neg: false }) }
+  //   (alive1, alive2) = (frac1, frac2);
+  //   loop {
+  //     let (c1opt, c2opt) = get_next(alive1, alive2, s1_iter, s2_iter, &mut f_len1, &mut f_len2);
+  //     if let Some(c1) = c1opt {
+  //       (alive1, frac1) = push_next!(c1, s1_iter, tmp1_digits, *negc, *radix, *delim);
+  //       if frac1 { return Some("INVALID NUMBER STRING") }
+  //     }
+  //     if let Some(c2) = c2opt {
+  //       (alive2, frac2) = push_next!(c2, s2_iter, tmp2_digits, *negc, *radix, *delim);
+  //       if frac2 { return Some("INVALID NUMBER STRING") }
+  //     }
+  //     if (c1opt, c2opt) == (None, None) { break None }
+  //   }
+  // }
 
   fn add_digits(&self, c1_val: i32, c2_val: i32, mut carry: i32, mut neg: bool, r: &mut Digits) -> (i32, bool) {
     let radius = &self.base / 2 + 1;
@@ -727,12 +747,15 @@ impl Math {
     self.add_digits(0, 0, carry, neg, r);
   }
 
+  // redesigning based on reading ahead
+  #[allow(unused_variables)]
+  #[allow(unused_mut)]
   pub fn sum(&self, s1: &String, s2: &String, state: &mut CognitionState) -> Result<String, &'static str> {
     if self.base == 0 { return Err("UNINITIALIZED NUMBER BASE") }
 
-    let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
-    let Some(ref radix) = self.radix else { return Err("MATH RADIX UNINITIALIZED") };
-    let Some(ref delim) = self.delim else { return Err("MATH DELIM UNINITIALIZED") };
+    let negc = if let Some(ref c) = self.negc { c.clone() } else { return Err("MATH NEGC UNINITIALIZED") };
+    let radix = if let Some(ref c) = self.radix { c.clone() } else { return Err("MATH RADIX UNINITIALIZED") };
+    let delim = if let Some(ref c) = self.delim { c.clone() } else { return Err("MATH DELIM UNINITIALIZED") };
 
     if s1.len() == 0 { return Ok(state.string_copy(s2)) }
     if s2.len() == 0 { return Ok(state.string_copy(s1)) }
@@ -752,48 +775,104 @@ impl Math {
       (if alive1 { *len1 += 1; iter1.next() } else { None },
        if alive2 { *len2 += 1; iter2.next() } else { None });
 
+
+      // macro_rules! push_next_int {
+      //   ($self:ident,$c:ident,$iter:ident,$tmp:ident,$negc:expr,$radix:expr,$delim:expr) => {
+      //     if $c == $negc {
+      //       let Some(c) = $iter.next() else { return Err("INVALID NUMBER STRING") };
+      //       let Some(i) = $self.d_idx.get(&c) else { return Err("INVALID NUMBER STRING") };
+      //       $tmp.push(-(*i)); (true, false)
+      //     }
+      //     else if $c == $radix { (false, true) }
+      //     else if $c == $delim { (false, false) }
+      //     else {
+      //       let Some(i) = $self.d_idx.get(&$c) else { return Err("INVALID NUMBER STRING") };
+      //       $tmp.push(*i); (true, false)
+      //     }
+      //   };
+      // }
+
       let mut neg = None;
-      loop {
-        let (c1opt, c2opt) = get_next(alive1, alive2, &mut s1_iter, &mut s2_iter, &mut i_len1, &mut i_len2);
-        if let Some(c1) = c1opt { (alive1, frac1) = push_next_int!(self, c1, s1_iter, tmp1_ints, *negc, *radix, *delim); }
-        if let Some(c2) = c2opt { (alive2, frac2) = push_next_int!(self, c2, s2_iter, tmp2_ints, *negc, *radix, *delim); }
-        if alive1 && alive2 && neg.is_none() {
-          let sum = tmp1_ints.last().unwrap() + tmp2_ints.last().unwrap();
-          if sum < 0 { neg = Some(true) } else if sum > 0 { neg = Some(false) }
+
+      if let Some(mut c) = s1_iter.next() {
+        loop {
+          if c == radix { break }
+          if c == delim { break }
+          let Some(c_new) = s1_iter.next() else {
+            let Some(i) = self.d_idx.get(&c) else {
+              state.pool.add_ints(tmp1_ints);
+              state.pool.add_ints(tmp2_ints);
+              return Err("INVALID NUMBER STRING")
+            };
+            tmp1_ints.push(*i);
+            break
+          };
+          if c_new == negc {
+            let Some(i) = self.d_idx.get(&c) else {
+              state.pool.add_ints(tmp1_ints);
+              state.pool.add_ints(tmp2_ints);
+              return Err("INVALID NUMBER STRING")
+            };
+            tmp1_ints.push(-(*i));
+            let Some(c_new) = s1_iter.next() else { break };
+            c = c_new;
+            continue;
+          }
+          let Some(i) = self.d_idx.get(&c) else {
+            state.pool.add_ints(tmp1_ints);
+            state.pool.add_ints(tmp2_ints);
+            return Err("INVALID NUMBER STRING")
+          };
+          tmp1_ints.push(*i);
+          c = c_new;
         }
-        if (c1opt, c2opt) == (None, None) { break }
       }
-      if i_len1 > i_len2      { neg = Some(*tmp1_ints.first().unwrap() < 0) }
-      else if i_len1 < i_len2 { neg = Some(*tmp2_ints.first().unwrap() < 0) }
-      (alive1, alive2) = (frac1, frac2);
-      loop {
-        let (c1opt, c2opt) = get_next(alive1, alive2, &mut s1_iter, &mut s2_iter, &mut f_len1, &mut f_len2);
-        if let Some(c1) = c1opt {
-          (alive1, frac1) = push_next_int!(self, c1, s1_iter, tmp1_ints, *negc, *radix, *delim);
-          if frac1 { return Err("INVALID NUMBER STRING") }
-        }
-        if let Some(c2) = c2opt {
-          (alive2, frac2) = push_next_int!(self, c2, s2_iter, tmp2_ints, *negc, *radix, *delim);
-          if frac2 { return Err("INVALID NUMBER STRING") }
-        }
-        if alive1 && alive2 && neg.is_none() {
-          let sum = tmp1_ints.last().unwrap() + tmp2_ints.last().unwrap();
-          if sum < 0 { neg = Some(true) } else if sum > 0 { neg = Some(false) }
-        }
-        if (c1opt, c2opt) == (None, None) { break }
-      }
+
+      // loop {
+      //   let (c1opt_new, c2opt_new) = get_next(alive1, alive2, &mut s1_iter, &mut s2_iter, &mut i_len1, &mut i_len2);
+      //   if let Some(c1) = c1opt {
+      //     (alive1, frac1) = push_next_int!(self, c1, s1_iter, tmp1_ints, *negc, *radix, *delim);
+      //   }
+      //   if let Some(c2) = c2opt { (alive2, frac2) = push_next_int!(self, c2, s2_iter, tmp2_ints, *negc, *radix, *delim); }
+      //   if alive1 && alive2 && neg.is_none() {
+      //     let sum = tmp1_ints.last().unwrap() + tmp2_ints.last().unwrap();
+      //     if sum < 0 { neg = Some(true) } else if sum > 0 { neg = Some(false) }
+      //   }
+      //   if (c1opt, c2opt) == (None, None) { break }
+      // }
+      // if i_len1 > i_len2      { neg = Some(*tmp1_ints.first().unwrap() < 0) }
+      // else if i_len1 < i_len2 { neg = Some(*tmp2_ints.first().unwrap() < 0) }
+      // (alive1, alive2) = (frac1, frac2);
+
+      // loop {
+      //   let (c1opt, c2opt) = get_next(alive1, alive2, &mut s1_iter, &mut s2_iter, &mut f_len1, &mut f_len2);
+      //   if let Some(c1) = c1opt {
+      //     (alive1, frac1) = push_next_int!(self, c1, s1_iter, tmp1_ints, *negc, *radix, *delim);
+      //     if frac1 { return Err("INVALID NUMBER STRING") }
+      //   }
+      //   if let Some(c2) = c2opt {
+      //     (alive2, frac2) = push_next_int!(self, c2, s2_iter, tmp2_ints, *negc, *radix, *delim);
+      //     if frac2 { return Err("INVALID NUMBER STRING") }
+      //   }
+      //   if alive1 && alive2 && neg.is_none() {
+      //     let sum = tmp1_ints.last().unwrap() + tmp2_ints.last().unwrap();
+      //     if sum < 0 { neg = Some(true) } else if sum > 0 { neg = Some(false) }
+      //   }
+      //   if (c1opt, c2opt) == (None, None) { break }
+      // }
+
       let n_o_d = tmp1_ints.len().max(tmp2_ints.len()) + 2;
       let mut tmp_digits = state.pool.get_digits(n_o_d);
       for _ in 0..n_o_d { tmp_digits.push(Digit{ digit: self.digits[0], neg: false }) }
-      if f_len1 > f_len2 { self.add(neg, &mut tmp2_ints, &mut tmp1_ints, f_len2, f_len1, &mut tmp_digits, *radix) }
-      else               { self.add(neg, &mut tmp1_ints, &mut tmp2_ints, f_len1, f_len2, &mut tmp_digits, *radix) }
+      if f_len1 > f_len2 { self.add(neg, &mut tmp2_ints, &mut tmp1_ints, f_len2, f_len1, &mut tmp_digits, radix) }
+      else               { self.add(neg, &mut tmp1_ints, &mut tmp2_ints, f_len1, f_len2, &mut tmp_digits, radix) }
 
       while let Some(d) = tmp_digits.pop() {
         if d.digit == self.digits[0] { continue }
-        if d.neg { result.push(*negc) }
+        if d.neg { result.push(negc) }
         result.push(d.digit);
       }
-      result.push(*delim);
+      result.push(delim);
       state.pool.add_digits(tmp_digits);
 
       break
