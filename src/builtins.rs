@@ -1,5 +1,6 @@
 pub mod cranker;
 pub mod errors;
+pub mod math;
 pub mod multithreading;
 pub mod parser;
 pub mod stackops;
@@ -12,6 +13,7 @@ pub fn cog_nop(state: CognitionState, _v: Option<&Value>) -> CognitionState { st
 pub fn add_builtins(state: &mut CognitionState) {
   cranker::add_words(state);
   errors::add_words(state);
+  math::add_words(state);
   multithreading::add_words(state);
   parser::add_words(state);
   stackops::add_words(state);

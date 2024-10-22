@@ -36,12 +36,23 @@ fn main() -> ExitCode {
   if argc > 1 {
     if args[1].as_str() == "test_math" {
       let mut math = Math::new();
-      let digits = String::from("0123456789");
+      let digits = String::from("0123456789↊↋🜘");
       math.set_digits(&digits);
-      math.set_negc('\u{0305}');
+      math.set_negc('n');
       math.set_radix('.');
       math.set_delim(',');
-      math.set_base(12);
+      let err = math.set_base(12);
+      if err.is_some() { println!("{}", err.unwrap()) }
+      let mut state = CognitionState::new(Stack::new());
+
+      let s1 = String::from(args[2].as_str());
+
+      let Ok(i1) = math.stoi(&s1) else { panic!("stoi failed") };
+      println!("\"{}\" -> {}", s1, i1);
+
+      let Ok(s2) = math.itos(i1, &mut state) else { panic!("itos failed") };
+      println!("{} -> \"{}\"", i1, s2);
+
       return ExitCode::SUCCESS;
     }
   }
@@ -229,6 +240,33 @@ fn print_end(state: &CognitionState) {
     println!("uninitialized crank");
   }
   println!("");
+
+  if let Some(ref math) = cur.math {
+    println!("Math:");
+    println!("base: {}", math.base());
+    print!("digits: ");
+    for d in math.get_digits() {
+      print!("{d}");
+    }
+    println!("");
+    print!("negc: ");
+    match math.get_negc() {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
+    }
+    print!("radix: ");
+    match math.get_radix() {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
+    }
+    print!("delim: ");
+    match math.get_delim() {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
+    }
+  } else {
+    println!("uninitialized math\n");
+  }
 
   println!("Pool:");
   state.pool.print();

@@ -151,20 +151,24 @@ impl Pool {
 
   pub fn print(&self) {
     if let Some(ref vwords) = self.vwords {
-      println!("vwords:");
+      print!("vwords: ");
       vwords.print();
+      println!("");
     }
     if let Some(ref vstacks) = self.vstacks {
-      println!("vstacks:");
+      print!("vstacks: ");
       vstacks.print();
+      println!("");
     }
     if let Some(ref vmacros) = self.vmacros {
-      println!("vmacros:");
+      print!("vmacros: ");
       vmacros.print();
+      println!("");
     }
     if let Some(ref verrors) = self.verrors {
-      println!("verrors:");
+      print!("verrors: ");
       verrors.print();
+      println!("");
     }
     if let Some(ref vcustoms) = self.vcustoms {
       println!("vcustoms: {}", vcustoms.len());
@@ -174,28 +178,39 @@ impl Pool {
     }
 
     if let Some(ref stacks) = self.stacks {
-      println!("stacks:");
+      print!("stacks: ");
       stacks.print();
+      println!("");
     }
     if let Some(ref strings) = self.strings {
-      println!("strings:");
+      print!("strings: ");
       strings.print();
+      println!("");
     }
     if let Some(ref stringss) = self.stringss {
-      println!("stringss:");
+      print!("stringss: ");
       stringss.print();
+      println!("");
     }
     if let Some(ref crankss) = self.crankss {
-      println!("crankss:");
+      print!("crankss: ");
       crankss.print();
+      println!("");
     }
     if let Some(ref maths) = self.maths {
-      println!("maths:");
+      print!("maths: ");
       maths.print();
+      println!("");
     }
     if let Some(ref digitss) = self.digitss {
-      println!("digitss:");
+      print!("digitss: ");
       digitss.print();
+      println!("");
+    }
+    if let Some(ref intss) = self.intss {
+      print!("intss: ");
+      intss.print();
+      println!("");
     }
 
     if let Some(ref word_tables) = self.word_tables {

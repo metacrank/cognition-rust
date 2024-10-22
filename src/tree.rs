@@ -21,7 +21,7 @@ impl<K:Ord+Copy+Display,D> Tree<K,D> {
   }
 
   pub fn print(&self) {
-    if let Some(r) = &self.root { r.print(); println!("") };
+    if let Some(r) = &self.root { r.print() };
   }
 
   pub fn insert(&mut self, key: K, data: D, new: fn(&mut Pool) -> Vec<D>, p: &mut Pool) {

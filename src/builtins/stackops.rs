@@ -33,14 +33,23 @@ pub fn cog_dup(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   state
 }
 
-// Does not use cognition math system
-// Update when implemented
-pub fn cog_ssize(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
-  let size = state.current_ref().stack.len();
-  let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-  v.str_word.push_str(&size.to_string());
-  state.push_quoted(Value::Word(v));
-  state
+pub fn cog_ssize(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let mut cur_v = state.pop_cur();
+  let cur = cur_v.metastack_container();
+  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE UNINITIALIZED", w) }
+  if cur.math.as_ref().unwrap().base() == 0 { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
+  if cur.math.as_ref().unwrap().base() == 1 { return state.push_cur(cur_v).eval_error("MATH BASE ONE", w) }
+  match cur.math.as_ref().unwrap().itos(cur.stack.len() as isize, &mut state) { // TODO: converts usize to isize
+    Ok(s) => {
+      let mut v = state.pool.get_vword(s.len());
+      v.str_word.push_str(&s);
+      state.pool.add_string(s);
+      state = state.push_cur(cur_v);
+      state.push_quoted(Value::Word(v));
+      state
+    },
+    Err(e) => { return state.push_cur(cur_v).eval_error(e, w) }
+  }
 }
 
 pub fn add_words(state: &mut CognitionState) {

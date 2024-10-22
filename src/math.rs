@@ -4,55 +4,6 @@ use std::str::Chars;
 //use std::iter::Rev;
 //use std::slice::IterMut;
 
-const N_O_D: usize = 12;
-const BASE: usize = 10;
-//const RADIUS: usize = BASE / 2 + 1;
-const B_ODD: bool = BASE % 2 == 1;
-
-/// The standard in this module is to use codepoint U0305 (Combining Overline)
-/// to denote negative digits. Having some restriction on the constant digit
-/// patterns is necessary to avoid ambiguous number strings, and checking for
-/// a single char makes way more sense than matching substrings.
-const DIGITS: [char; N_O_D] = [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '↊', '↋' ];
-const NEG_C: char = '\u{0305}'; // Combining Overline
-
-// const fn digits(n: [&'static str; N_O_D], p: [&'static str; N_O_D]) -> [&'static str; BASE] {
-//   let mut result = [""; BASE];
-//   let mut i = 0;
-//   while i < N_O_D {
-//     result[i] = a[i];
-//     i += 1;
-//   }
-//   while i < A + B {
-//     result[i] = b[i - A];
-//     i += 1;
-//   }
-//   result
-// }
-
-//const DIGGITS: &'static [&str] = &POS_DIGITS[];
-
-//const DIGITS: [&str; BASE] = concat(POS_DIGITS[..BASE/2], NEG_DIGITS[..BASE/2]);
-
-const fn addition_table(_d: [char; N_O_D]) -> [[char; BASE]; BASE] {
-  let mut a = 0;
-  while a < BASE {
-    // donothing
-    a += 1;
-    a -= 1;
-    if a == 4 {
-      return [['0'; BASE]; BASE];
-    }
-  }
-  [['1'; BASE]; BASE]
-}
-
-const fn multiplication_table(_d: [char; N_O_D]) -> [[char; BASE]; BASE] {
-  [['0'; BASE]; BASE]
-}
-
-//const ADDITION_TABLE: [[char; BASE]; BASE] = addition_table(DIGITS);
-
 pub type Digits = Vec<Digit>;
 pub type UnaryOp = HashMap<Digit, Digit>;
 pub type BinaryOp = HashMap<(Digit, Digit), (Digit, Digit)>;
@@ -64,13 +15,6 @@ pub struct Digit {
   digit: char,
   neg: bool,
 }
-
-// #[derive(Eq, Hash, PartialEq, Clone)]
-// enum Carry {
-//   PosOne,
-//   Zero,
-//   NegOne,
-// }
 
 #[derive(Eq, Hash, PartialEq, Clone)]
 pub enum Operand {
@@ -164,7 +108,7 @@ impl Operand {
 }
 
 macro_rules! push_next {
-  ($c:ident,$iter:ident,$tmp:ident,$negc:ident,$radix:ident,$delim:ident) => {
+  ($c:ident,$iter:ident,$tmp:ident,$negc:expr,$radix:expr,$delim:expr) => {
     if $c == $negc {
       let Some(c) = $iter.next() else { return Some("INVALID NUMBER STRING") };
       $tmp.push(Digit{ digit: c, neg: true }); (true, false)
@@ -175,7 +119,7 @@ macro_rules! push_next {
   };
 }
 macro_rules! push_next_int {
-  ($self:ident,$c:ident,$iter:ident,$tmp:ident,$negc:ident,$radix:ident,$delim:ident) => {
+  ($self:ident,$c:ident,$iter:ident,$tmp:ident,$negc:expr,$radix:expr,$delim:expr) => {
     if $c == $negc {
       let Some(c) = $iter.next() else { return Err("INVALID NUMBER STRING") };
       let Some(i) = $self.d_idx.get(&c) else { return Err("INVALID NUMBER STRING") };
@@ -194,7 +138,6 @@ pub struct Math {
   base: i32,
   digits: Vec<char>,
   d_idx: HashMap<char, i32>,
-  // add: HashMap<(char, char, Carry), (Digit, Carry)>,
   mul: HashMap<(char, char), (i32, i32)>,
 
   pub un_ops: Vec<UnaryOp>,
@@ -205,14 +148,6 @@ pub struct Math {
   negc: Option<char>,
   radix: Option<char>,
   delim: Option<char>,
-}
-
-pub enum BaseResult {
-  Ok,
-  Digits,
-  Negc,
-  Radix,
-  Delim,
 }
 
 impl Math {
@@ -241,7 +176,7 @@ impl Math {
   }
 
   pub fn copy_into(&self, math: &mut Math, state: &mut CognitionState) {
-    math.base = self.base;
+    math.base = self.base.clone();
     for d in self.digits.iter() {
       math.digits.push(d.clone());
     }
@@ -282,9 +217,9 @@ impl Math {
       }
       math.custom_ops.push(new_op);
     }
-    math.negc = self.negc;
-    math.radix = self.radix;
-    math.delim = self.delim;
+    math.negc = self.negc.clone();
+    math.radix = self.radix.clone();
+    math.delim = self.delim.clone();
   }
 
   pub fn set_digits(&mut self, s: &String) {
@@ -297,42 +232,29 @@ impl Math {
       self.d_idx.insert(self.digits[i], i as i32);
     }
   }
+  pub fn get_digits(&self) -> &Vec<char> { &self.digits }
 
   pub fn set_negc (&mut self, c: char) { self.negc = Some(c) }
   pub fn set_radix(&mut self, c: char) { self.radix = Some(c) }
   pub fn set_delim(&mut self, c: char) { self.delim = Some(c) }
 
-  pub fn set_base(&mut self, base: i32) -> BaseResult {
-    if self.digits.len() < (base / 2 + 1) as usize { return BaseResult::Digits }
-    if self.negc.is_none() { return BaseResult::Negc }
-    if self.radix.is_none() { return BaseResult::Radix }
-    if self.delim.is_none() { return BaseResult::Delim }
+  pub fn get_negc (&self) -> Option<char> { self.negc }
+  pub fn get_radix (&self) -> Option<char> { self.radix }
+  pub fn get_delim (&self) -> Option<char> { self.delim }
+
+  pub fn set_base(&mut self, base: i32) -> Option<&'static str> {
+    if self.digits.len() < (base / 2 + 1) as usize { return Some("MATH DIGITS UNINITIALIZED") }
+    if self.negc.is_none() { return Some("MATH NEGC UNINITIALIZED") }
+    if self.radix.is_none() { return Some("MATH RADIX UNINITIALIZED") }
+    if self.delim.is_none() { return Some("MATH DELIM UNINITIALIZED") }
     self.base = base;
     self.init_mul();
-    BaseResult::Ok
+    // TODO: init chebyshev polynomial coefficients
+    None
   }
 
   pub fn base(&self) -> i32 { self.base }
 
-  // fn init_add(&mut self) {
-  //   let radius = self.base / 2 + 1;
-  //   let b_odd = self.base % 2;
-  //   for i in 0..radius {
-  //     for j in 0..radius {
-  //       let di = Digit { digit: self.digits[i], sign: true };
-  //       let dj = Digit { digit: self.digits[j], sign: true };
-
-  //       let sum = if {
-  //         i + j <= radius + (b_odd - 1) {
-  //           Digit { self.digits[i + j], sign: true };
-  //         } else {
-
-  //         }
-  //       }
-
-  //     }
-  //   }
-  // }
   fn init_mul(&mut self) {
     let radius = self.base / 2 + 1;
     for i in 0..radius {
@@ -361,17 +283,60 @@ impl Math {
   }
 
   pub fn len(&self, s: &str) -> Result<usize, &'static str> {
-    let Some(negc) = self.negc else { return Err("NEGC UNINITIALIZED") };
-    let Some(radix) = self.radix else { return Err("RADIX UNINITIALIZED") };
+    let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
+    let Some(ref radix) = self.radix else { return Err("MATH RADIX UNINITIALIZED") };
     let mut l: usize = 0;
     let mut s_iter = s.chars();
     loop {
       let Some(c) = s_iter.next() else { break Ok(l) };
-      if c == negc {
+      if c == *negc {
         if s_iter.next() == self.radix { break Ok(l + 1) }
-      } else if c == radix { break Ok(l) }
+      } else if c == *radix { break Ok(l) }
       l += 1
     }
+  }
+
+  /// Converts a string to a signed integer
+  pub fn stoi(&self, s: &str) -> Result<isize, &'static str> {
+    let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
+    let mut agg: isize = 0;
+    let mut iter = s.chars();
+    while let Some(c) = iter.next() {
+      if c == *negc {
+        let Some(c) = iter.next() else { return Err("INVALID NUMBER STRING") };
+        let Some(i) = self.d_idx.get(&c) else { return Err("INVALID NUMBER STRING") };
+        agg = agg * self.base as isize - *i as isize;
+        continue
+      }
+      let Some(i) = self.d_idx.get(&c) else { return Err("INVALID NUMBER STRING") };
+      agg = agg * self.base as isize + *i as isize
+    }
+    Ok(agg)
+  }
+  /// Converts a signed integer to a string
+  pub fn itos(&self, mut i: isize, state: &mut CognitionState) -> Result<String, &'static str> {
+    let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
+    let radius = self.base / 2 + 1;
+    let mut digits = state.pool.get_digits(DEFAULT_STACK_SIZE);
+    let mut neg = i < 0;
+    let mut neg_count = 0;
+    while i != 0 {
+      let mut digit: i32 = (i % self.base as isize) as i32;
+      if digit < 0 { digit += self.base }
+      if digit >= radius || (digit == radius - 1 && !neg) {
+        neg = true; digit = self.base - digit; neg_count += 1
+      } else if digit > 0 { neg = false }
+      i += { if neg { digit } else { -digit } } as isize;
+      i /= self.base as isize;
+      digits.push(Digit{ digit: self.digits[digit as usize], neg });
+    }
+    let mut result = state.pool.get_string(digits.len() + neg_count);
+    while let Some(d) = digits.pop() {
+      if d.neg { result.push(*negc) }
+      result.push(d.digit)
+    }
+    state.pool.add_digits(digits);
+    Ok(result)
   }
 
   fn into_digits(&self, s: &str, v: &mut Vec<Digit>) {
@@ -600,9 +565,9 @@ impl Math {
 
 
   fn pair_into_next_digits(&self, s1_iter: &mut Chars, s2_iter: &mut Chars, tmp1_digits: &mut Digits, tmp2_digits: &mut Digits) -> Option<&'static str> {
-    let Some(negc) = self.negc else { return Some("MATH NEGC UNINITIALIZED") };
-    let Some(radix) = self.radix else { return Some("MATH RADIX UNINITIALIZED") };
-    let Some(delim) = self.delim else { return Some("MATH DELIM UNINITIALIZED") };
+    let Some(ref negc) = self.negc else { return Some("MATH NEGC UNINITIALIZED") };
+    let Some(ref radix) = self.radix else { return Some("MATH RADIX UNINITIALIZED") };
+    let Some(ref delim) = self.delim else { return Some("MATH DELIM UNINITIALIZED") };
 
     let (mut i_len1, mut i_len2, mut f_len1, mut f_len2) = (0,0,0,0);
 
@@ -615,21 +580,21 @@ impl Math {
 
     loop {
       let (c1opt, c2opt) = get_next(alive1, alive2, s1_iter, s2_iter, &mut i_len1, &mut i_len2);
-      if let Some(c1) = c1opt { (alive1, frac1) = push_next!(c1, s1_iter, tmp1_digits, negc, radix, delim); }
-      if let Some(c2) = c2opt { (alive2, frac2) = push_next!(c2, s2_iter, tmp2_digits, negc, radix, delim); }
+      if let Some(c1) = c1opt { (alive1, frac1) = push_next!(c1, s1_iter, tmp1_digits, *negc, *radix, *delim); }
+      if let Some(c2) = c2opt { (alive2, frac2) = push_next!(c2, s2_iter, tmp2_digits, *negc, *radix, *delim); }
       if (c1opt, c2opt) == (None, None) { break }
     }
-    if frac1 { tmp1_digits.push(Digit{ digit: radix, neg: false }) }
-    if frac2 { tmp2_digits.push(Digit{ digit: radix, neg: false }) }
+    if frac1 { tmp1_digits.push(Digit{ digit: *radix, neg: false }) }
+    if frac2 { tmp2_digits.push(Digit{ digit: *radix, neg: false }) }
     (alive1, alive2) = (frac1, frac2);
     loop {
       let (c1opt, c2opt) = get_next(alive1, alive2, s1_iter, s2_iter, &mut f_len1, &mut f_len2);
       if let Some(c1) = c1opt {
-        (alive1, frac1) = push_next!(c1, s1_iter, tmp1_digits, negc, radix, delim);
+        (alive1, frac1) = push_next!(c1, s1_iter, tmp1_digits, *negc, *radix, *delim);
         if frac1 { return Some("INVALID NUMBER STRING") }
       }
       if let Some(c2) = c2opt {
-        (alive2, frac2) = push_next!(c2, s2_iter, tmp2_digits, negc, radix, delim);
+        (alive2, frac2) = push_next!(c2, s2_iter, tmp2_digits, *negc, *radix, *delim);
         if frac2 { return Some("INVALID NUMBER STRING") }
       }
       if (c1opt, c2opt) == (None, None) { break None }
@@ -765,9 +730,9 @@ impl Math {
   pub fn sum(&self, s1: &String, s2: &String, state: &mut CognitionState) -> Result<String, &'static str> {
     if self.base == 0 { return Err("UNINITIALIZED NUMBER BASE") }
 
-    let Some(negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
-    let Some(radix) = self.radix else { return Err("MATH RADIX UNINITIALIZED") };
-    let Some(delim) = self.delim else { return Err("MATH DELIM UNINITIALIZED") };
+    let Some(ref negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
+    let Some(ref radix) = self.radix else { return Err("MATH RADIX UNINITIALIZED") };
+    let Some(ref delim) = self.delim else { return Err("MATH DELIM UNINITIALIZED") };
 
     if s1.len() == 0 { return Ok(state.string_copy(s2)) }
     if s2.len() == 0 { return Ok(state.string_copy(s1)) }
@@ -790,8 +755,8 @@ impl Math {
       let mut neg = None;
       loop {
         let (c1opt, c2opt) = get_next(alive1, alive2, &mut s1_iter, &mut s2_iter, &mut i_len1, &mut i_len2);
-        if let Some(c1) = c1opt { (alive1, frac1) = push_next_int!(self, c1, s1_iter, tmp1_ints, negc, radix, delim); }
-        if let Some(c2) = c2opt { (alive2, frac2) = push_next_int!(self, c2, s2_iter, tmp2_ints, negc, radix, delim); }
+        if let Some(c1) = c1opt { (alive1, frac1) = push_next_int!(self, c1, s1_iter, tmp1_ints, *negc, *radix, *delim); }
+        if let Some(c2) = c2opt { (alive2, frac2) = push_next_int!(self, c2, s2_iter, tmp2_ints, *negc, *radix, *delim); }
         if alive1 && alive2 && neg.is_none() {
           let sum = tmp1_ints.last().unwrap() + tmp2_ints.last().unwrap();
           if sum < 0 { neg = Some(true) } else if sum > 0 { neg = Some(false) }
@@ -804,11 +769,11 @@ impl Math {
       loop {
         let (c1opt, c2opt) = get_next(alive1, alive2, &mut s1_iter, &mut s2_iter, &mut f_len1, &mut f_len2);
         if let Some(c1) = c1opt {
-          (alive1, frac1) = push_next_int!(self, c1, s1_iter, tmp1_ints, negc, radix, delim);
+          (alive1, frac1) = push_next_int!(self, c1, s1_iter, tmp1_ints, *negc, *radix, *delim);
           if frac1 { return Err("INVALID NUMBER STRING") }
         }
         if let Some(c2) = c2opt {
-          (alive2, frac2) = push_next_int!(self, c2, s2_iter, tmp2_ints, negc, radix, delim);
+          (alive2, frac2) = push_next_int!(self, c2, s2_iter, tmp2_ints, *negc, *radix, *delim);
           if frac2 { return Err("INVALID NUMBER STRING") }
         }
         if alive1 && alive2 && neg.is_none() {
@@ -820,15 +785,15 @@ impl Math {
       let n_o_d = tmp1_ints.len().max(tmp2_ints.len()) + 2;
       let mut tmp_digits = state.pool.get_digits(n_o_d);
       for _ in 0..n_o_d { tmp_digits.push(Digit{ digit: self.digits[0], neg: false }) }
-      if f_len1 > f_len2 { self.add(neg, &mut tmp2_ints, &mut tmp1_ints, f_len2, f_len1, &mut tmp_digits, radix) }
-      else               { self.add(neg, &mut tmp1_ints, &mut tmp2_ints, f_len1, f_len2, &mut tmp_digits, radix) }
+      if f_len1 > f_len2 { self.add(neg, &mut tmp2_ints, &mut tmp1_ints, f_len2, f_len1, &mut tmp_digits, *radix) }
+      else               { self.add(neg, &mut tmp1_ints, &mut tmp2_ints, f_len1, f_len2, &mut tmp_digits, *radix) }
 
       while let Some(d) = tmp_digits.pop() {
         if d.digit == self.digits[0] { continue }
-        if d.neg { result.push(negc) }
+        if d.neg { result.push(*negc) }
         result.push(d.digit);
       }
-      result.push(delim);
+      result.push(*delim);
       state.pool.add_digits(tmp_digits);
 
       break
@@ -836,4 +801,23 @@ impl Math {
     result.pop();
     Ok(result)
   }
+
+  // pub fn product(&self, s1: &String, s2: &String, state: &mut CognitionState) -> Result<String, &'static str> {
+//     if self.base == 0 { return Err("UNINITIALIZED NUMBER BASE") }
+
+//     let Some(negc) = self.negc else { return Err("MATH NEGC UNINITIALIZED") };
+//     let Some(radix) = self.radix else { return Err("MATH RADIX UNINITIALIZED") };
+//     let Some(delim) = self.delim else { return Err("MATH DELIM UNINITIALIZED") };
+
+//     if s1.len() == 0 { return Ok(state.string_copy(s2)) }
+//     if s2.len() == 0 { return Ok(state.string_copy(s1)) }
+
+//     let mut result = state.pool.get_string(s1.len().max(s2.len()) * 4);
+
+//     let (mut tmp1_ints, mut tmp2_ints) = (state.pool.get_ints(s1.len()), state.pool.get_ints(s2.len()));
+//     let (mut s1_iter, mut s2_iter) = (s1.chars(), s2.chars());
+
+// //    self.pair_into_next_digits(&mut s1_iter, &mut s2_iter, tmp1_digits, tmp2_digits)
+
+//   }
 }
