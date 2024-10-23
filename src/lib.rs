@@ -983,6 +983,32 @@ impl CognitionState {
     self
   }
 
+  // fn evalstack(mut self, mut val: Value, callword: Option<&Value>, crank_last: bool) -> Self {
+  //   let (stack, is_macro) = if val.is_stack() {
+  //     self.family.stack.push(&val as )
+  //     (&mut val.vstack_mut().container.stack, false)
+  //   } else {
+  //     (&mut val.vmacro_mut().macro_stack, true)
+  //   };
+  //   let mut local_family = self.pool.get_family();
+
+  //   let mut i = 0;
+  //   while i < stack.len() {
+  //     let v = stack[i];
+  //     if i != stack.len() - 1 {
+  //       self = self.eval_value(v, callword, &mut local_family, true, false, false, crank_last);
+  //       if self.returned { self.returned = false; break }
+  //       i += 1; continue
+  //     }
+
+
+  //   }
+
+  //   self.pool.add_family(local_family);
+
+  //   self
+  // }
+
   fn crank(mut self) -> Self {
     let mut cur_v = self.pop_cur();
     let cur = cur_v.metastack_container();
