@@ -236,7 +236,7 @@ impl VFLLib {
     VFLLib{ fllib, str_word: None }
   }
   pub fn with_nop() -> VFLLib {
-    Self::with_fn(builtins::cog_nop)
+    Self::with_fn(builtins::misc::cog_nop)
   }
 }
 impl VCustom {

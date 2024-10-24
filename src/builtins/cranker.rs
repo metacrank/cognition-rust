@@ -1,30 +1,7 @@
 use crate::*;
 
 pub fn cog_crank(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let cur = state.current();
-  let Some(v) = cur.stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let stack = v.value_stack_ref();
-  if stack.len() != 1 {
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  }
-  let word_val = &stack[0];
-  let Value::Word(vword) = word_val else {
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  };
-  let Some(ref math) = cur.math else {
-    return state.eval_error("MATH BASE ZERO", w)
-  };
-  if math.base() == 0 {
-    return state.eval_error("MATH BASE ZERO", w)
-  }
-  let base = match math.stoi(&vword.str_word) {
-    Ok(i) => if i > i32::MAX as isize {
-      return state.eval_error("OUT OF BOUNDS", w)
-    } else { i as i32 },
-    Err(e) => return state.eval_error(e, w),
-  };
-  let v = cur.stack.pop().unwrap();
-  state.pool.add_val(v);
+  let base = get_int!(state, w);
   let cur = state.current();
   if cur.cranks.is_none() {
     state.current().cranks = Some(state.pool.get_cranks(1));
@@ -39,6 +16,27 @@ pub fn cog_crank(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   state
 }
 
+pub fn cog_metacrank(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let (meta, base) = get_2_ints!(state, w);
+  let meta = meta as usize;
+  if state.current().cranks.is_none() {
+    state.current().cranks = Some(state.pool.get_cranks(meta));
+  }
+  let cranks = state.current().cranks.as_mut().unwrap();
+  for _ in cranks.len()..meta {
+    cranks.push(Crank { modulo: 0, base: 0 });
+  }
+  let modulo = if base > 1 { 1 } else { 0 };
+  if let Some(crank) = cranks.get_mut(meta) {
+    crank.modulo = modulo;
+    crank.base = base;
+  } else {
+    state.current().cranks.as_mut().unwrap().push(Crank { modulo, base });
+  }
+  state
+}
+
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "crank", cog_crank);
+  add_word!(state, "metacrank", cog_metacrank);
 }
