@@ -43,21 +43,23 @@ pub fn cog_base(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 pub fn cog_negc(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   get_char_option!(state, c, w);
   ensure_math!(state);
-
-  state.current().math.as_mut().unwrap().set_negc(c);
+  if let Some(c) = c { state.current().math.as_mut().unwrap().set_negc(c) }
+  else { state.current().math.as_mut().unwrap().unset_negc() }
   state
 }
 pub fn cog_radix(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  get_char!(state, c, w);
+  get_char_option!(state, c, w);
   ensure_math!(state);
-  state.current().math.as_mut().unwrap().set_radix(c);
+  if let Some(c) = c { state.current().math.as_mut().unwrap().set_radix(c) }
+  else { state.current().math.as_mut().unwrap().unset_radix() }
   state
 }
 // Cayley-Dickson delimiter
 pub fn cog_cd_delim(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  get_char!(state, c, w);
+  get_char_option!(state, c, w);
   ensure_math!(state);
-  state.current().math.as_mut().unwrap().set_delim(c);
+  if let Some(c) = c { state.current().math.as_mut().unwrap().set_delim(c) }
+  else { state.current().math.as_mut().unwrap().unset_delim() }
   state
 }
 
