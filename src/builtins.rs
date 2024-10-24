@@ -14,6 +14,23 @@ macro_rules! get_char {
   };
 }
 
+macro_rules! get_char_option {
+  ($state:ident,$c:pat,$w:ident) => {
+    let cur = $state.current();
+    let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    if v.value_stack_ref().len() != 1 { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    let word_v = &v.value_stack_ref()[0];
+    if !word_v.is_word() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    let s = &word_v.vword_ref().str_word;
+    let mut iter = s.chars();
+    let tmp = iter.next();
+    let $c = tmp;
+    if tmp.is_some() && iter.next().is_some() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    let v = cur.stack.pop().unwrap();
+    $state.pool.add_val(v);
+  };
+}
+
 macro_rules! get_int {
   ($state:ident,$w:ident) => {{
     let cur = $state.current();

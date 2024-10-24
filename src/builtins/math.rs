@@ -41,8 +41,9 @@ pub fn cog_base(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 }
 
 pub fn cog_negc(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  get_char!(state, c, w);
+  get_char_option!(state, c, w);
   ensure_math!(state);
+
   state.current().math.as_mut().unwrap().set_negc(c);
   state
 }
@@ -52,7 +53,7 @@ pub fn cog_radix(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   state.current().math.as_mut().unwrap().set_radix(c);
   state
 }
-// Cayley Dickson delimiter
+// Cayley-Dickson delimiter
 pub fn cog_cd_delim(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   get_char!(state, c, w);
   ensure_math!(state);

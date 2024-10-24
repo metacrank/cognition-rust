@@ -244,6 +244,10 @@ impl Math {
   pub fn get_radix (&self) -> Option<char> { self.radix }
   pub fn get_delim (&self) -> Option<char> { self.delim }
 
+  pub fn unset_negc (&mut self) { self.negc = None }
+  pub fn unset_radix(&mut self) { self.radix = None }
+  pub fn unset_delim(&mut self) { self.delim = None }
+
   pub fn set_base(&mut self, base: i32) -> Option<&'static str> {
     if self.digits.len() < (base / 2 + 1) as usize { return Some("MATH DIGITS UNINITIALIZED") }
     if self.negc.is_none() { return Some("MATH NEGC UNINITIALIZED") }
