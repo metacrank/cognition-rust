@@ -132,6 +132,7 @@ pub mod misc;
 pub mod multithreading;
 pub mod parser;
 pub mod stackops;
+pub mod strings;
 
 use crate::CognitionState;
 
@@ -145,4 +146,5 @@ pub fn add_builtins(state: &mut CognitionState) {
   multithreading::add_words(state);
   parser::add_words(state);
   stackops::add_words(state);
+  strings::add_words(state);
 }
