@@ -3,6 +3,7 @@
 use std::process::ExitCode;
 use std::env;
 use std::fs;
+use std::time::Instant;
 
 use cognition::*;
 use cognition::macros::*;
@@ -95,6 +96,8 @@ fn main() -> ExitCode {
     if let Some(s) = parser.source() { state.pool.add_string(s) }
     parser.reset(source);
 
+    let now = Instant::now();
+
     // Parse and eval loop
     loop {
       let w = parser.get_next(&mut state);
@@ -104,6 +107,8 @@ fn main() -> ExitCode {
       }
       if state.exited { break }
     }
+
+    println!("time: {}", now.elapsed().as_micros());
 
     state.parser = Some(parser);
   }
