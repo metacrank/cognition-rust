@@ -353,9 +353,9 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     state.current().stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w);
   }
-  if v.is_stack() {
-    state.family.stack.push(&v as *const Value);
-  }
+  // if v.is_stack() {
+  //   state.family.stack.push(&v as *const Value);
+  // }
   for v in stack.iter() {
     let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)));
     loop {
@@ -368,7 +368,7 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     }
     state.pool.add_parser(parser);
   }
-  if v.is_stack() { state.family.stack.pop(); }
+  // if v.is_stack() { state.family.stack.pop(); }
   state.pool.add_val(v);
   state
 }

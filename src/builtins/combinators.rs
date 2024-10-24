@@ -13,5 +13,7 @@ pub fn cog_compose(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
 }
 
 pub fn add_words(state: &mut CognitionState) {
+  let nopy = builtins::cog_nop;
+  add_word!(state, "eval", nopy, EVAL);
   add_word!(state, "compose", cog_compose);
 }

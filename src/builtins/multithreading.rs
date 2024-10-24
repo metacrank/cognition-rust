@@ -9,13 +9,13 @@ impl Custom for ThreadHandler {
   fn printfunc(&self, f: &mut dyn Write) {
     fwrite_check_pretty!(f, b"(thread)");
   }
-  fn copyfunc(&self) -> Box<dyn Custom + Send> {
+  fn copyfunc(&self) -> Box<dyn Custom + Send + Sync> {
     Box::new(Void{})
   }
 }
 /// Never use! Never send a ThreadCustom to another thread
 unsafe impl Send for ThreadHandler {}
-
+unsafe impl Sync for ThreadHandler {}
 
 // [  ] spawn -> [ (thread) ]
 // Takes a stack and turns it into a new cognition instance running in another thread

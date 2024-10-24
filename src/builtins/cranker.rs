@@ -17,7 +17,7 @@ pub fn cog_crank(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   if math.base() == 0 {
     return state.eval_error("MATH BASE ZERO", w)
   }
-  let i = match math.stoi(&vword.str_word) {
+  let base = match math.stoi(&vword.str_word) {
     Ok(i) => if i > i32::MAX as isize {
       return state.eval_error("OUT OF BOUNDS", w)
     } else { i as i32 },
@@ -29,11 +29,12 @@ pub fn cog_crank(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   if cur.cranks.is_none() {
     state.current().cranks = Some(state.pool.get_cranks(1));
   }
+  let modulo = if base > 1 { 1 } else { 0 };
   if let Some(crank) = state.current().cranks.as_mut().unwrap().first_mut() {
-    crank.modulo = 0;
-    crank.base = i;
+    crank.modulo = modulo;
+    crank.base = base;
   } else {
-    state.current().cranks.as_mut().unwrap().push(Crank { modulo: 0, base: 1 });
+    state.current().cranks.as_mut().unwrap().push(Crank { modulo, base });
   }
   state
 }
