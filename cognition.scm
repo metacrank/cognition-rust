@@ -20,9 +20,7 @@
            (commit "e675d26861c71e52283966168ef2082b3c2228c2")))
      (sha256
       (base32
-       "0wgz34m315fxn949a2ciwkqn3dsc5sd85kvssigbd1yvll4qkyd6"))
-     ;;(hash (content-hash "05zxkyz9bv3j9h0xyid1rhvh3klhsmrpkf3bcs6frvlgyr2gwilj"))
-     ))
+       "0wgz34m315fxn949a2ciwkqn3dsc5sd85kvssigbd1yvll4qkyd6"))))
    (build-system cargo-build-system)
    (synopsis "An unopinionated programming language which offers full publicity of syntax and tokenization.")
    (description
