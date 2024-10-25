@@ -11,18 +11,19 @@
 (define-public cognition
   (package
    (name "cognition")
-   (version version)
+   (version "0.1.0")
    (source
     (origin
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "e675d26861c71e52283966168ef2082b3c2228c2")
-           (sha256
-            (base32
-             "0z0y2il4xq8fdj20fwfggpf6286hb099jh1kdywap9rlrybq142d"))))))
+           (commit "e675d26861c71e52283966168ef2082b3c2228c2")))
+     (sha256
+      (base32
+       "0wgz34m315fxn949a2ciwkqn3dsc5sd85kvssigbd1yvll4qkyd6"))
+     ;;(hash (content-hash "05zxkyz9bv3j9h0xyid1rhvh3klhsmrpkf3bcs6frvlgyr2gwilj"))
+     ))
    (build-system cargo-build-system)
-   (arguments (list #:cargo-inputs (list)))
    (synopsis "An unopinionated programming language which offers full publicity of syntax and tokenization.")
    (description
     "Cognition is a fully introspective system designed so that the syntax and hierarchy structure of the
@@ -34,6 +35,6 @@
      for the advanced manipulation of how the next token is tokenized, and how these tokens are arranged
      into something like the AST without having to explicitly program a rigid syntax.")
    (home-page "https://github.com/metacrank/cognition-rust")
-   (license expat))))
+   (license expat)))
 
 cognition
