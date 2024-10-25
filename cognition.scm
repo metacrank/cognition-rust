@@ -9,16 +9,18 @@
   #:use-module (gnu packages))
 
 (define-public cognition
-  (let ((commit "c20d71e4226dc8d4b8d2b88b45f96881f57143a4")
+  (let ((commit "e675d26861c71e52283966168ef2082b3c2228c2")
         (version "0.1.0")
-        (url "git@github.com:metacrank/cognition-rust.git"))
+        (url "https://github.com/metacrank/cognition-rust.git"))
     (package
      (name "cognition")
      (version version)
      (source
-      (git-checkout
-       (url url)
-       (commit commit)))
+      (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url url)
+             (commit commit)))))
      (build-system cargo-build-system)
      (arguments (list #:cargo-inputs (list)))
      (synopsis "An unopinionated programming language which offers full publicity of syntax and tokenization.")
