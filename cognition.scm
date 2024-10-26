@@ -17,10 +17,10 @@
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "e675d26861c71e52283966168ef2082b3c2228c2")))
+           (commit "09653035e1ee883e1dbb4d7ae28fd1ca94713b19")))
      (sha256
       (base32
-       "0wgz34m315fxn949a2ciwkqn3dsc5sd85kvssigbd1yvll4qkyd6"))))
+       "1q73gsxld86jgqb8sys4s560aay7fc9vzzfqj0svlj0d19yl2s0j"))))
    (build-system cargo-build-system)
    (synopsis "An unopinionated programming language which offers full publicity of syntax and tokenization.")
    (description
