@@ -696,7 +696,7 @@ impl CognitionState {
     let word_def = self.pool.get_word_def(v);
     self.current().word_table.as_mut().unwrap().insert(name, word_def);
   }
-  
+
   pub fn push_quoted(&mut self, v: Value) {
     let mut wrapper = self.pool.get_vstack(1);
     wrapper.container.stack.push(v);
