@@ -192,7 +192,7 @@ fn help() -> ExitCode {
 
 fn version() -> ExitCode {
   println!("Authors: Matthew Hinton, Preston Pan, MIT License 2024");
-  println!("cognition, version 1.0 alpha");
+  println!("cognition, version 0.1.1 alpha");
   ExitCode::from(0)
 }
 
