@@ -11,16 +11,16 @@
 (define-public cognition
   (package
    (name "cognition")
-   (version "0.1.0")
+   (version "0.1.1")
    (source
     (origin
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "09653035e1ee883e1dbb4d7ae28fd1ca94713b19")))
+           (commit "b55956122ff11ec73db6974e9fa180d24ba3b300")))
      (sha256
       (base32
-       "1q73gsxld86jgqb8sys4s560aay7fc9vzzfqj0svlj0d19yl2s0j"))))
+       "04gg1fav0f25q6n8fvn0x0vdg9qfdcmajsywdrn1r8sjpqahz36p"))))
    (build-system cargo-build-system)
    (synopsis "An unopinionated programming language which offers full publicity of syntax and tokenization.")
    (description
