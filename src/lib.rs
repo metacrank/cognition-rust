@@ -847,6 +847,7 @@ impl CognitionState {
   }
 
   #[allow(unused_mut)]
+  //#[inline(always)]
   fn evalstack(mut self, wd: WordDef, defstack: Option<Stack>, callword: Option<&Value>, crank_first: bool) -> Self {
     let mut family_stack_pushes = 0;
     let mut is_macro = if wd.is_stack() {
@@ -870,6 +871,7 @@ impl CognitionState {
       let last_v = if destructive { stack.len() == 0 } else { i == refstack.len() - 1 };
       let cranking = if is_macro { crank_first && i == 0 } else { crank_first || i != 0 };
       (self, control) = self.eval_value(v, callword, &mut local_family, is_macro || i == 0, cranking);
+      
       match control {
         RecurseControl::Evalf(wd, retstack) => {
           if last_v && false {}
@@ -913,29 +915,28 @@ impl CognitionState {
   }
 
   fn get_crank_val(mut self) -> (Self, Option<(WordDef, Stack)>) {
-    let mut cur_v = self.pop_cur();
-    let cur = cur_v.metastack_container();
+    let cur = self.current();
 
     let cranks = match cur.cranks.as_mut() {
-      None => { return (self.push_cur(cur_v), None) },
+      None => { return (self, None) },
       Some(c) => c,
     };
     let high_tide = |c: &Crank| c.modulo == 0 && c.base != 0;
     let cindex: Option<usize> = cranks.iter().position(high_tide);
     let Some(cidx) = cindex else {
       cur.inc_crank();
-      return (self.push_cur(cur_v), None)
+      return (self, None)
     };
     let fixedindex: isize = cur.stack.len() as isize - 1 - cidx as isize;
     if fixedindex < 0 {
       cur.inc_crank();
-      return (self.push_cur(cur_v).eval_error("CRANK TOO DEEP", None), None);
+      return (self.eval_error("CRANK TOO DEEP", None), None);
     }
     let mut needseval = cur.stack.remove(fixedindex as usize);
     let mut defstack = self.pool.get_stack(needseval.value_stack_ref().len());
     while let Some(v) = needseval.value_stack().pop() { defstack.push(v) }
     let wd = self.pool.get_word_def(needseval);
-    (self.push_cur(cur_v), Some((wd, defstack)))
+    (self, Some((wd, defstack)))
   }
 
   pub fn evalf(self, alias: Option<&Value>) -> Self {
