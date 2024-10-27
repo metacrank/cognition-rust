@@ -129,7 +129,6 @@ pub mod errors;
 pub mod io;
 pub mod math;
 pub mod misc;
-pub mod multithreading;
 pub mod parser;
 pub mod stackops;
 pub mod strings;
@@ -143,7 +142,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   io::add_words(state);
   math::add_words(state);
   misc::add_words(state);
-  multithreading::add_words(state);
   parser::add_words(state);
   stackops::add_words(state);
   strings::add_words(state);

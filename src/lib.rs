@@ -70,7 +70,7 @@ impl Pretty for [u8] {
 pub trait Custom: Any {
   fn printfunc(&self, f: &mut dyn Write);
   // implemented as Box::new(self.clone()) in classes that implement Clone
-  fn copyfunc(&self) -> Box<dyn Custom + Send + Sync>;
+  fn copyfunc(&self) -> Box<dyn Custom>;
 }
 
 /// Useful Custom type
@@ -79,7 +79,7 @@ impl Custom for Void {
   fn printfunc(&self, f: &mut dyn Write) {
     fwrite_check_pretty!(f, b"(void)");
   }
-  fn copyfunc(&self) -> Box<dyn Custom + Send + Sync> {
+  fn copyfunc(&self) -> Box<dyn Custom> {
     Box::new(Void{})
   }
 }
@@ -184,7 +184,7 @@ pub struct VFLLib {
   pub str_word: Option<String>,
 }
 pub struct VCustom {
-  custom: Option<Box<dyn Custom + Send + Sync>>,
+  custom: Option<Box<dyn Custom>>,
 }
 #[derive(PartialEq, Eq, Clone)]
 pub enum VControl {
@@ -240,7 +240,7 @@ impl VFLLib {
   }
 }
 impl VCustom {
-  pub fn with_custom(custom: Box<dyn Custom + Send + Sync>) -> VCustom {
+  pub fn with_custom(custom: Box<dyn Custom>) -> VCustom {
     VCustom{ custom: Some(custom) }
   }
   pub fn with_void() -> VCustom {

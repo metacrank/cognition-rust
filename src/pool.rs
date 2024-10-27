@@ -391,7 +391,7 @@ impl Pool {
     });
     Box::new(VFLLib::with_fn(f))
   }
-  pub fn get_vcustom(&mut self, custom: Box<dyn Custom + Send + Sync>) -> VCustom {
+  pub fn get_vcustom(&mut self, custom: Box<dyn Custom>) -> VCustom {
     pool_pop_val!(self.vcustoms, Value::Custom(mut vcustom), vcustom, { vcustom.custom = Some(custom); });
     VCustom{ custom: Some(custom) }
   }

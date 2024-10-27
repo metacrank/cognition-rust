@@ -13,9 +13,9 @@ impl Custom for ThreadHandler {
     Box::new(Void{})
   }
 }
-/// Never use! Never send a ThreadCustom to another thread
-unsafe impl Send for ThreadHandler {}
-unsafe impl Sync for ThreadHandler {}
+
+unsafe impl Send for VCustom {}
+unsafe impl Sync for VCustom {}
 
 // [  ] spawn -> [ (thread) ]
 // Takes a stack and turns it into a new cognition instance running in another thread
