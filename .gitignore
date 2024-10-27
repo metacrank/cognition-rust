@@ -22,7 +22,3 @@ Cargo.lock
 
 # Test file
 output.txt
-
-# Perf analysis
-perf.data
-perf.data.old
