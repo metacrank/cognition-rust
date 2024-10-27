@@ -1030,12 +1030,11 @@ impl CognitionState {
       return self.push_cur(cur_v);
     }
     let needseval = cur.stack.remove(fixedindex as usize);
-    self = match needseval {
+    match needseval {
       Value::Stack(_) => self.push_cur(cur_v).evalstack(needseval, None, true),
       Value::Macro(_) => self.push_cur(cur_v).evalmacro(needseval, None, true),
       _ => bad_value_err!(),
-    };
-    self
+    }
   }
 
   pub fn eval(mut self, v: Value) -> Self {
