@@ -12,22 +12,6 @@ use cognition::math::Math;
 fn isint(_n: &String) -> bool { true }
 fn string_to_i32(_n: &String) -> Result<i32, &'static str> { Ok(2) }
 
-// figure out a better solution
-// macro_rules! cognition_destroy_parser {
-//   ($state:ident) => {
-//     {
-//       $state.args.clear();
-//       CognitionState{ stack: $state.stack,
-//                       parser: None,
-//                       exited: false,
-//                       exit_code: None,
-//                       args: $state.args,
-//                       pool: $state.pool,
-//                       i: $state.i }
-//     }
-//   }
-// }
-
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
   let argc = args.len();
@@ -79,6 +63,9 @@ fn main() -> ExitCode {
   vstack.container.faliases = Container::default_faliases();
   state.stack.push(initial_stack);
   state.parser = Some(Parser::new(None));
+  for arg in args[opts.fileidx+opts.s..].iter() {
+    state.args.push(Value::Word(Box::new(VWord{ str_word: arg.clone() })));
+  }
 
   cognition::builtins::add_builtins(&mut state);
 
@@ -170,8 +157,7 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
     i += 1;
   }
 
-  let s: usize = if s < 0 { 1 }
-                  else { s as usize };
+  let s: usize = if s < 0 { 1 } else { s as usize };
 
   Ok(Config{h, q, v, s, fileidx})
 }

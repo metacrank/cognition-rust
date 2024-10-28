@@ -22,6 +22,8 @@ use std::sync::Arc;
 //use std::str::Chars;
 use std::any::Any;
 
+use libloading;
+
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type Stack = Vec<Value>;
 pub type Cranks = Vec<Crank>;
@@ -30,19 +32,6 @@ pub type Faliases = HashSet<String>;
 pub type WordDef = Arc<Value>;
 pub type Family = Vec<WordDef>;
 pub type WordTable = HashMap<String, Arc<Value>>;
-
-// pub struct Family { stack: Vec<*const Value> }
-
-// impl Family {
-//   fn new() -> Self { Self { stack: Vec::<*const Value>::new() } }
-//   fn with_capacity(capacity: usize) -> Self {
-//     Self { stack: Vec::<*const Value>::with_capacity(capacity) }
-//   }
-// }
-
-// /// Only send families which are going to be
-// /// completely reused: families in a pool
-// unsafe impl Send for Family {}
 
 pub trait Pretty {
   fn print_pretty(&self);
@@ -67,10 +56,20 @@ impl Pretty for [u8] {
   }
 }
 
-pub trait Custom: Any {
+pub trait Custom {
   fn printfunc(&self, f: &mut dyn Write);
   // implemented as Box::new(self.clone()) in classes that implement Clone
-  fn copyfunc(&self) -> Box<dyn Custom>;
+  fn copyfunc(&self) -> Box<dyn CustomAny>;
+}
+
+pub trait CustomAny: Any + Custom {
+  fn as_any(&self) -> &dyn Any;
+  fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: Any + Custom> CustomAny for T {
+  fn as_any(&self) -> &dyn Any { self }
+  fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 /// Useful Custom type
@@ -79,7 +78,7 @@ impl Custom for Void {
   fn printfunc(&self, f: &mut dyn Write) {
     fwrite_check_pretty!(f, b"(void)");
   }
-  fn copyfunc(&self) -> Box<dyn Custom> {
+  fn copyfunc(&self) -> Box<dyn CustomAny> {
     Box::new(Void{})
   }
 }
@@ -152,22 +151,23 @@ impl Container {
       }
     }
   }
-  pub fn default_faliases() -> Option<Faliases> {
-    let mut f = Faliases::with_capacity(DEFAULT_FALIASES_SIZE);
-    f.insert(String::from("f"));
-    f.insert(String::from("ing"));
-    Some(f)
-  }
   pub fn isfalias(&self, v: &Value) -> bool {
     match &self.faliases {
       None => false,
       Some(f) => f.contains(&v.vword_ref().str_word),
     }
   }
+
+  pub fn default_faliases() -> Option<Faliases> {
+    let mut f = Faliases::with_capacity(DEFAULT_FALIASES_SIZE);
+    f.insert(String::from("f"));
+    f.insert(String::from("ing"));
+    Some(f)
+  }
 }
 
 pub struct VWord {
-  str_word: String,
+  pub str_word: String,
 }
 pub struct VStack {
   pub container: Container,
@@ -184,7 +184,7 @@ pub struct VFLLib {
   pub str_word: Option<String>,
 }
 pub struct VCustom {
-  custom: Option<Box<dyn Custom>>,
+  pub custom: Option<Box<dyn CustomAny>>,
 }
 #[derive(PartialEq, Eq, Clone)]
 pub enum VControl {
@@ -240,7 +240,7 @@ impl VFLLib {
   }
 }
 impl VCustom {
-  pub fn with_custom(custom: Box<dyn Custom>) -> VCustom {
+  pub fn with_custom(custom: Box<dyn CustomAny>) -> VCustom {
     VCustom{ custom: Some(custom) }
   }
   pub fn with_void() -> VCustom {
@@ -304,9 +304,7 @@ impl Value {
       Self::FLLib(vfllib) => {
         match &vfllib.str_word {
           Some(s) => {
-            fwrite_check_pretty!(f, HBLK);
             s.fprint_pretty(f);
-            fwrite_check_pretty!(f, COLOR_RESET);
           },
           None => {
             fwrite_check_pretty!(f, HBLK);
@@ -317,7 +315,11 @@ impl Value {
       },
       Self::Custom(vcustom) => {
         if let Some(ref c) = vcustom.custom { c.printfunc(f) }
-        else { fwrite_check_pretty!(f, b"(void)") }
+        else {
+          fwrite_check_pretty!(f, HBLK);
+          fwrite_check_pretty!(f, b"(void)");
+          fwrite_check_pretty!(f, COLOR_RESET);
+        }
       },
       Self::Control(vcontrol) => {
         fwrite_check_pretty!(f, GRN);
@@ -490,7 +492,8 @@ pub struct CognitionState {
   pub parser: Option<Parser>,
   pub exited: bool,
   pub exit_code: Option<String>,
-  pub args: Strings,
+  pub args: Stack,
+  pub fllibs: Vec<libloading::Library>,
   pub pool: Pool,
 }
 
@@ -519,7 +522,8 @@ impl CognitionState {
   pub fn new(stack: Stack) -> Self {
     Self{ chroots: Vec::<Stack>::with_capacity(DEFAULT_STACK_SIZE), stack,
           family: Family::with_capacity(DEFAULT_STACK_SIZE), parser: None,
-          exited: false, exit_code: None, args: Strings::new(), pool: Pool::new(), }
+          exited: false, exit_code: None, args: Stack::new(),
+          fllibs: Vec::<libloading::Library>::new(), pool: Pool::new() }
   }
 
   pub fn eval_error(mut self, e: &'static str, w: Option<&Value>) -> Self {
@@ -568,23 +572,6 @@ impl CognitionState {
     newstr.push_str(s);
     newstr
   }
-
-  // pub fn word_def_copy(&mut self, word_def: &WordDef) -> WordDef {
-  //   match word_def {
-  //     WordDef::Stack(s) => {
-  //       let mut new_vstack = self.pool.get_vstack(s.container.stack.len());
-  //       self.contain_copy(&s.container, &mut new_vstack.container);
-  //       WordDef::Stack(new_vstack.into())
-  //     },
-  //     WordDef::Macro(m) => {
-  //       let mut new_vmacro = self.pool.get_vmacro(m.macro_stack.len());
-  //       for v in m.macro_stack.iter() {
-  //         new_vmacro.macro_stack.push(self.value_copy(v));
-  //       }
-  //       WordDef::Macro(new_vmacro.into())
-  //     },
-  //   }
-  // }
 
   pub fn contain_copy(&mut self, old: &Container, new: &mut Container) {
     for v in old.stack.iter() {
@@ -665,7 +652,13 @@ impl CognitionState {
         }
         Value::Error(new_verror)
       },
-      Value::FLLib(vfllib) => Value::FLLib(self.pool.get_vfllib(vfllib.fllib)),
+      Value::FLLib(vfllib) => {
+        let mut new_vfllib = self.pool.get_vfllib(vfllib.fllib);
+        if let Some(ref s) = vfllib.str_word {
+          new_vfllib.str_word = Some(self.string_copy(s));
+        }
+        Value::FLLib(new_vfllib)
+      },
       Value::Custom(vcustom) => Value::Custom({
         match vcustom.custom {
           Some(ref custom) => self.pool.get_vcustom(custom.copyfunc()),
@@ -674,6 +667,13 @@ impl CognitionState {
       }),
       Value::Control(vcontrol) => Value::Control(vcontrol.clone()),
     }
+  }
+
+  pub fn default_faliases(&mut self) -> Option<Faliases> {
+    let mut f = self.pool.get_faliases();
+    f.insert(String::from("f"));
+    f.insert(String::from("ing"));
+    Some(f)
   }
 
   pub fn current(&mut self) -> &mut Container {
@@ -694,7 +694,9 @@ impl CognitionState {
       self.current().word_table = Some(self.pool.get_word_table());
     }
     let word_def = self.pool.get_word_def(v);
-    self.current().word_table.as_mut().unwrap().insert(name, word_def);
+    if let Some(v) = self.current().word_table.as_mut().unwrap().insert(name, word_def) {
+      self.pool.add_word_def(v);
+    }
   }
 
   pub fn push_quoted(&mut self, v: Value) {
@@ -871,7 +873,7 @@ impl CognitionState {
       let last_v = if destructive { stack.len() == 0 } else { i == refstack.len() - 1 };
       let cranking = if is_macro { crank_first && i == 0 } else { crank_first || i != 0 };
       (self, control) = self.eval_value(v, callword, &mut local_family, is_macro || i == 0, cranking);
-      
+
       match control {
         RecurseControl::Evalf(wd, retstack) => {
           if last_v && false {}
@@ -894,6 +896,7 @@ impl CognitionState {
         RecurseControl::None => {},
         RecurseControl::Return => break,
       }
+      if self.exited { break }
       i += 1;
     }
     self.pool.add_stack(stack);

@@ -1,0 +1,9 @@
+stuff
+2 crank crank bequeath uncd bequeath drop bequeath digits bequeath radix bequeath cd-delim bequeath base bequeath negc bequeath compose bequeath exit bequeath
+2 crank cd nop 01 compose digits compose n compose negc compose . compose radix compose , compose cd-delim compose
+2 crank a compose b compose compose compose base compose 1 compose crank compose uncd compose VMACRO cast
+1 crank eval
+
+3 crank repl
+2 crank ? nop read compose evalstr compose repl compose VMACRO cast
+1 crank def repl
