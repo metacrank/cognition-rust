@@ -357,7 +357,8 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   //   state.family.stack.push(&v as *const Value);
   // }
   for v in stack.iter() {
-    let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)));
+    let mut parser = state.pool.get_parser();
+    parser.reset(state.string_copy(&v.vword_ref().str_word));
     loop {
       let w = parser.get_next(&mut state);
       match w {

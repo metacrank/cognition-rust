@@ -17,10 +17,9 @@ use std::collections::HashMap;
 use std::default::Default;
 use std::io::Write;
 use std::io::stdout;
-//use std::Arc::Arc;
 use std::sync::Arc;
-//use std::str::Chars;
 use std::any::Any;
+//use std::time::Instant;
 
 use libloading;
 
@@ -510,6 +509,88 @@ macro_rules! eval_value_if_cranked {
   };
 }
 
+macro_rules! evalstack_recurse_setup {
+  ($self:ident,$is_macro:ident,$wd:ident,$wdn:ident,$local_family:ident,$legacy_family:ident,$family_stack_pushes:ident,$new_family_member:ident,$refstack:ident,$i:ident,$word_holder:ident) => {
+    let mut local_family_iter = $local_family.into_iter();
+    if $new_family_member { if local_family_iter.next().is_some() { $family_stack_pushes -= 1 } }
+    if let Some(member) = local_family_iter.next() {
+      if $legacy_family.is_none() {
+        $legacy_family = Some($self.pool.get_family());
+      }
+      $legacy_family.as_mut().unwrap().push(member);
+      $local_family = local_family_iter.collect();
+      $legacy_family.as_mut().unwrap().append(&mut $local_family);
+    } else { $local_family = local_family_iter.collect() }
+    $self.pool.add_word_def($wd);
+    $wd = $wdn;
+    $is_macro = if $wd.is_stack() {
+      let mut found = false;
+      if let Some(lf) = &mut $legacy_family {
+        if let Some(l) = lf.last() {
+          if Arc::ptr_eq(l, &$wd) {
+            $self.family.push(lf.pop().unwrap());
+            found = true
+          }
+        }
+      }
+      if !found {
+        if $self.family.iter().any(|x| Arc::ptr_eq(x, &$wd)) {
+          found = true;
+        }
+      }
+      if !found {
+        $family_stack_pushes += 1;
+        $new_family_member = true;
+        $self.family.push($wd.clone());
+      }
+      false
+    } else {
+      $new_family_member = false;
+      true
+    };
+    $refstack = $wd.value_stack_ref(); // frees previous refstack
+    $i = usize::MAX;
+    if let Some(wh) = $word_holder.take() {
+      $self.pool.add_val(wh)
+    }
+  }
+}
+macro_rules! evalstack_recurse {
+  ($self:ident,$is_macro:ident,$wd:ident,$wdn:ident,$local_family:ident,$legacy_family:ident,$family_stack_pushes:ident,$new_family_member:ident,$refstack:ident,$i:ident,$destructive:ident,$callword:ident,$crank_first:ident,DESTRUCTIVE,$stack:ident,$retstack:ident,$word_holder:ident,$crnkf:expr,$last_v:ident) => {
+    while let Some(f) = $self.family.pop() { $local_family.push(f) }
+    if $last_v {
+      evalstack_recurse_setup!($self, $is_macro, $wd, $wdn, $local_family, $legacy_family, $family_stack_pushes, $new_family_member, $refstack, $i, $word_holder);
+      $self.pool.add_stack($stack);
+      $stack = $retstack;
+      $destructive = true;
+      $callword = None;
+      $crank_first = $crnkf;
+    } else {
+      $self = $self.evalstack($wdn, Some($retstack), None, $crnkf);
+      while let Some(f) = $local_family.pop() { $self.family.push(f) }
+    }
+  };
+  ($self:ident,$is_macro:ident,$wd:ident,$wdn:ident,$local_family:ident,$legacy_family:ident,$family_stack_pushes:ident,$new_family_member:ident,$refstack:ident,$i:ident,$destructive:ident,$callword:ident,$crank_first:ident,$callw:expr,$word_holder:ident,$crnkf:expr,$last_v:ident) => {
+    while let Some(f) = $self.family.pop() { $local_family.push(f) }
+    if $last_v {
+      evalstack_recurse_setup!($self, $is_macro, $wd, $wdn, $local_family, $legacy_family, $family_stack_pushes, $new_family_member, $refstack, $i, $word_holder);
+      $destructive = false;
+      $callword = None;
+      $word_holder = Some($callw);
+      $crank_first = $crnkf;
+    } else {
+      $self = $self.evalstack($wdn, None, Some(&$callw), $crnkf);
+      while let Some(f) = $local_family.pop() { $self.family.push(f) }
+      $self.pool.add_val($callw);
+    }
+  }
+}
+macro_rules! callword {
+  ($callword:ident,$word_holder:ident) => {
+    if let Some(w) = $word_holder.as_ref() { Some(w) } else { $callword }
+  }
+}
+
 enum RecurseControl {
   Evalf(WordDef, Stack),
   Crank(WordDef, Stack),
@@ -848,15 +929,18 @@ impl CognitionState {
     (self, RecurseControl::None)
   }
 
-  #[allow(unused_mut)]
-  //#[inline(always)]
-  fn evalstack(mut self, wd: WordDef, defstack: Option<Stack>, callword: Option<&Value>, crank_first: bool) -> Self {
+  #[inline(always)]
+  fn evalstack(mut self, mut wd: WordDef, defstack: Option<Stack>, mut callword: Option<&Value>, mut crank_first: bool) -> Self {
     let mut family_stack_pushes = 0;
+    let mut new_family_member = false;
     let mut is_macro = if wd.is_stack() {
       family_stack_pushes += 1;
-      self.family.push(wd.clone()); false
+      new_family_member = true;
+      self.family.push(wd.clone());
+      false
     } else { true };
     let mut local_family = self.pool.get_family();
+    let mut legacy_family: Option<Family> = None;
     let mut control: RecurseControl;
 
     let mut refstack = wd.value_stack_ref();
@@ -865,6 +949,7 @@ impl CognitionState {
     } else {
       (self.pool.get_stack(0), false)
     };
+    let mut word_holder: Option<Value> = None;
 
     let mut i = 0;
     loop {
@@ -872,36 +957,32 @@ impl CognitionState {
       let v = if destructive { stack.pop().unwrap() } else { self.value_copy(&refstack[i]) };
       let last_v = if destructive { stack.len() == 0 } else { i == refstack.len() - 1 };
       let cranking = if is_macro { crank_first && i == 0 } else { crank_first || i != 0 };
-      (self, control) = self.eval_value(v, callword, &mut local_family, is_macro || i == 0, cranking);
+      (self, control) = self.eval_value(v, callword!(callword, word_holder), &mut local_family, is_macro || i == 0, cranking);
 
       match control {
-        RecurseControl::Evalf(wd, retstack) => {
-          if last_v && false {}
-          else { self = self.evalstack(wd, Some(retstack), None, false) }
-          while let Some(f) = local_family.pop() { self.family.push(f) }
-        },
-        RecurseControl::Crank(wd, retstack) => {
-          if last_v && false {}
-          else { self = self.evalstack(wd, Some(retstack), None, true) }
-          while let Some(f) = local_family.pop() { self.family.push(f) }
-        },
-        RecurseControl::Def(wd, v) => {
-          if last_v && false {}
-          else {
-            self = self.evalstack(wd, None, Some(&v), cranking);
-            self.pool.add_val(v);
-          }
-          while let Some(f) = local_family.pop() { self.family.push(f) }
-        },
+        RecurseControl::Evalf(wdn, retstack) => {
+          evalstack_recurse!(self, is_macro, wd, wdn, local_family, legacy_family, family_stack_pushes, new_family_member,
+                             refstack, i, destructive, callword, crank_first, DESTRUCTIVE, stack, retstack, word_holder, false, last_v); },
+        RecurseControl::Crank(wdn, retstack) => {
+          evalstack_recurse!(self, is_macro, wd, wdn, local_family, legacy_family, family_stack_pushes, new_family_member,
+                             refstack, i, destructive, callword, crank_first, DESTRUCTIVE, stack, retstack, word_holder, true, last_v); },
+        RecurseControl::Def(wdn, v) => {
+          evalstack_recurse!(self, is_macro, wd, wdn, local_family, legacy_family, family_stack_pushes, new_family_member,
+                             refstack, i, destructive, callword, crank_first, v, word_holder, cranking, last_v); },
         RecurseControl::None => {},
         RecurseControl::Return => break,
       }
       if self.exited { break }
       i += 1;
     }
+    if let Some(wh) = word_holder { self.pool.add_val(wh) }
     self.pool.add_stack(stack);
-
+    while let Some(f) = local_family.pop() { self.family.push(f) }
     self.pool.add_family(local_family);
+    if let Some(mut lf) = legacy_family {
+      while let Some(f) = lf.pop() { self.family.push(f) }
+      self.pool.add_family(lf)
+    }
     for _ in 0..family_stack_pushes {
       if let Some(wd) = self.family.pop() {
         self.pool.add_word_def(wd) }}

@@ -4,6 +4,8 @@ stuff
 2 crank a compose b compose compose compose base compose 1 compose crank compose uncd compose VMACRO cast
 1 crank eval
 
+getargs eval fllib fllib
+
 3 crank repl
 2 crank ? nop read compose evalstr compose repl compose VMACRO cast
 1 crank def repl

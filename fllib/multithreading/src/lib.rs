@@ -24,7 +24,6 @@ impl Custom for ThreadHandler {
 // Takes a stack and turns it into a new cognition instance running in another thread
 // Returns a custom thread handler type
 pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  println!("called spawn");
   let stack = &mut state.current().stack;
   let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   if !v.is_stack() {
