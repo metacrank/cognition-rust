@@ -263,7 +263,7 @@ impl Pool {
     pool_insert_val!(Value::Stack(vstack), vstack.container.stack.capacity(), self, self.vstacks);
   }
   pub fn add_vmacro(&mut self, vmacro: Box<VMacro>) {
-    pool_insert_val!(Value::Macro(vmacro), vmacro.macro_stack.capacity(), self, self.vstacks);
+    pool_insert_val!(Value::Macro(vmacro), vmacro.macro_stack.capacity(), self, self.vmacros);
   }
   pub fn add_verror(&mut self, verror: Box<VError>) {
     pool_insert_val!(Value::Error(verror), verror.error.capacity(), self, self.verrors);
