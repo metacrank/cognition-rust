@@ -7,7 +7,7 @@ stuff
 getargs eval fllib fllib
 
 3 crank repl
-2 crank ? nop read compose evalstr compose repl compose VMACRO cast
+2 crank ? unglue read unglue compose eval evalstr unglue compose eval repl compose VMACRO cast
 1 crank def
 2 crank repl dup
-1 crank dup bequeath def repl
+1 crank bequeath eval
