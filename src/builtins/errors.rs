@@ -177,9 +177,8 @@ pub fn cog_ethrow(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
 pub fn cog_esize(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut cur_v = state.pop_cur();
   let cur = cur_v.metastack_container();
-  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE UNINITIALIZED", w) }
+  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
   if cur.math.as_ref().unwrap().base() == 0 { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  if cur.math.as_ref().unwrap().base() == 1 { return state.push_cur(cur_v).eval_error("MATH BASE ONE", w) }
   let length = if let Some(ref e) = cur.err_stack { e.len() } else { 0 };
   if length > isize::MAX as usize { return state.push_cur(cur_v).eval_error("OUT OF BOUNDS", w) }
   match cur.math.as_ref().unwrap().itos(length as isize, &mut state) {

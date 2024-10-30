@@ -43,7 +43,7 @@ macro_rules! get_word {
 }
 
 macro_rules! get_int {
-  ($state:ident,$w:ident) => {{
+  ($state:ident,$w:ident,ACTIVE) => {{
     let cur = $state.current();
     let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let stack = v.value_stack_ref();
@@ -66,7 +66,11 @@ macro_rules! get_int {
       } else { i as i32 },
       Err(e) => return $state.eval_error(e, $w),
     };
-    let v = cur.stack.pop().unwrap();
+    i
+  }};
+  ($state:ident,$w:ident) => {{
+    let i = get_int!($state,$w,ACTIVE);
+    let v = $state.current().stack.pop().unwrap();
     $state.pool.add_val(v);
     i
   }};

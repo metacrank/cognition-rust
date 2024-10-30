@@ -39,12 +39,11 @@ pub fn cog_dup(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
 pub fn cog_ssize(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut cur_v = state.pop_cur();
   let cur = cur_v.metastack_container();
-  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE UNINITIALIZED", w) }
+  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
   if cur.math.as_ref().unwrap().base() == 0 { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  if cur.math.as_ref().unwrap().base() == 1 { return state.push_cur(cur_v).eval_error("MATH BASE ONE", w) }
   let length = cur.stack.len();
   if length > isize::MAX as usize { return state.push_cur(cur_v).eval_error("OUT OF BOUNDS", w) }
-  match cur.math.as_ref().unwrap().itos(length as isize, &mut state) { // TODO: converts usize to isize
+  match cur.math.as_ref().unwrap().itos(length as isize, &mut state) {
     Ok(s) => {
       let mut v = state.pool.get_vword(s.len());
       v.str_word.push_str(&s);

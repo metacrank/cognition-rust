@@ -56,9 +56,6 @@ pub fn cog_len(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(ref math) = cur.math else { return state.eval_error("MATH BASE ZERO", w) };
   if math.base() == 0 { return state.eval_error("MATH BASE ZERO", w) }
   let length = word_v.vword_ref().str_word.len();
-  if math.base() == 1 && length != 0 {
-    return state.eval_error("MATH BASE ONE", w)
-  }
   if length > isize::MAX as usize { return state.eval_error("OUT OF BOUNDS", w) }
   match math.itos(word_v.vword_ref().str_word.len() as isize, &mut state) {
     Ok(s) => {
