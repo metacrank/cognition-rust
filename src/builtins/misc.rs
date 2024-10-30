@@ -2,7 +2,7 @@ use crate::*;
 use std::{thread, time};
 use libloading;
 
-pub fn cog_nop(state: CognitionState, _w: Option<&Value>) -> CognitionState { state }
+pub fn cog_nop(state: CognitionState, _: Option<&Value>) -> CognitionState { state }
 
 pub fn cog_exit(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
@@ -22,7 +22,7 @@ pub fn cog_exit(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state
 }
 
-pub fn cog_reset(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_reset(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   if let Some(wt) = state.current().word_table.take() {
     state.pool.add_word_table(wt)
   }
@@ -53,7 +53,7 @@ pub fn cog_reset(mut state: CognitionState, _w: Option<&Value>) -> CognitionStat
   state
 }
 
-pub fn cog_getargs(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_getargs(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let mut vstack = state.pool.get_vstack(state.args.len());
   for s in state.args.iter() {
     let mut vword = state.pool.get_vword(s.vword_ref().str_word.len());
@@ -155,6 +155,27 @@ pub fn cog_fllib_filename(mut state: CognitionState, w: Option<&Value>) -> Cogni
   state
 }
 
+pub fn cog_fllib_count(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let mut cur_v = state.pop_cur();
+  let cur = cur_v.metastack_container();
+  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE UNINITIALIZED", w) }
+  if cur.math.as_ref().unwrap().base() == 0 { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
+  if cur.math.as_ref().unwrap().base() == 1 { return state.push_cur(cur_v).eval_error("MATH BASE ONE", w) }
+  let length = state.fllibs.len();
+  if length > isize::MAX as usize { return state.push_cur(cur_v).eval_error("OUT OF BOUNDS", w) }
+  match cur.math.as_ref().unwrap().itos(length as isize, &mut state) { // TODO: converts usize to isize
+    Ok(s) => {
+      let mut v = state.pool.get_vword(s.len());
+      v.str_word.push_str(&s);
+      state.pool.add_string(s);
+      state = state.push_cur(cur_v);
+      state.push_quoted(Value::Word(v));
+      state
+    },
+    Err(e) => { return state.push_cur(cur_v).eval_error(e, w) }
+  }
+}
+
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "nothing");
   add_word!(state, "nop", cog_nop);
@@ -168,4 +189,5 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "nanosleep", cog_nanosleep);
   add_word!(state, "fllib", cog_fllib);
   add_word!(state, "fllib-filename", cog_fllib_filename);
+  add_word!(state, "fllib-count", cog_fllib_count);
 }

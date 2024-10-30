@@ -1,7 +1,7 @@
 use crate::*;
 use std::io::*;
 
-pub fn cog_questionmark(state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_questionmark(state: CognitionState, _: Option<&Value>) -> CognitionState {
   let mut f = stdout();
   fwrite_check_pretty!(f, GRN);
   println!("STACK:");

@@ -144,3 +144,16 @@ macro_rules! add_word {
   }
 }
 // pub(crate) use add_word;
+
+#[macro_export]
+macro_rules! ensure_quoted {
+  ($state:ident,$stack:expr) => {
+    for val in $stack.iter_mut() {
+      if !(val.is_stack() || val.is_macro()) {
+        let new_val = $state.pool.get_vstack(1);
+        let old_val = std::mem::replace(val, Value::Stack(new_val));
+        val.vstack_mut().container.stack.push(old_val);
+      }
+    }
+  }
+}

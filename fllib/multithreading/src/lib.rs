@@ -1,7 +1,6 @@
 use cognition::*;
 use std::thread;
 use std::io::Write;
-use std::mem;
 
 struct CogStateWrapper { cogstate: CognitionState }
 unsafe impl Send for CogStateWrapper {}
@@ -30,13 +29,7 @@ pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  for val in v.vstack_mut().container.stack.iter_mut() {
-    if !(val.is_stack() || val.is_macro()) {
-      let new_val = state.pool.get_vstack(1);
-      let old_val = mem::replace(val, Value::Stack(new_val));
-      val.vstack_mut().container.stack.push(old_val);
-    }
-  }
+  ensure_quoted!(state, v.vstack_mut().container.stack);
   let mut metastack = state.pool.get_stack(1);
   metastack.push(v);
   let mut cogstate = CognitionState::new(metastack);

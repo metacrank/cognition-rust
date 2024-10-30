@@ -658,6 +658,10 @@ impl CognitionState {
     for v in old.stack.iter() {
       new.stack.push(self.value_copy(v));
     }
+    self.contain_copy_attributes(old, new);
+  }
+
+  pub fn contain_copy_attributes(&mut self, old: &Container, new: &mut Container) {
     if let Some(ref err_stack) = old.err_stack {
       new.err_stack = Some(self.pool.get_stack(err_stack.len()));
       let new_err_stack = new.err_stack.as_mut().unwrap();

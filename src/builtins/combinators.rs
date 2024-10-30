@@ -52,9 +52,18 @@ pub fn cog_cast(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state.eval_error("BAD ARGUMENT TYPE", w)
 }
 
+pub fn cog_quote(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let mut wrapper = state.pool.get_vstack(1);
+  wrapper.container.stack.push(v);
+  state.current().stack.push(Value::Stack(wrapper));
+  state
+}
+
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "eval", EVAL);
   add_word!(state, "return", RETURN);
   add_word!(state, "compose", cog_compose);
   add_word!(state, "cast", cog_cast);
+  add_word!(state, "quote", cog_quote);
 }

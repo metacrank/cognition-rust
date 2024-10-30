@@ -25,6 +25,32 @@ pub fn cog_def(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   state
 }
 
+pub fn cog_undef(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let v = get_word!(state, w);
+  let Some(wt) = &mut state.current().word_table else { return state.eval_error("UNDEFINED WORD", w) };
+  let Some(result) = wt.remove(&v.value_stack_ref().first().unwrap().vword_ref().str_word) else {
+    return state.eval_error("UNDEFINED WORD", w)
+  };
+  state.pool.add_word_def(result);
+  state.pool.add_val(v);
+  state
+}
+
+pub fn cog_wordlist(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let v = if let Some(wt) = state.current().word_table.take() {
+    let mut v = state.pool.get_vstack(wt.len());
+    for k in wt.keys() {
+      let mut word = state.pool.get_vword(k.len());
+      word.str_word.push_str(k);
+      v.container.stack.push(Value::Word(word));
+    }
+    state.current().word_table = Some(wt);
+    v
+  } else { state.pool.get_vstack(0) };
+  state.current().stack.push(Value::Stack(v));
+  state
+}
+
 pub fn cog_unglue(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let cur = state.current();
   let Some(v) = cur.stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
@@ -40,6 +66,21 @@ pub fn cog_unglue(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   state.pool.add_val(v);
   let new_v = state.value_copy(&*new_wd);
   state.current().stack.push(new_v);
+  state
+}
+
+pub fn cog_def_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let mut v = get_word!(state, w);
+  let s = &mut v.value_stack().first_mut().unwrap().vword_mut().str_word;
+  if let Some(wt) = &mut state.current().word_table {
+    if wt.contains_key(&*s) {
+      if s.len() == 0 { s.push('t') }
+      state.current().stack.push(v);
+      return state
+    }
+  }
+  s.truncate(0);
+  state.current().stack.push(v);
   state
 }
 
@@ -94,6 +135,9 @@ pub fn cog_bequeath(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
 
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "def", cog_def);
+  add_word!(state, "undef", cog_undef);
   add_word!(state, "unglue", cog_unglue);
+  add_word!(state, "def?", cog_def_questionmark);
+  add_word!(state, "wordlist", cog_wordlist);
   add_word!(state, "bequeath", cog_bequeath);
 }

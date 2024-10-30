@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn cog_getf(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_getf(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let faliases = state.current().faliases.take();
   if faliases.is_none() {
     let list = state.pool.get_vstack(DEFAULT_STACK_SIZE);
@@ -159,22 +159,22 @@ pub fn cog_s(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   state
 }
 
-pub fn cog_dtgl(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_dtgl(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   state.current().dflag = !state.current_ref().dflag;
   state
 }
 
-pub fn cog_itgl(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_itgl(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   state.current().iflag = !state.current_ref().iflag;
   state
 }
 
-pub fn cog_stgl(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_stgl(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   state.current().sflag = !state.current_ref().sflag;
   state
 }
 
-pub fn cog_getd(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_getd(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let v = if let Some(delims) = state.current().delims.take() {
     let mut v = state.pool.get_vword(delims.len());
     v.str_word.push_str(&delims);
@@ -183,7 +183,7 @@ pub fn cog_getd(mut state: CognitionState, _w: Option<&Value>) -> CognitionState
   state.push_quoted(Value::Word(v)); state
 }
 
-pub fn cog_geti(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_geti(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let v = if let Some(ignored) = state.current().ignored.take() {
     let mut v = state.pool.get_vword(ignored.len());
     v.str_word.push_str(&ignored);
@@ -192,7 +192,7 @@ pub fn cog_geti(mut state: CognitionState, _w: Option<&Value>) -> CognitionState
   state.push_quoted(Value::Word(v)); state
 }
 
-pub fn cog_gets(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_gets(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let v = if let Some(singlets) = state.current().singlets.take() {
     let mut v = state.pool.get_vword(singlets.len());
     v.str_word.push_str(&singlets);
