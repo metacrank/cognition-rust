@@ -277,47 +277,47 @@ impl Value {
   pub fn fprint(&self, f: &mut dyn Write, end: &'static str) {
     match self {
       Self::Word(vword) => {
-        fwrite_check_pretty!(f, b"'");
+        fwrite_check!(f, b"'");
         vword.str_word.fprint_pretty(f);
-        fwrite_check_pretty!(f, b"'");
+        fwrite_check!(f, b"'");
       },
       Self::Stack(vstack) => {
-        fwrite_check_pretty!(f, b"[ ");
+        fwrite_check!(f, b"[ ");
         for v in vstack.container.stack.iter() { v.fprint(f, " "); }
-        fwrite_check_pretty!(f, b"]");
+        fwrite_check!(f, b"]");
       },
       Self::Macro(vmacro) => {
-        fwrite_check_pretty!(f, b"( ");
+        fwrite_check!(f, b"( ");
         for v in vmacro.macro_stack.iter() { v.fprint(f, " "); }
-        fwrite_check_pretty!(f, b")");
+        fwrite_check!(f, b")");
       },
       Self::Error(verror) => {
         match verror.loc {
           Some(ref loc) => {
             loc.filename.fprint_pretty(f);
-            fwrite_check_pretty!(f, b":");
+            fwrite_check!(f, b":");
             loc.line.fprint_pretty(f);
-            fwrite_check_pretty!(f, b":");
+            fwrite_check!(f, b":");
             loc.column.fprint_pretty(f);
-            fwrite_check_pretty!(f, b":");
+            fwrite_check!(f, b":");
           },
           None => {
-            fwrite_check_pretty!(f, b"(none):");
+            fwrite_check!(f, b"(none):");
           },
         }
         match verror.str_word {
           Some(ref word) => {
-            fwrite_check_pretty!(f, b"'");
+            fwrite_check!(f, b"'");
             word.fprint_pretty(f);
-            fwrite_check_pretty!(f, b"':");
+            fwrite_check!(f, b"':");
           }
           None => {
-            fwrite_check_pretty!(f, b"(none):");
+            fwrite_check!(f, b"(none):");
           }
         }
-        fwrite_check_pretty!(f, RED);
+        fwrite_check!(f, RED);
         verror.error.fprint_pretty(f);
-        fwrite_check_pretty!(f, COLOR_RESET);
+        fwrite_check!(f, COLOR_RESET);
       },
       Self::FLLib(vfllib) => {
         match &vfllib.str_word {
@@ -325,27 +325,27 @@ impl Value {
             s.fprint_pretty(f);
           },
           None => {
-            fwrite_check_pretty!(f, HBLK);
-            fwrite_check_pretty!(f, b"FLLIB");
-            fwrite_check_pretty!(f, COLOR_RESET);
+            fwrite_check!(f, HBLK);
+            fwrite_check!(f, b"FLLIB");
+            fwrite_check!(f, COLOR_RESET);
           },
         }
       },
       Self::Custom(vcustom) => {
         if let Some(ref c) = vcustom.custom { c.printfunc(f) }
         else {
-          fwrite_check_pretty!(f, HBLK);
-          fwrite_check_pretty!(f, b"(void)");
-          fwrite_check_pretty!(f, COLOR_RESET);
+          fwrite_check!(f, HBLK);
+          fwrite_check!(f, b"(void)");
+          fwrite_check!(f, COLOR_RESET);
         }
       },
       Self::Control(vcontrol) => {
         fwrite_check_pretty!(f, GRN);
         match vcontrol {
-          VControl::Eval   => fwrite_check_pretty!(f, b"eval"),
-          VControl::Return => fwrite_check_pretty!(f, b"return"),
+          VControl::Eval   => { fwrite_check!(f, b"eval"); },
+          VControl::Return => { fwrite_check!(f, b"return"); },
         }
-        fwrite_check_pretty!(f, COLOR_RESET);
+        fwrite_check!(f, COLOR_RESET);
       },
     }
     fwrite_check!(f, end.as_bytes());

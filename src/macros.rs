@@ -69,6 +69,10 @@ macro_rules! fwrite_check_pretty {
           $crate::fwrite_check_byte!($f, b"\\", n);
           $crate::fwrite_check_byte!($f, b"t", n);
         },
+        b'\'' => {
+          $crate::fwrite_check_byte!($f, b"\\", n);
+          $crate::fwrite_check_byte!($f, b"'", n);
+        },
         _ => {
           $crate::fwrite_check_byte!($f, &s[n..n+1], n);
         },
