@@ -358,7 +358,7 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   // }
   for v in stack.iter() {
     let mut parser = state.pool.get_parser();
-    parser.reset(state.string_copy(&v.vword_ref().str_word));
+    parser.reset(state.string_copy(&v.vword_ref().str_word), None);
     loop {
       let w = parser.get_next(&mut state);
       match w {
@@ -387,7 +387,7 @@ pub fn cog_strstack(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   }
   let mut quot = state.pool.get_vstack(DEFAULT_STACK_SIZE);
   for v in stack.iter() {
-    let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)));
+    let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)), None);
     loop {
       let w = parser.get_next(&mut state);
       match w {

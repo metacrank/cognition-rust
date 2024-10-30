@@ -36,7 +36,13 @@ pub fn cog_metacrank(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   state
 }
 
+pub fn cog_halt(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  if let Some(cranks) = &mut state.current().cranks { cranks.clear() }
+  state
+}
+
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "crank", cog_crank);
   add_word!(state, "metacrank", cog_metacrank);
+  add_word!(state, "halt", cog_halt);
 }

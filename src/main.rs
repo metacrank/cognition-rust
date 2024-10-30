@@ -10,38 +10,10 @@ use cognition::math::Math;
 
 // to be reimplemented properly
 fn isint(_n: &String) -> bool { true }
-fn string_to_i32(_n: &String) -> Result<i32, &'static str> { Ok(2) }
 
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
   let argc = args.len();
-
-  // temporary
-  if argc > 1 {
-    if args[1].as_str() == "test_math" {
-      let mut math = Math::new();
-      let digits = String::from("abcdefghijklmnopqrstuvwxyz");
-      math.set_digits(&digits);
-      math.set_negc('n');
-      math.set_radix('.');
-      math.set_delim(',');
-      let err = math.set_base(12);
-      if err.is_some() { println!("{}", err.unwrap()) }
-      let mut state = CognitionState::new(Stack::new());
-
-      let s1 = String::from(args[2].as_str());
-
-      let Ok(i1) = math.stoi(&s1) else { panic!("stoi failed") };
-      println!("\"{}\" -> {}", s1, i1);
-
-      math.set_negc('\u{0305}');
-
-      let Ok(s2) = math.itos(i1, &mut state) else { panic!("itos failed") };
-      println!("{} -> \"{}\"", i1, s2);
-
-      return ExitCode::SUCCESS;
-    }
-  }
 
   let parse = parse_configs(&args, argc);
   let opts = match parse {
@@ -62,7 +34,7 @@ fn main() -> ExitCode {
   let Value::Stack(vstack) = &mut initial_stack else { panic!("fatal error") };
   vstack.container.faliases = Container::default_faliases();
   state.stack.push(initial_stack);
-  state.parser = Some(Parser::new(None));
+  state.parser = Some(Parser::new(None, None));
   for arg in args[opts.fileidx+opts.s..].iter() {
     state.args.push(Value::Word(Box::new(VWord{ str_word: arg.clone() })));
   }
@@ -80,19 +52,18 @@ fn main() -> ExitCode {
     let source: String = fs_result.unwrap();
     let mut parser = state.parser.take().unwrap();
     if let Some(s) = parser.source() { state.pool.add_string(s) }
-    parser.reset(source);
+    parser.reset(source, Some(state.string_copy(filename)));
+    state.parser = Some(parser);
 
     // Parse and eval loop
     loop {
-      let w = parser.get_next(&mut state);
+      let w = state.parser_get_next();
       match w {
         Some(v) => state = state.eval(v),
         None => break,
       }
       if state.exited { break }
     }
-
-    state.parser = Some(parser);
   }
 
   if !opts.q { print_end(&state); }
@@ -112,6 +83,14 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
   if args.len() < 2 {
     return Err(usage(1));
   }
+
+  let mut math = Math::new();
+  let digits = String::from("0123456789↊↋🜘");
+  math.set_digits(&digits);
+  math.set_negc('\u{0305}');
+  math.set_radix('.');
+  math.set_delim(',');
+  math.set_base(24);
 
   let (mut h, mut q, mut v) = (false, false, false);
   let mut s: i32 = -1;
@@ -140,9 +119,14 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
         }
         i += 1;
         let arg = &args[i];
-        match string_to_i32(arg) {
-          Ok(i) => s = i,
-          Err(_) => return Err(usage(2)),
+        match math.stoi(arg) {
+          Ok(i) => if i < 0 || i > i32::MAX as isize {
+            println!("Index (s) out of range");
+            return Err(ExitCode::from(2))
+          } else {
+            s = i as i32;
+          },
+          Err(_) => return Err(usage(3)),
         }
       }
       _ => {
@@ -170,7 +154,7 @@ fn usage(code: u8) -> ExitCode {
 fn help() -> ExitCode {
   usage(0);
   println!(" -h    --help            print this help message");
-  println!(" -q    --quiet           don't show stack information at program end");
+  println!(" -q    --quiet           don't show state information at program end");
   println!(" -s N  --sources N       specify N source files to be composed (default is N=1)");
   println!(" -v    --version         print version information");
   ExitCode::from(0)

@@ -9,7 +9,7 @@ pub fn cog_eclean(mut state: CognitionState, _: Option<&Value>) -> CognitionStat
   state
 }
 
-fn push_err_on_stack(state: &mut CognitionState, v: &Value) {
+pub fn push_err_on_stack(state: &mut CognitionState, v: &Value) {
   let e = v.verror_ref();
   let mut v1 = state.pool.get_vword(e.error.len());
   v1.str_word.push_str(&e.error);
@@ -19,6 +19,25 @@ fn push_err_on_stack(state: &mut CognitionState, v: &Value) {
       let mut v2 = state.pool.get_vword(s.len());
       v2.str_word.push_str(s);
       state.push_quoted(Value::Word(v2));
+    },
+    None => {
+      let v2 = state.pool.get_vstack(0);
+      state.current().stack.push(Value::Stack(v2));
+    },
+  }
+  match e.loc {
+    Some(ref loc) => {
+      let mut quot = state.pool.get_vstack(3);
+      let mut v2 = state.pool.get_vword(loc.filename.len());
+      v2.str_word.push_str(&loc.filename);
+      quot.container.stack.push(Value::Word(v2));
+      let mut v2 = state.pool.get_vword(loc.line.len());
+      v2.str_word.push_str(&loc.line);
+      quot.container.stack.push(Value::Word(v2));
+      let mut v2 = state.pool.get_vword(loc.column.len());
+      v2.str_word.push_str(&loc.column);
+      quot.container.stack.push(Value::Word(v2));
+      state.current().stack.push(Value::Stack(quot));
     },
     None => {
       let v2 = state.pool.get_vstack(0);
@@ -51,39 +70,45 @@ pub fn cog_epop(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 
 pub fn cog_epush(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
-  let Some(v2) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let Some(v1) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let mut v3 = stack.pop().unwrap();
+  let v2 = stack.pop().unwrap();
+  let v1 = stack.pop().unwrap();
+  let stack3 = v3.value_stack();
   let stack2 = v2.value_stack_ref();
   let stack1 = v1.value_stack_ref();
-  if stack1.len() != 1 || stack2.len() > 1 {
+  if stack1.len() != 1 || stack2.len() > 1 || !(stack3.len() == 0 || stack3.len() == 3) {
     stack.push(v1);
     stack.push(v2);
+    stack.push(v3);
     return state.eval_error("BAD ARGUMENT TYPE", w);
   }
   let w1 = stack1.first().unwrap();
   let w2 = stack2.first();
-  if w2.is_some() {
-    let Some(Value::Word(_)) = w2 else { return state.eval_error("BAD ARGUMENT TYPE", w) };
-  }
+  if stack3.iter().any(|x| !x.is_word()) { return state.eval_error("BAD ARGUMENT TYPE", w) }
   let Value::Word(ref v1word) = w1 else { return state.eval_error("BAD ARGUMENT TYPE", w) };
-  let mut v = state.pool.get_verror(v1word.str_word.len());
-  v.error.push_str(&v1word.str_word);
-  v.str_word = match w2 {
+  let str_word = match w2 {
     Some(Value::Word(ref v2word)) => Some(state.string_copy(&v2word.str_word)),
     None => None,
-    _ => unreachable!(),
+    _ => return state.eval_error("BAD ARGUMENT TYPE", w),
   };
+  let mut v = state.pool.get_verror(v1word.str_word.len());
+  v.error.push_str(&v1word.str_word);
+  v.str_word = str_word;
+  if stack3.len() == 3 {
+    let mut loc = state.pool.get_verror_loc(0);
+    std::mem::swap(&mut stack3.first_mut().as_mut().unwrap().vword_mut().str_word, &mut loc.filename);
+    std::mem::swap(&mut stack3.get_mut(1).as_mut().unwrap().vword_mut().str_word, &mut loc.line);
+    std::mem::swap(&mut stack3.get_mut(2).as_mut().unwrap().vword_mut().str_word, &mut loc.column);
+    v.loc = Some(loc)
+  }
   state.pool.add_val(v1);
   state.pool.add_val(v2);
-  let mut err_stack = state.current().err_stack.take();
-  match &mut err_stack {
-    Some(estack) => estack.push(Value::Error(v)),
-    None => {
-      err_stack = Some(state.pool.get_stack(1));
-      err_stack.as_mut().unwrap().push(Value::Error(v))
-    },
+  state.pool.add_val(v3);
+  if state.current().err_stack.is_none() {
+    state.current().err_stack = Some(state.pool.get_stack(1));
   }
-  state.current().err_stack = err_stack.take();
+  state.current().err_stack.as_mut().unwrap().push(Value::Error(v));
   state
 }
 
@@ -141,8 +166,9 @@ pub fn cog_ethrow(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   e.error.push_str(&err_w.str_word);
   if let Some(Value::Word(vw)) = w { e.str_word = Some(state.string_copy(&vw.str_word)); }
   state.pool.add_val(v);
+  e.loc = state.verr_loc();
   if state.current().err_stack.is_none() {
-    state.current().err_stack = Some(state.pool.get_stack(DEFAULT_STACK_SIZE));
+    state.current().err_stack = Some(state.pool.get_stack(1));
   }
   state.current().err_stack.as_mut().unwrap().push(Value::Error(e));
   state

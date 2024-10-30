@@ -13,6 +13,7 @@ pub struct Pool {
   vcustoms: Option<Stack>,
   vfllibs: Option<Stack>,
 
+  verror_locs: Option<ITree<VErrorLoc>>,
   stacks: Option<ITree<Stack>>,
   strings: Option<ITree<String>>,
   stringss: Option<ITree<Strings>>,
@@ -130,6 +131,7 @@ impl Pool {
       vcustoms: None,
       vfllibs: None,
 
+      verror_locs: None,
       stacks: None,
       strings: None,
       stringss: None,
@@ -170,6 +172,11 @@ impl Pool {
     if let Some(ref verrors) = self.verrors {
       print!("verrors: ");
       verrors.print();
+      println!("");
+    }
+    if let Some(ref verror_locs) = self.verror_locs {
+      print!("verror_locs: ");
+      verror_locs.print();
       println!("");
     }
     if let Some(ref vcustoms) = self.vcustoms {
@@ -267,6 +274,9 @@ impl Pool {
   }
   pub fn add_verror(&mut self, verror: Box<VError>) {
     pool_insert_val!(Value::Error(verror), verror.error.capacity(), self, self.verrors);
+  }
+  pub fn add_verror_loc(&mut self, loc: VErrorLoc) {
+    pool_insert!(loc, loc.filename.capacity(), self, self.verror_locs, VErrorLoc, Vec::<VErrorLoc>::pnew);
   }
   pub fn add_vfllib(&mut self, vfllib: Box<VFLLib>) {
     pool_push_val!(Value::FLLib(vfllib), self, self.vfllibs);
@@ -379,11 +389,24 @@ impl Pool {
   pub fn get_verror(&mut self, capacity: usize) -> Box<VError> {
     pool_remove_val!(self, self.verrors, capacity, Value::Error(mut verror), verror, {
       verror.error.clear();
-      if verror.str_word.is_some() {
-        self.add_string(verror.str_word.take().unwrap());
+      if let Some(word) = verror.str_word.take() {
+        self.add_string(word);
+      }
+      if let Some(loc) = verror.loc.take() {
+        self.add_verror_loc(loc);
       }
     });
     Box::new(VError::with_capacity(capacity))
+  }
+  pub fn get_verror_loc(&mut self, capacity: usize) -> VErrorLoc {
+    pool_remove!(self, self.verror_locs, capacity, mut loc, loc, Vec::<VErrorLoc>::pdrop, {
+      loc.filename.clear();
+      loc.line.clear();
+      loc.column.clear();
+    });
+    VErrorLoc{ filename: self.get_string(capacity),
+               line: self.get_string(4),
+               column: self.get_string(4) }
   }
   pub fn get_vfllib(&mut self, f: CognitionFunction) -> Box<VFLLib> {
     pool_pop_val!(self.vfllibs, Value::FLLib(mut vfllib), vfllib, {
@@ -465,7 +488,7 @@ impl Pool {
     pool_pop!(self.parsers, mut parser, parser, {
       if let Some(s) = parser.source() { self.add_string(s) }
     });
-    Parser::new(None)
+    Parser::new(None, None)
   }
 
   pub fn get_un_op(&mut self) -> UnaryOp {

@@ -174,9 +174,15 @@ pub struct VStack {
 pub struct VMacro {
   pub macro_stack: Stack,
 }
+pub struct VErrorLoc {
+  filename: String,
+  line: String,
+  column: String,
+}
 pub struct VError {
   error: String,
   str_word: Option<String>,
+  loc: Option<VErrorLoc>
 }
 pub struct VFLLib {
   fllib: CognitionFunction,
@@ -221,10 +227,10 @@ impl VMacro {
 }
 impl VError {
   pub fn with_strings(error: String, str_word: String) -> VError {
-    VError{ error, str_word: Some(str_word) }
+    VError{ error, str_word: Some(str_word), loc: None }
   }
   pub fn with_error(error: String) -> VError {
-    VError{ error, str_word: None }
+    VError{ error, str_word: None, loc: None }
   }
   pub fn with_capacity(capacity: usize) -> VError {
     Self::with_error(String::with_capacity(capacity))
@@ -286,6 +292,19 @@ impl Value {
         fwrite_check_pretty!(f, b")");
       },
       Self::Error(verror) => {
+        match verror.loc {
+          Some(ref loc) => {
+            loc.filename.fprint_pretty(f);
+            fwrite_check_pretty!(f, b":");
+            loc.line.fprint_pretty(f);
+            fwrite_check_pretty!(f, b":");
+            loc.column.fprint_pretty(f);
+            fwrite_check_pretty!(f, b":");
+          },
+          None => {
+            fwrite_check_pretty!(f, b"(none):");
+          },
+        }
         match verror.str_word {
           Some(ref word) => {
             fwrite_check_pretty!(f, b"'");
@@ -391,6 +410,7 @@ impl Value {
 
 pub struct Parser {
   source: Option<String>,
+  filename: Option<String>,
   i: usize,
   c: Option<char>,
   line: usize,
@@ -398,10 +418,10 @@ pub struct Parser {
 }
 
 impl Parser {
-  pub fn new(source: Option<String>) -> Parser {
-    if source.is_none() { return Parser{ source: None, i: 0, c: None, line: 1, column: 0 } }
+  pub fn new(source: Option<String>, filename: Option<String>) -> Parser {
+    if source.is_none() { return Parser{ source: None, filename: None, i: 0, c: None, line: 1, column: 0 } }
     let c = match source.as_ref().unwrap().get(..) { Some(st) => st.chars().next(), None => None };
-    Parser{ source, i: 0, c, line: 1, column: 0 }
+    Parser{ source, filename, i: 0, c, line: 1, column: 0 }
   }
   pub fn next(&mut self) {
     if self.c.is_none() || self.source.is_none() { return }
@@ -417,16 +437,20 @@ impl Parser {
     }
   }
 
-  pub fn reset(&mut self, source: String) {
+  pub fn reset(&mut self, source: String, filename: Option<String>) {
     self.column = 0;
     self.line = 1;
     self.c = match source.get(..) { Some(st) => st.chars().next(), None => None };
     self.i = 0;
     self.source = Some(source);
+    self.filename = filename;
   }
 
   pub fn source(&mut self) -> Option<String> {
     self.source.take()
+  }
+  pub fn filename(&mut self) -> Option<String> {
+    self.filename.take()
   }
   pub fn line(&self) -> usize { self.line }
   pub fn column(&self) -> usize { self.column }
@@ -606,6 +630,41 @@ impl CognitionState {
           fllibs: Vec::<libloading::Library>::new(), pool: Pool::new() }
   }
 
+  pub fn verr_loc(&mut self) -> Option<VErrorLoc> {
+    if let Some(ref parser) = self.parser {
+      if let Some(ref filename) = parser.filename {
+        let mut loc = self.pool.get_verror_loc(filename.len());
+        loc.filename.push_str(filename);
+        if let Some(math) = self.current().math.take() {
+          if math.base() == 1 {
+            let zero = math.get_digits().get(0).expect("Math missing digits");
+            if self.parser.as_ref().unwrap().line == 0 { loc.line.push(zero.clone()) }
+            if self.parser.as_ref().unwrap().column == 0 { loc.column.push(zero.clone()) }
+          }
+          if math.base() > 1 {
+            if self.parser.as_ref().unwrap().line <= isize::MAX as usize {
+              let line = self.parser.as_ref().unwrap().line as isize;
+              if let Ok(line) = math.itos(line, self) {
+                loc.line.push_str(&line);
+                self.pool.add_string(line);
+              }
+            }
+            if self.parser.as_ref().unwrap().column <= isize::MAX as usize {
+              let column = self.parser.as_ref().unwrap().column as isize;
+              if let Ok(column) = math.itos(column, self) {
+                loc.column.push_str(&column);
+                self.pool.add_string(column);
+              }
+            }
+          }
+          self.current().math = Some(math)
+        }
+        return Some(loc)
+      }
+    }
+    None
+  }
+
   pub fn eval_error(mut self, e: &'static str, w: Option<&Value>) -> Self {
     let mut verror = self.pool.get_verror(e.len());
     verror.error.push_str(e);
@@ -613,6 +672,7 @@ impl CognitionState {
       None => None,
       Some(v) => Some(self.string_copy(&v.vword_ref().str_word)),
     };
+    verror.loc = self.verr_loc();
     if let None = self.current_ref().err_stack {
       let temp = self.pool.get_stack(1);
       self.current().err_stack = Some(temp);
@@ -645,6 +705,13 @@ impl CognitionState {
       Some(s) => s.chars().any(|x| x == c),
     };
     (found && cur.sflag) || (!found && !cur.sflag)
+  }
+
+  pub fn parser_get_next(&mut self) -> Option<Value> {
+    let Some(mut parser) = self.parser.take() else { return None };
+    let retval = parser.get_next(self);
+    self.parser = Some(parser);
+    retval
   }
 
   pub fn string_copy(&mut self, s: &String) -> String {
@@ -954,7 +1021,7 @@ impl CognitionState {
     };
     let mut word_holder: Option<Value> = None;
 
-    let mut i = 0;
+    let mut i: usize = 0;
     loop {
       if if destructive { stack.len() == 0 } else { i >= refstack.len() } { break }
       let v = if destructive { stack.pop().unwrap() } else { self.value_copy(&refstack[i]) };
@@ -976,7 +1043,7 @@ impl CognitionState {
         RecurseControl::Return => break,
       }
       if self.exited { break }
-      i += 1;
+      i = i.wrapping_add(1);
     }
     if let Some(wh) = word_holder { self.pool.add_val(wh) }
     self.pool.add_stack(stack);
@@ -992,7 +1059,6 @@ impl CognitionState {
     self
   }
 
-  // don't increment crank
   pub fn get_evalf_val(mut self, alias: Option<&Value>) -> (Self, Option<(WordDef, Stack)>) {
     let Some(mut needseval) = self.current().stack.pop() else { return (self.eval_error("EMPTY STACK", alias), None) };
     let mut defstack = self.pool.get_stack(needseval.value_stack_ref().len());
