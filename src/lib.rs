@@ -807,7 +807,6 @@ impl CognitionState {
   fn evalword(mut self, v: Value, local_family: &mut Family, always_evalf: bool, try_eval: bool, cranking: bool) -> (Self, RecurseControl) {
     loop {
       let Some(family_stack) = self.family.pop() else {
-        v.print(" :(\n");
         // Assuming family stack has failed
         if try_eval {
           if let Some(ref wt) = self.current_ref().word_table {
@@ -846,8 +845,6 @@ impl CognitionState {
       if try_eval {
         if let Some(ref wt) = family_container.word_table {
           if let Some(wd) = wt.get(&v.vword_ref().str_word) {
-
-            v.print(" :)\n");
             // self = self.evalstack_new(wd.clone(), None, Some(&v), false);
             // self.pool.add_val(v);
             let new_word_def = wd.clone();
