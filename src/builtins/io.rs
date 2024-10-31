@@ -242,7 +242,8 @@ pub fn cog_empty(mut state: CognitionState, _: Option<&Value>) -> CognitionState
 
 pub fn cog_fopen(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let v = get_word!(state, w);
-  let Ok(file) = File::open(&v.value_stack_ref().first().unwrap().vword_ref().str_word) else {
+  let string = &v.value_stack_ref().first().unwrap().vword_ref().str_word;
+  let Ok(file) = File::options().read(true).create(false).open(string) else {
     state.current().stack.push(v);
     return state.eval_error("INVALID FILENAME", w);
   };
@@ -823,6 +824,8 @@ pub fn cog_read_line(mut state: CognitionState, w: Option<&Value>) -> CognitionS
 }
 
 // TODO: add seeking with the Seek trait
+// Maybe in separate fllib?
+// 'fs' fllib would be useful
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "?", cog_questionmark);
   add_word!(state, ".", cog_period);

@@ -175,6 +175,31 @@ pub fn cog_fllib_count(mut state: CognitionState, w: Option<&Value>) -> Cognitio
   }
 }
 
+pub fn cog_void(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let vcustom = state.pool.get_vcustom(Box::new(Void{}));
+  state.push_quoted(Value::Custom(vcustom));
+  state
+}
+
+pub fn cog_void_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(v) = stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
+  let Value::Custom(vcustom) = v.value_stack_ref().first().unwrap() else {
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let Some(ref custom) = vcustom.custom else { return state.eval_error("BAD ARGUMENT TYPE", w) };
+  let vword = if custom.as_any().downcast_ref::<Void>().is_some() {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "nothing");
   add_word!(state, "nop", cog_nop);
@@ -189,4 +214,6 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "fllib", cog_fllib);
   add_word!(state, "fllib-filename", cog_fllib_filename);
   add_word!(state, "fllib-count", cog_fllib_count);
+  add_word!(state, "void", cog_void);
+  add_word!(state, "void?", cog_void_questionmark);
 }
