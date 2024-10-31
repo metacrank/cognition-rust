@@ -54,7 +54,7 @@ macro_rules! cog_crank_val {
         let mut vword = $state.pool.get_vword(s.len());
         vword.str_word.push_str(&s);
         $state.pool.add_string(s);
-        $state.current().stack.push(Value::Word(vword));
+        $state.push_quoted(Value::Word(vword));
         $state
       },
       Err(e) => $state.eval_error(e, $w)
