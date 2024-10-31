@@ -36,7 +36,8 @@ pub struct ReadWriteCustom { stream: Option<Box<dyn ReadWriteAny>> }
 pub struct FileCustom  { file: Option<File> }
 pub struct ReadCustom  { reader: Option<Box<dyn ReadAny>> }
 pub struct WriteCustom { writer: Option<Box<dyn WriteAny>> }
-pub struct BufReadCustom { bufreader: Option<BufReader<Box<dyn ReadAny>>> }
+pub struct BufReadCustom  { bufreader: Option<BufReader<Box<dyn ReadAny>>> }
+pub struct BufWriteCustom { bufwriter: Option<BufWriter<Box<dyn WriteAny>>> }
 
 impl Custom for ReadWriteCustom {
   fn printfunc(&self, f: &mut dyn Write) {
@@ -136,6 +137,33 @@ impl Custom for BufReadCustom {
       return Box::new(BufReadCustom{ bufreader: Some(BufReader::new(Box::new(empty()))) })
     }
     Box::new(Void{})
+  }
+}
+impl Custom for BufWriteCustom {
+  fn printfunc(&self, f: &mut dyn Write) {
+    fwrite_check!(f, b"(bufwriter)");
+  }
+  fn copyfunc(&self) -> Box<dyn CustomAny> {
+    let write_any = (**self.bufwriter.as_ref().unwrap().get_ref()).as_any();
+    if let Some(file) = write_any.downcast_ref::<File>() {
+      if let Ok(f) = file.try_clone() {
+        return Box::new(BufWriteCustom{ bufwriter: Some(BufWriter::new(Box::new(f))) })
+      }
+    } else if write_any.downcast_ref::<Stdout>().is_some() {
+      return Box::new(BufWriteCustom{ bufwriter: Some(BufWriter::new(Box::new(stdout()))) })
+    } else if write_any.downcast_ref::<Stderr>().is_some() {
+      return Box::new(BufWriteCustom{ bufwriter: Some(BufWriter::new(Box::new(stderr()))) })
+    } else if write_any.downcast_ref::<Empty>().is_some() {
+      return Box::new(BufWriteCustom{ bufwriter: Some(BufWriter::new(Box::new(empty()))) })
+    }
+    Box::new(Void{})
+  }
+}
+impl Drop for BufWriteCustom {
+  fn drop(&mut self) {
+    if let Err(e) = self.bufwriter.as_mut().unwrap().flush() {
+      let _ = stderr().write(format!("{e}").as_bytes());
+    }
   }
 }
 
@@ -308,7 +336,8 @@ pub fn cog_writer(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
     let boxed: Box<dyn WriteAny> = Box::new(stream.stream.take().unwrap());
     let writer = Some(boxed);
     vcustom.custom = Some(Box::new(WriteCustom{ writer }));
-  } else if custom.as_any_mut().downcast_mut::<WriteCustom>().is_some() {
+  } else if custom.as_any_mut().downcast_mut::<BufReadCustom>().is_some() {
+  } else if custom.as_any_mut().downcast_mut::<BufWriteCustom>().is_some() {
   } else { return state.eval_error("BAD ARGUMENT TYPE", w) };
   state
 }
@@ -333,6 +362,26 @@ pub fn cog_bufreader(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   state
 }
 
+pub fn cog_bufwriter(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(v) = stack.last_mut() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
+  let Value::Custom(vcustom) = v.value_stack().first_mut().unwrap() else {
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let Some(custom) = &mut vcustom.custom else { return state.eval_error("BAD ARGUMENT TYPE", w) };
+  let boxed: Box<dyn WriteAny> = if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+    Box::new(file.file.take().unwrap())
+  } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
+    writer.writer.take().unwrap()
+  } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
+     Box::new(stream.stream.take().unwrap())
+  } else { return state.eval_error("BAD ARGUMENT TYPE", w) };
+  let bufwriter = Some(BufWriter::new(boxed));
+  vcustom.custom = Some(Box::new(BufWriteCustom{ bufwriter }));
+  state
+}
+
 pub fn cog_unbuffer(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   let Some(v) = stack.last_mut() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
@@ -341,11 +390,22 @@ pub fn cog_unbuffer(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
   let Some(custom) = &mut vcustom.custom else { return state.eval_error("BAD ARGUMENT TYPE", w) };
-  let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() else {
+  if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
+    let boxed_unbuffered = bufreader.bufreader.take().unwrap().into_inner();
+    vcustom.custom = Some(Box::new(ReadCustom{ reader: Some(boxed_unbuffered) }));
+  } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+    let mut bufwriter = bufwriter.bufwriter.take().unwrap();
+    let _ = bufwriter.flush();
+    match bufwriter.into_inner() {
+      Ok(boxed_unbuffered) => vcustom.custom = Some(Box::new(WriteCustom{ writer: Some(boxed_unbuffered) })),
+      Err(e) => {
+        let _ = stderr().write(format!("{e}").as_bytes());
+        vcustom.custom = Some(Box::new(Void{}))
+      }
+    }
+  } else {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let boxed_unbuffered = bufreader.bufreader.take().unwrap().into_inner();
-  vcustom.custom = Some(Box::new(ReadCustom{ reader: Some(boxed_unbuffered) }));
   state
 }
 
@@ -388,6 +448,8 @@ pub fn cog_fquestionmark(mut state: CognitionState, w: Option<&Value>) -> Cognit
         questionmark(&state, writer.writer.as_mut().unwrap().as_write_mut());
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
         questionmark(&state, stream.stream.as_mut().unwrap().as_write_mut());
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        questionmark(&state, bufwriter.bufwriter.as_mut().unwrap().as_write_mut());
       } else {
         stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
@@ -439,6 +501,10 @@ pub fn cog_fperiod(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut stream.stream.as_mut().unwrap().as_write_mut(), "\n");
+        state.pool.add_val(print_v);
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        let print_v = stack.pop().unwrap();
+        print_v.fprint(&mut bufwriter.bufwriter.as_mut().unwrap().as_write_mut(), "\n");
         state.pool.add_val(print_v);
       } else {
         stack.push(v);
@@ -501,6 +567,10 @@ pub fn cog_fwrite(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
         let print_v = stack.pop().unwrap();
         fwrite_check!(stream.stream.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
         state.pool.add_val(print_v);
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        let print_v = stack.pop().unwrap();
+        fwrite_check!(bufwriter.bufwriter.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        state.pool.add_val(print_v);
       } else {
         stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
@@ -557,6 +627,10 @@ pub fn cog_fprint(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(stream.stream.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        state.pool.add_val(print_v);
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        let print_v = stack.pop().unwrap();
+        fwrite_check!(bufwriter.bufwriter.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
         state.pool.add_val(print_v);
       } else {
         stack.push(v);
@@ -766,6 +840,7 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "reader", cog_reader);
   add_word!(state, "writer", cog_writer);
   add_word!(state, "bufreader", cog_bufreader);
+  add_word!(state, "bufwriter", cog_bufwriter);
   add_word!(state, "unbuffer", cog_unbuffer);
   add_word!(state, "stream", cog_stream);
   add_word!(state, "f?", cog_fquestionmark);
