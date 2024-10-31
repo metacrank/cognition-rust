@@ -145,13 +145,15 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
 }
 
 fn usage(code: u8) -> ExitCode {
-  println!("Usage: crank [-hqsv] [file...] [arg...]");
+  println!("Usage: crank [-hfqsv] [file...] [arg...]");
   ExitCode::from(code)
 }
 
 fn help() -> ExitCode {
   usage(0);
   println!(" -h    --help            print this help message");
+  println!(" -f    --free            recursively free metastack at end to break reference");
+  println!("                           cycles and avoid leaking memory (to be implemented)");
   println!(" -q    --quiet           don't show state information at program end");
   println!(" -s N  --sources N       specify N source files to be composed (default is N=1)");
   println!(" -v    --version         print version information");
@@ -160,7 +162,7 @@ fn help() -> ExitCode {
 
 fn version() -> ExitCode {
   println!("Authors: Matthew Hinton, Preston Pan, MIT License 2024");
-  println!("cognition, version 0.1.1 alpha");
+  println!("cognition, version 0.1.2 alpha");
   ExitCode::from(0)
 }
 
