@@ -1,4 +1,4 @@
-define-module (metacrank cognition)
+(define-module (metacrank cognition)
   #:use-module (guix licenses)
   #:use-module (guix packages)
   #:use-module (guix download)
@@ -12,16 +12,16 @@ define-module (metacrank cognition)
 (define-public cognition
   (package
    (name "cognition")
-   (version "0.1.1")
+   (version "0.1.2")
    (source
     (origin
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "85a7ef7d750447415195ab892c8e15884bf8c756")))
+           (commit "bf88ddc4c326b18e0cc30eb22f4ad5e2d0cf6524")))
      (sha256
       (base32
-       "0fjrd0qy6plkqm0cf7mqb3r6kmjzpha92vjpskfcbwsnn7vnsl6r"))))
+       "1b23w4bh0zap8a8qd4272zhjsjz34ahxxkh0l474jbwfq2sqlwwb"))))
    (build-system cargo-build-system)
    (arguments
     `(#:cargo-inputs
@@ -40,4 +40,3 @@ define-module (metacrank cognition)
    (license expat)))
 
 cognition
-
