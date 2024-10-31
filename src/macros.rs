@@ -26,30 +26,36 @@ macro_rules! bad_value_err {
 
 #[macro_export]
 macro_rules! default_fprint_error {
-  ($e:literal) => {
-    print!("Value::fprint(): error: ");
-    println!($e);
+  ($e:expr) => {
+    let _ = std::io::stderr().write("Value::fprint(): error: ".as_bytes());
+    let _ = std::io::stderr().write($e.as_bytes());
   }
 }
 #[macro_export]
 macro_rules! fwrite_check_byte {
-  ($f:ident,$s:expr,$n:ident) => {
+  ($f:expr,$s:expr,$n:ident) => {{
     let n = $n;
     match $f.write($s) {
-      Ok(1) => {},
-      Ok(_) => { $crate::default_fprint_error!("not all bytes could be written");
-                 $crate::default_fprint_error!("wrote {n} bytes"); },
-      Err(e) => { $crate::default_fprint_error!("{e}"); },
+      Ok(1) => { false },
+      Ok(_) => {
+        $crate::default_fprint_error!("not all bytes could be written");
+        $crate::default_fprint_error!(format!("wrote {n} bytes"));
+        true
+      },
+      Err(e) => {
+        $crate::default_fprint_error!(format!("{e}"));
+        true
+      },
     }
-  }
+  }}
 }
 
 #[macro_export]
 macro_rules! fwrite_check {
-  ($f:ident,$s:expr) => {
+  ($f:expr,$s:expr) => {
     let s: &[u8] = $s;
     for n in 0..s.len() {
-      $crate::fwrite_check_byte!($f, &s[n..n+1], n);
+      if $crate::fwrite_check_byte!($f, &s[n..n+1], n) { break }
     }
   }
 }
@@ -57,24 +63,24 @@ macro_rules! fwrite_check {
 
 #[macro_export]
 macro_rules! fwrite_check_pretty {
-  ($f:ident,$s:expr) => {{
+  ($f:expr,$s:expr) => {{
     let s: &[u8] = $s;
     for n in 0..s.len() {
       match s[n] {
         b'\n' => {
-          $crate::fwrite_check_byte!($f, b"\\", n);
-          $crate::fwrite_check_byte!($f, b"n", n);
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"n", n)  { break }
         },
         b'\t' => {
-          $crate::fwrite_check_byte!($f, b"\\", n);
-          $crate::fwrite_check_byte!($f, b"t", n);
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"t", n)  { break }
         },
         b'\'' => {
-          $crate::fwrite_check_byte!($f, b"\\", n);
-          $crate::fwrite_check_byte!($f, b"'", n);
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"'", n)  { break }
         },
         _ => {
-          $crate::fwrite_check_byte!($f, &s[n..n+1], n);
+          if $crate::fwrite_check_byte!($f, &s[n..n+1], n) { break }
         },
       }
     };

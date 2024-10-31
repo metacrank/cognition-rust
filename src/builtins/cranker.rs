@@ -44,7 +44,6 @@ pub fn cog_halt(mut state: CognitionState, _: Option<&Value>) -> CognitionState 
 macro_rules! cog_crank_val {
   ($state:ident,$w:ident,$letpat:pat,$valexpr:expr) => {{
     let Some(math) = $state.current().math.take() else { return $state.eval_error("MATH BASE ZERO", $w) };
-    if math.base() == 0 { $state.current().math = Some(math); return $state.eval_error("MATH BASE ZERO", $w) }
     let val = if let Some(ref cranks) = $state.current().cranks {
       if let $letpat = cranks.get(0) { $valexpr } else { 0 }
     } else { 0 };

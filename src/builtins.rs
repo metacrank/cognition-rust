@@ -43,7 +43,7 @@ macro_rules! get_word {
 }
 
 macro_rules! get_int {
-  ($state:ident,$w:ident,ACTIVE) => {{
+  ($state:ident,$w:ident,ACTIVE,$err:literal) => {{
     let cur = $state.current();
     let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let stack = v.value_stack_ref();
@@ -62,12 +62,15 @@ macro_rules! get_int {
     }
     let i = match math.stoi(&vword.str_word) {
       Ok(i) => if i > i32::MAX as isize || i < 0 {
-        return $state.eval_error("OUT OF BOUNDS", $w)
+        return $state.eval_error($err, $w)
       } else { i as i32 },
       Err(e) => return $state.eval_error(e, $w),
     };
     i
   }};
+  ($state:ident,$w:ident,ACTIVE) => {
+    get_int!($state, $w, ACTIVE, "OUT OF BOUNDS")
+  };
   ($state:ident,$w:ident) => {{
     let i = get_int!($state,$w,ACTIVE);
     let v = $state.current().stack.pop().unwrap();

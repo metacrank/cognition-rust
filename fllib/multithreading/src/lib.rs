@@ -5,17 +5,17 @@ use std::io::Write;
 struct CogStateWrapper { cogstate: CognitionState }
 unsafe impl Send for CogStateWrapper {}
 
-struct ThreadHandler { handle: Option<thread::JoinHandle<CogStateWrapper>> }
-impl Custom for ThreadHandler {
+pub struct ThreadCustom { handle: Option<thread::JoinHandle<CogStateWrapper>> }
+impl Custom for ThreadCustom {
   fn printfunc(&self, f: &mut dyn Write) {
     if self.handle.is_none() {
-      fwrite_check_pretty!(f, b"(void thread)");
+      fwrite_check!(f, b"(void thread)");
     } else {
-      fwrite_check_pretty!(f, b"(thread)");
+      fwrite_check!(f, b"(thread)");
     }
   }
   fn copyfunc(&self) -> Box<dyn CustomAny> {
-    Box::new(ThreadHandler{ handle: None })
+    Box::new(ThreadCustom{ handle: None })
   }
 }
 
@@ -48,7 +48,7 @@ pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     let copy = wrapper;
     CogStateWrapper{ cogstate: copy.cogstate.crank() }
   });
-  let vhandler = state.pool.get_vcustom(Box::new(ThreadHandler{ handle: Some(handle) }));
+  let vhandler = state.pool.get_vcustom(Box::new(ThreadCustom{ handle: Some(handle) }));
   state.push_quoted(Value::Custom(vhandler));
   state
 }
@@ -61,10 +61,17 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   let v_stack = v.value_stack();
   if v_stack.len() != 1 {
     stack.push(v);
-    return state.eval_error("BAD ARGUMENT TYPE", w);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  let custom = v_stack.first_mut().unwrap().vcustom_mut().custom.as_mut().unwrap();
-  if let Some(handler) = custom.as_any_mut().downcast_mut::<ThreadHandler>() {
+  let Value::Custom(vcustom) = v_stack.first_mut().unwrap() else {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let Some(custom) = &mut vcustom.custom else {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  if let Some(handler) = custom.as_any_mut().downcast_mut::<ThreadCustom>() {
     if let Some(handle) = handler.handle.take() {
       if let Ok(cogstatewrapper) = handle.join() {
         let mut cogstate = cogstatewrapper.cogstate;
@@ -78,9 +85,8 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
           exit_code_stack.container.stack.push(Value::Word(code_v));
         }
         state.current().stack.push(Value::Stack(exit_code_stack));
-        let mut true_v = state.pool.get_vword(1);
-        true_v.str_word.push('t');
-        state.push_quoted(Value::Word(true_v));
+        let false_v = state.pool.get_vword(0);
+        state.push_quoted(Value::Word(false_v));
         while let Some(arg) = cogstate.args.pop() {
           state.pool.add_val(arg)
         }
@@ -92,9 +98,9 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
         state.current().stack.push(Value::Stack(empty));
         let empty = state.pool.get_vstack(0);
         state.current().stack.push(Value::Stack(empty));
-        let mut result = state.pool.get_vstack(1);
-        result.container.stack.push(Value::Word(state.pool.get_vword(0)));
-        state.current().stack.push(Value::Stack(result));
+        let mut true_v = state.pool.get_vword(1);
+        true_v.str_word.push('t');
+        state.push_quoted(Value::Word(true_v));
       }
       state.pool.add_val(v);
       return state;

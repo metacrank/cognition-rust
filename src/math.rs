@@ -340,8 +340,8 @@ impl Math {
   }
   /// Converts a signed integer to a string
   pub fn itos(&self, mut i: isize, state: &mut CognitionState) -> Result<String, &'static str> {
-    let negc = if let Some(ref c) = self.negc { c.clone() } else { return Err("MATH NEGC UNINITIALIZED") };
     if self.base == 0 { return Err("MATH BASE ZERO") };
+    let negc = if let Some(ref c) = self.negc { c.clone() } else { return Err("MATH NEGC UNINITIALIZED") };
     if i == 0 { return Ok(state.pool.get_string(0)) }
     if self.base == 1 { return Err("MATH BASE ONE") };
     let radius = self.base / 2 + 1;
