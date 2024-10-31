@@ -87,17 +87,17 @@ pub fn cog_setargs(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
 }
 
 pub fn cog_sleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_int!(state, w);
+  let i = get_int!(state, w, isize);
   thread::sleep(time::Duration::from_secs(i as u64));
   state
 }
 pub fn cog_usleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_int!(state, w);
+  let i = get_int!(state, w, isize);
   thread::sleep(time::Duration::from_micros(i as u64));
   state
 }
 pub fn cog_nanosleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_int!(state, w);
+  let i = get_int!(state, w, isize);
   thread::sleep(time::Duration::from_nanos(i as u64));
   state
 }

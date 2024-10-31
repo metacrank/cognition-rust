@@ -42,8 +42,9 @@ macro_rules! get_word {
   }};
 }
 
+// note: do not use usize (use isize instead)
 macro_rules! get_int {
-  ($state:ident,$w:ident,ACTIVE,$err:literal) => {{
+  ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
     let cur = $state.current();
     let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let stack = v.value_stack_ref();
@@ -61,26 +62,29 @@ macro_rules! get_int {
       return $state.eval_error("MATH BASE ZERO", $w)
     }
     let i = match math.stoi(&vword.str_word) {
-      Ok(i) => if i > i32::MAX as isize || i < 0 {
+      Ok(i) => if i > <$type>::MAX as isize || i < 0 {
         return $state.eval_error($err, $w)
-      } else { i as i32 },
+      } else { i as $type },
       Err(e) => return $state.eval_error(e, $w),
     };
     i
   }};
-  ($state:ident,$w:ident,ACTIVE) => {
-    get_int!($state, $w, ACTIVE, "OUT OF BOUNDS")
+  ($state:ident,$w:ident,$type:ty,ACTIVE) => {
+    get_int!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
   };
-  ($state:ident,$w:ident) => {{
-    let i = get_int!($state,$w,ACTIVE);
+  ($state:ident,$w:ident,$type:ty) => {{
+    let i = get_int!($state, $w, $type, ACTIVE);
     let v = $state.current().stack.pop().unwrap();
     $state.pool.add_val(v);
     i
   }};
+  ($state:ident,$w:ident) => {
+    get_int!($state, $w, i32)
+  };
 }
 
 macro_rules! get_2_ints {
-  ($state:ident,$w:ident) => {{
+  ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
     let cur = $state.current();
     let Some(v2) = cur.stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let Some(v1) = cur.stack.pop() else {
@@ -116,29 +120,43 @@ macro_rules! get_2_ints {
       return $state.eval_error("MATH BASE ZERO", $w)
     }
     let i1 = match math.stoi(&vword1.str_word) {
-      Ok(i) => if i > i32::MAX as isize || i < 0 {
+      Ok(i) => if i > <$type>::MAX as isize || i < 0 {
         cur.stack.push(v1); cur.stack.push(v2);
         return $state.eval_error("OUT OF BOUNDS", $w)
-      } else { i as i32 },
+      } else { i as $type },
       Err(e) => {
         cur.stack.push(v1); cur.stack.push(v2);
         return $state.eval_error(e, $w)
       },
     };
     let i2 = match math.stoi(&vword2.str_word) {
-      Ok(i) => if i > i32::MAX as isize || i < 0 {
+      Ok(i) => if i > <$type>::MAX as isize || i < 0 {
         cur.stack.push(v1); cur.stack.push(v2);
         return $state.eval_error("OUT OF BOUNDS", $w)
-      } else { i as i32 },
+      } else { i as $type },
       Err(e) => {
         cur.stack.push(v1); cur.stack.push(v2);
         return $state.eval_error(e, $w)
       },
     };
+    $state.current().stack.push(v1);
+    $state.current().stack.push(v2);
+    (i1, i2)
+  }};
+  ($state:ident,$w:ident,$type:ty,ACTIVE) => {
+    get_2_ints!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
+  };
+  ($state:ident,$w:ident,$type:ty) => {{
+    let (i1, i2) = get_2_ints!($state, $w, $type, ACTIVE);
+    let v2 = $state.current().stack.pop().unwrap();
+    let v1 = $state.current().stack.pop().unwrap();
     $state.pool.add_val(v1);
     $state.pool.add_val(v2);
     (i1, i2)
   }};
+  ($state:ident,$w:ident) => {
+    get_2_ints!($state, $w, i32)
+  };
 }
 
 pub mod combinators;

@@ -30,16 +30,14 @@ fn main() -> ExitCode {
   // Initialize state
   let metastack = Stack::with_capacity(DEFAULT_STACK_SIZE);
   let mut state = CognitionState::new(metastack);
-  let mut initial_stack = Value::Stack(Box::new(VStack::with_capacity(DEFAULT_STACK_SIZE)));
-  let Value::Stack(vstack) = &mut initial_stack else { panic!("fatal error") };
+  let mut vstack = Box::new(VStack::with_capacity(DEFAULT_STACK_SIZE));
   vstack.container.faliases = Container::default_faliases();
-  state.stack.push(initial_stack);
+  state.stack.push(Value::Stack(vstack));
   state.parser = Some(Parser::new(None, None));
   for arg in args[opts.fileidx+opts.s..].iter() {
     state.args.push(Value::Word(Box::new(VWord{ str_word: arg.clone() })));
   }
-
-  cognition::builtins::add_builtins(&mut state);
+  builtins::add_builtins(&mut state);
 
   for i in 0..opts.s {
     // Read code from file

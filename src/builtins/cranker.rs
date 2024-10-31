@@ -63,11 +63,11 @@ macro_rules! cog_crank_val {
 }
 macro_rules! cog_metacrank_val {
   ($state:ident,$w:ident,$letpat:pat,$valexpr:expr) => {{
-    let idx = get_int!($state, $w, ACTIVE);
+    let idx = get_int!($state, $w, usize, ACTIVE);
     let cur = $state.current();
     let math = cur.math.take().unwrap();
     let base = if let Some(ref cranks) = cur.cranks {
-      if let $letpat = cranks.get(idx as usize) { $valexpr } else { 0 }
+      if let $letpat = cranks.get(idx) { $valexpr } else { 0 }
     } else { 0 };
     let s = math.itos(base as isize, &mut $state);
     $state.current().math = Some(math);
