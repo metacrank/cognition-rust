@@ -1,4 +1,6 @@
 use crate::*;
+use super::io::*;
+use std::fs::File;
 
 pub fn cog_eclean(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let estack_o = state.current().err_stack.take();
@@ -124,8 +126,8 @@ pub fn cog_edrop(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   state.eval_error("NO ERRORS", w)
 }
 
-pub fn cog_eprint(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let err_stack = &mut state.current().err_stack;
+pub fn cog_eprint(state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let err_stack = &state.current_ref().err_stack;
   if let Some(estack) = err_stack {
     let e = estack.last();
     if let Some(v) = e {
@@ -136,7 +138,103 @@ pub fn cog_eprint(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   state.eval_error("NO ERRORS", w)
 }
 
-// cog_feprint
+pub fn cog_fewrite(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(mut v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let err_stack = &state.current_ref().err_stack;
+  let Some(estack) = err_stack else {
+    state.current().stack.push(v);
+    return state.eval_error("NO ERRORS", w)
+  };
+  if estack.last().is_none() {
+    state.current().stack.push(v);
+    return state.eval_error("NO ERRORS", w)
+  }
+
+  match v.value_stack().first_mut().unwrap() {
+    Value::Custom(vcustom) => {
+      let Some(custom) = &mut vcustom.custom else {
+        state.current().stack.push(v);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      };
+      if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+        estack.last().as_ref().unwrap().fprint(file.file.as_mut().unwrap(), "\n");
+      } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
+        estack.last().as_ref().unwrap().fprint(writer.writer.as_mut().unwrap(), "\n");
+      } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
+        estack.last().as_ref().unwrap().fprint(stream.stream.as_mut().unwrap(), "\n");
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        estack.last().as_ref().unwrap().fprint(bufwriter.bufwriter.as_mut().unwrap(), "\n");
+      } else {
+        state.current().stack.push(v);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      }
+      state.current().stack.push(v);
+    },
+    Value::Word(vword) => {
+      if let Ok(mut file) = File::create(&vword.str_word) {
+        estack.last().as_ref().unwrap().fprint(&mut file, "\n");
+      } else {
+        state.current().stack.push(v);
+        return state.eval_error("INVALID FILENAME", w)
+      };
+      state.pool.add_val(v);
+    },
+    _ => return {
+      state.current().stack.push(v);
+      state.eval_error("BAD ARGUMENT TYPE", w)
+    },
+  }
+  state
+}
+
+pub fn cog_feprint(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(mut v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let err_stack = &state.current_ref().err_stack;
+  let Some(estack) = err_stack else {
+    state.current().stack.push(v);
+    return state.eval_error("NO ERRORS", w)
+  };
+  if estack.last().is_none() {
+    state.current().stack.push(v);
+    return state.eval_error("NO ERRORS", w)
+  }
+
+  match v.value_stack().first_mut().unwrap() {
+    Value::Custom(vcustom) => {
+      let Some(custom) = &mut vcustom.custom else {
+        state.current().stack.push(v);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      };
+      if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+        estack.last().as_ref().unwrap().fprint(file.file.as_mut().unwrap(), "\n");
+      } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
+        estack.last().as_ref().unwrap().fprint(writer.writer.as_mut().unwrap(), "\n");
+      } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
+        estack.last().as_ref().unwrap().fprint(stream.stream.as_mut().unwrap(), "\n");
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        estack.last().as_ref().unwrap().fprint(bufwriter.bufwriter.as_mut().unwrap(), "\n");
+      } else {
+        state.current().stack.push(v);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      }
+      state.current().stack.push(v);
+    },
+    Value::Word(vword) => {
+      if let Ok(mut file) = File::options().append(true).create(true).open(&vword.str_word) {
+        estack.last().as_ref().unwrap().fprint(&mut file, "\n");
+      } else {
+        state.current().stack.push(v);
+        return state.eval_error("INVALID FILENAME", w)
+      };
+      state.pool.add_val(v);
+    },
+    _ => return {
+      state.current().stack.push(v);
+      state.eval_error("BAD ARGUMENT TYPE", w)
+    },
+  }
+  state
+}
 
 pub fn cog_eshow(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   println!("Error stack:");
@@ -201,7 +299,8 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "epush", cog_epush);
   add_word!(state, "edrop", cog_edrop);
   add_word!(state, "eprint", cog_eprint);
-  // cog_feprint
+  add_word!(state, "fewrite", cog_fewrite);
+  add_word!(state, "feprint", cog_feprint);
   add_word!(state, "eshow", cog_eshow);
   add_word!(state, "ethrow", cog_ethrow);
   add_word!(state, "esize", cog_esize);

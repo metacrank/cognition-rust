@@ -255,5 +255,5 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "get-radix", cog_get_radix);
   add_word!(state, "get-cd-delim", cog_get_cd_delim);
   add_word!(state, "get-digits", cog_get_digits);
-  add_word!(state, "+", cog_plus);
+  //add_word!(state, "+", cog_plus);
 }

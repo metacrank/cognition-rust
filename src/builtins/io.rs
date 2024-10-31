@@ -1,7 +1,6 @@
 use crate::*;
 use std::io::*;
 use std::fs::File;
-use std::fs::OpenOptions;
 
 macro_rules! trait_any {
   () => {
@@ -32,12 +31,12 @@ pub trait ReadWriteAny: Read + Write + Any { trait_any!(); }
 impl<T: Any + Read + Write> ReadWriteAny for T { impl_any!(); }
 
 // Always unwrap Options
-pub struct ReadWriteCustom { stream: Option<Box<dyn ReadWriteAny>> }
-pub struct FileCustom  { file: Option<File> }
-pub struct ReadCustom  { reader: Option<Box<dyn ReadAny>> }
-pub struct WriteCustom { writer: Option<Box<dyn WriteAny>> }
-pub struct BufReadCustom  { bufreader: Option<BufReader<Box<dyn ReadAny>>> }
-pub struct BufWriteCustom { bufwriter: Option<BufWriter<Box<dyn WriteAny>>> }
+pub struct ReadWriteCustom { pub stream: Option<Box<dyn ReadWriteAny>> }
+pub struct FileCustom  { pub file: Option<File> }
+pub struct ReadCustom  { pub reader: Option<Box<dyn ReadAny>> }
+pub struct WriteCustom { pub writer: Option<Box<dyn WriteAny>> }
+pub struct BufReadCustom  { pub bufreader: Option<BufReader<Box<dyn ReadAny>>> }
+pub struct BufWriteCustom { pub bufwriter: Option<BufWriter<Box<dyn WriteAny>>> }
 
 impl Custom for ReadWriteCustom {
   fn printfunc(&self, f: &mut dyn Write) {
@@ -640,7 +639,7 @@ pub fn cog_fprint(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
       state.current().stack.push(v);
     },
     Value::Word(vword) => {
-      if let Ok(mut file) = OpenOptions::new().append(true).create(true).open(&vword.str_word) {
+      if let Ok(mut file) = File::options().append(true).create(true).open(&vword.str_word) {
         let print_v = stack.pop().unwrap();
         fwrite_check!(file, &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
         state.pool.add_val(print_v);
