@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn cog_getf(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_getf(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let faliases = state.current().faliases.take();
   if faliases.is_none() {
     let list = state.pool.get_vstack(DEFAULT_STACK_SIZE);
@@ -159,22 +159,22 @@ pub fn cog_s(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   state
 }
 
-pub fn cog_dtgl(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_dtgl(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   state.current().dflag = !state.current_ref().dflag;
   state
 }
 
-pub fn cog_itgl(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_itgl(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   state.current().iflag = !state.current_ref().iflag;
   state
 }
 
-pub fn cog_stgl(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_stgl(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   state.current().sflag = !state.current_ref().sflag;
   state
 }
 
-pub fn cog_getd(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_getd(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let v = if let Some(delims) = state.current().delims.take() {
     let mut v = state.pool.get_vword(delims.len());
     v.str_word.push_str(&delims);
@@ -183,7 +183,7 @@ pub fn cog_getd(mut state: CognitionState, _w: Option<&Value>) -> CognitionState
   state.push_quoted(Value::Word(v)); state
 }
 
-pub fn cog_geti(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_geti(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let v = if let Some(ignored) = state.current().ignored.take() {
     let mut v = state.pool.get_vword(ignored.len());
     v.str_word.push_str(&ignored);
@@ -192,7 +192,7 @@ pub fn cog_geti(mut state: CognitionState, _w: Option<&Value>) -> CognitionState
   state.push_quoted(Value::Word(v)); state
 }
 
-pub fn cog_gets(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_gets(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let v = if let Some(singlets) = state.current().singlets.take() {
     let mut v = state.pool.get_vword(singlets.len());
     v.str_word.push_str(&singlets);
@@ -353,11 +353,12 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     state.current().stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w);
   }
-  if v.is_stack() {
-    state.family.stack.push(&v as *const Value);
-  }
+  // if v.is_stack() {
+  //   state.family.stack.push(&v as *const Value);
+  // }
   for v in stack.iter() {
-    let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)));
+    let mut parser = state.pool.get_parser();
+    parser.reset(state.string_copy(&v.vword_ref().str_word), None);
     loop {
       let w = parser.get_next(&mut state);
       match w {
@@ -368,7 +369,7 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     }
     state.pool.add_parser(parser);
   }
-  if v.is_stack() { state.family.stack.pop(); }
+  // if v.is_stack() { state.family.stack.pop(); }
   state.pool.add_val(v);
   state
 }
@@ -386,7 +387,7 @@ pub fn cog_strstack(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   }
   let mut quot = state.pool.get_vstack(DEFAULT_STACK_SIZE);
   for v in stack.iter() {
-    let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)));
+    let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)), None);
     loop {
       let w = parser.get_next(&mut state);
       match w {

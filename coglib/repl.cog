@@ -1,0 +1,8 @@
+getargs eval fllib fllib
+uncd stuff compose
+
+3 crank repl
+2 crank ? unglue read unglue compose eval evalstr unglue compose eval repl compose VMACRO cast
+1 crank def
+2 crank repl dup
+1 crank bequeath eval

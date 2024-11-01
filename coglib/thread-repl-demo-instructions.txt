@@ -1,0 +1,28 @@
+crank -s 2 coglib/boottest.cog coglib/repl.cog fllib/graphemes/target/debug/libgraphemes.so fllib/multithreading/target/debug/libmultithreading.so
+
+(main):
+'dup quote compose'
+'2 crank repl dup'
+'1 crank bequeath quote compose'
+'2 crank repl bequeath'
+'1 crank spawn 40 sleep'
+
+(thread1):
+'2 crank repl dup'
+'1 crank bequeath quote compose'
+'2 crank repl bequeath'
+'1 crank spawn 19 sleep'
+
+(thread2):
+'thread2!'
+'exit_thread2 exit'
+
+(thread1):
+'thread'
+'thread1!'
+'exit_thread1 exit'
+
+(main):
+'thread'
+...celebrate...
+'0 exit'

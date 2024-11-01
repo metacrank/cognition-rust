@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn cog_clear(mut state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_clear(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let mut cur_v = state.pop_cur();
   let cur = cur_v.metastack_container();
   while let Some(v) = cur.stack.pop() {
@@ -18,8 +18,9 @@ pub fn cog_drop(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 
 pub fn cog_swap(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
-  let Some(v1) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let Some(v2) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let v1 = stack.pop().unwrap();
+  let v2 = stack.pop().unwrap();
   stack.push(v1);
   stack.push(v2);
   state
@@ -36,10 +37,11 @@ pub fn cog_dup(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
 pub fn cog_ssize(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut cur_v = state.pop_cur();
   let cur = cur_v.metastack_container();
-  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE UNINITIALIZED", w) }
+  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
   if cur.math.as_ref().unwrap().base() == 0 { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  if cur.math.as_ref().unwrap().base() == 1 { return state.push_cur(cur_v).eval_error("MATH BASE ONE", w) }
-  match cur.math.as_ref().unwrap().itos(cur.stack.len() as isize, &mut state) { // TODO: converts usize to isize
+  let length = cur.stack.len();
+  if length > isize::MAX as usize { return state.push_cur(cur_v).eval_error("OUT OF BOUNDS", w) }
+  match cur.math.as_ref().unwrap().itos(length as isize, &mut state) {
     Ok(s) => {
       let mut v = state.pool.get_vword(s.len());
       v.str_word.push_str(&s);
@@ -58,6 +60,4 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "swap", cog_swap);
   add_word!(state, "dup", cog_dup);
   add_word!(state, "ssize", cog_ssize);
-  // test add_word functionality
-  add_word!(state, "dropswapdupdupssize", cog_drop, cog_swap, cog_dup, cog_dup, cog_ssize);
 }

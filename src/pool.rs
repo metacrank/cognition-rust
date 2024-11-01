@@ -13,6 +13,7 @@ pub struct Pool {
   vcustoms: Option<Stack>,
   vfllibs: Option<Stack>,
 
+  verror_locs: Option<ITree<VErrorLoc>>,
   stacks: Option<ITree<Stack>>,
   strings: Option<ITree<String>>,
   stringss: Option<ITree<Strings>>,
@@ -22,6 +23,7 @@ pub struct Pool {
   intss: Option<ITree<Vec<i32>>>,
 
   word_tables: Option<Vec<WordTable>>,
+  word_defs: Option<Vec<WordDef>>,
   families: Option<Vec<Family>>,
   faliasess: Option<Vec<Faliases>>,
   parsers: Option<Vec<Parser>>,
@@ -129,6 +131,7 @@ impl Pool {
       vcustoms: None,
       vfllibs: None,
 
+      verror_locs: None,
       stacks: None,
       strings: None,
       stringss: None,
@@ -138,6 +141,7 @@ impl Pool {
       intss: None,
 
       word_tables: None,
+      word_defs: None,
       families: None,
       faliasess: None,
       parsers: None,
@@ -168,6 +172,11 @@ impl Pool {
     if let Some(ref verrors) = self.verrors {
       print!("verrors: ");
       verrors.print();
+      println!("");
+    }
+    if let Some(ref verror_locs) = self.verror_locs {
+      print!("verror_locs: ");
+      verror_locs.print();
       println!("");
     }
     if let Some(ref vcustoms) = self.vcustoms {
@@ -216,6 +225,9 @@ impl Pool {
     if let Some(ref word_tables) = self.word_tables {
       println!("word_tables: {}", word_tables.len());
     }
+    if let Some(ref word_defs) = self.word_defs {
+      println!("word_defs: {}", word_defs.len());
+    }
     if let Some(ref families) = self.families {
       println!("families: {}", families.len());
     }
@@ -246,8 +258,9 @@ impl Pool {
       Value::Stack(vstack)   => self.add_vstack(vstack),
       Value::Macro(vmacro)   => self.add_vmacro(vmacro),
       Value::Error(verror)   => self.add_verror(verror),
-      Value::Custom(vcustom) => self.add_vcustom(vcustom),
       Value::FLLib(vfllib)   => self.add_vfllib(vfllib),
+      Value::Custom(vcustom) => self.add_vcustom(vcustom),
+      Value::Control(_) => {},
     }
   }
   pub fn add_vword(&mut self, vword: Box<VWord>) {
@@ -257,17 +270,20 @@ impl Pool {
     pool_insert_val!(Value::Stack(vstack), vstack.container.stack.capacity(), self, self.vstacks);
   }
   pub fn add_vmacro(&mut self, vmacro: Box<VMacro>) {
-    pool_insert_val!(Value::Macro(vmacro), vmacro.macro_stack.capacity(), self, self.vstacks);
+    pool_insert_val!(Value::Macro(vmacro), vmacro.macro_stack.capacity(), self, self.vmacros);
   }
   pub fn add_verror(&mut self, verror: Box<VError>) {
     pool_insert_val!(Value::Error(verror), verror.error.capacity(), self, self.verrors);
   }
-  pub fn add_vcustom(&mut self, mut vcustom: Box<VCustom>) {
-    vcustom.custom = Box::new(Void{});
-    pool_push_val!(Value::Custom(vcustom), self, self.vcustoms);
+  pub fn add_verror_loc(&mut self, loc: VErrorLoc) {
+    pool_insert!(loc, loc.filename.capacity(), self, self.verror_locs, VErrorLoc, Vec::<VErrorLoc>::pnew);
   }
   pub fn add_vfllib(&mut self, vfllib: Box<VFLLib>) {
     pool_push_val!(Value::FLLib(vfllib), self, self.vfllibs);
+  }
+  pub fn add_vcustom(&mut self, mut vcustom: VCustom) {
+    vcustom.custom.take();
+    pool_push_val!(Value::Custom(vcustom), self, self.vcustoms);
   }
 
   pub fn add_stack(&mut self, s: Stack) {
@@ -295,6 +311,10 @@ impl Pool {
   pub fn add_word_table(&mut self, wt: WordTable) {
     pool_push!(wt, self, self.word_tables, Vec::<WordTable>::with_capacity(DEFAULT_STACK_SIZE));
   }
+  pub fn add_word_def(&mut self, wd: WordDef) {
+    if Arc::<Value>::strong_count(&wd) != 1 { return }
+    pool_push!(wd, self, self.word_defs, Vec::<WordDef>::with_capacity(DEFAULT_STACK_SIZE));
+  }
   pub fn add_family(&mut self, f: Family) {
     pool_push!(f, self, self.families, Vec::<Family>::with_capacity(DEFAULT_STACK_SIZE));
   }
@@ -316,12 +336,6 @@ impl Pool {
   }
   pub fn add_custom_ops(&mut self, o: CustomOp) {
     pool_push!(o, self, self.custom_ops, Vec::<CustomOp>::with_capacity(DEFAULT_STACK_SIZE));
-  }
-
-  pub fn add_def(&mut self, definition: (Option<String>, Option<WordDef>)) {
-    self.add_string(definition.0.unwrap());
-    let Some(WordDef::Val(val)) = definition.1 else { panic!("Pool::add_def(): definition lost") };
-    self.add_val(val);
   }
 
   pub fn get_vword(&mut self, capacity: usize) -> Box<VWord> {
@@ -360,7 +374,6 @@ impl Pool {
       container.dflag = false;
       container.iflag = true;
       container.sflag = true;
-      container.dependent = false;
       if container.word_table.is_some() {
         self.add_word_table(container.word_table.take().unwrap());
       }
@@ -376,21 +389,34 @@ impl Pool {
   pub fn get_verror(&mut self, capacity: usize) -> Box<VError> {
     pool_remove_val!(self, self.verrors, capacity, Value::Error(mut verror), verror, {
       verror.error.clear();
-      if verror.str_word.is_some() {
-        self.add_string(verror.str_word.take().unwrap());
+      if let Some(word) = verror.str_word.take() {
+        self.add_string(word);
+      }
+      if let Some(loc) = verror.loc.take() {
+        self.add_verror_loc(loc);
       }
     });
     Box::new(VError::with_capacity(capacity))
   }
-  pub fn get_vcustom(&mut self, custom: Box<dyn Custom + Send>) -> Box<VCustom> {
-    pool_pop_val!(self.vcustoms, Value::Custom(mut vcustom), vcustom, { vcustom.custom = custom; });
-    Box::new(VCustom { custom })
+  pub fn get_verror_loc(&mut self, capacity: usize) -> VErrorLoc {
+    pool_remove!(self, self.verror_locs, capacity, mut loc, loc, Vec::<VErrorLoc>::pdrop, {
+      loc.filename.clear();
+      loc.line.clear();
+      loc.column.clear();
+    });
+    VErrorLoc{ filename: self.get_string(capacity),
+               line: self.get_string(4),
+               column: self.get_string(4) }
   }
   pub fn get_vfllib(&mut self, f: CognitionFunction) -> Box<VFLLib> {
     pool_pop_val!(self.vfllibs, Value::FLLib(mut vfllib), vfllib, {
       vfllib.fllib = f;
     });
     Box::new(VFLLib::with_fn(f))
+  }
+  pub fn get_vcustom(&mut self, custom: Box<dyn CustomAny>) -> VCustom {
+    pool_pop_val!(self.vcustoms, Value::Custom(mut vcustom), vcustom, { vcustom.custom = Some(custom); });
+    VCustom{ custom: Some(custom) }
   }
 
   pub fn get_stack(&mut self, capacity: usize) -> Stack {
@@ -437,13 +463,19 @@ impl Pool {
     pool_pop!(self.word_tables, mut wt, wt, {
       for (key, word_def) in wt.drain() {
         self.add_string(key);
-        if let Some(WordDef::Val(v)) = word_def { self.add_val(v) }
+        self.add_word_def(word_def);
       }
     });
     WordTable::new()
   }
+  pub fn get_word_def(&mut self, v: Value) -> WordDef {
+    pool_pop!(self.word_defs, mut wd, wd, {
+      *(Arc::<Value>::get_mut(&mut wd).expect("unauthorized references to word def in pool")) = v;
+    });
+    WordDef::from(v)
+  }
   pub fn get_family(&mut self) -> Family {
-    pool_pop!(self.families, mut family, family, { family.stack.clear(); });
+    pool_pop!(self.families, mut family, family, { family.clear(); });
     Family::with_capacity(DEFAULT_STACK_SIZE)
   }
   pub fn get_faliases(&mut self) -> Faliases {
@@ -456,7 +488,7 @@ impl Pool {
     pool_pop!(self.parsers, mut parser, parser, {
       if let Some(s) = parser.source() { self.add_string(s) }
     });
-    Parser::new(None)
+    Parser::new(None, None)
   }
 
   pub fn get_un_op(&mut self) -> UnaryOp {

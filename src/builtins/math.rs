@@ -41,22 +41,31 @@ pub fn cog_base(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 }
 
 pub fn cog_negc(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  get_char!(state, c, w);
+  get_char_option!(state, c, w);
   ensure_math!(state);
-  state.current().math.as_mut().unwrap().set_negc(c);
+  if let Some(c) = c { state.current().math.as_mut().unwrap().set_negc(c) }
+  else if let Some(e) = state.current().math.as_mut().unwrap().unset_negc() {
+    return state.eval_error(e, w)
+  }
   state
 }
 pub fn cog_radix(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  get_char!(state, c, w);
+  get_char_option!(state, c, w);
   ensure_math!(state);
-  state.current().math.as_mut().unwrap().set_radix(c);
+  if let Some(c) = c { state.current().math.as_mut().unwrap().set_radix(c) }
+  else if let Some(e) = state.current().math.as_mut().unwrap().unset_radix() {
+    return state.eval_error(e, w)
+  }
   state
 }
-// Cayley Dickson delimiter
+// Cayley-Dickson delimiter
 pub fn cog_cd_delim(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  get_char!(state, c, w);
+  get_char_option!(state, c, w);
   ensure_math!(state);
-  state.current().math.as_mut().unwrap().set_delim(c);
+  if let Some(c) = c { state.current().math.as_mut().unwrap().set_delim(c) }
+  else if let Some(e) = state.current().math.as_mut().unwrap().unset_delim() {
+    return state.eval_error(e, w)
+  }
   state
 }
 
@@ -76,6 +85,89 @@ pub fn cog_digits(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   let v = cur.stack.pop().unwrap();
   state.pool.add_val(v);
   state.push_cur(cur_v)
+}
+
+pub fn cog_get_base(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if let Some(math) = state.current().math.take() {
+    if math.base() == 1 {
+      state.current().math = Some(math);
+      return state.eval_error("MATH BASE ONE", w)
+    } else if math.base() > 1 {
+      let one = math.get_digits().get(1).expect("Math missing digits");
+      let zero = math.get_digits().first().expect("Math missing digits");
+      let mut v = state.pool.get_vword(one.len_utf8() + zero.len_utf8());
+      v.str_word.push(one.clone());
+      v.str_word.push(zero.clone());
+      state.current().math = Some(math);
+      state.push_quoted(Value::Word(v));
+      return state
+    }
+  }
+  let v = state.pool.get_vstack(0);
+  state.current().stack.push(Value::Stack(v));
+  state
+}
+
+pub fn cog_get_negc(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  if let Some(math) = state.current().math.take() {
+    if let Some(c) = math.get_negc() {
+      let mut v = state.pool.get_vword(c.len_utf8());
+      v.str_word.push(c.clone());
+      state.current().math = Some(math);
+      state.push_quoted(Value::Word(v));
+      return state;
+    }
+    state.current().math = Some(math);
+  }
+  let v = state.pool.get_vword(0);
+  state.push_quoted(Value::Word(v));
+  state
+}
+pub fn cog_get_radix(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  if let Some(math) = state.current().math.take() {
+    if let Some(c) = math.get_radix() {
+      let mut v = state.pool.get_vword(c.len_utf8());
+      v.str_word.push(c.clone());
+      state.current().math = Some(math);
+      state.push_quoted(Value::Word(v));
+      return state;
+    }
+    state.current().math = Some(math);
+  }
+  let v = state.pool.get_vword(0);
+  state.push_quoted(Value::Word(v));
+  state
+}
+pub fn cog_get_cd_delim(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  if let Some(math) = state.current().math.take() {
+    if let Some(c) = math.get_delim() {
+      let mut v = state.pool.get_vword(c.len_utf8());
+      v.str_word.push(c.clone());
+      state.current().math = Some(math);
+      state.push_quoted(Value::Word(v));
+      return state;
+    }
+    state.current().math = Some(math);
+  }
+  let v = state.pool.get_vword(0);
+  state.push_quoted(Value::Word(v));
+  state
+}
+
+pub fn cog_get_digits(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  if let Some(math) = state.current().math.take() {
+    let digits = math.get_digits();
+    let mut v = state.pool.get_vword(digits.len() * 2);
+    for d in digits.iter() {
+      v.str_word.push(d.clone())
+    }
+    state.current().math = Some(math);
+    state.push_quoted(Value::Word(v));
+    return state;
+  }
+  let v = state.pool.get_vword(0);
+  state.push_quoted(Value::Word(v));
+  state
 }
 
 pub fn cog_plus(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
@@ -134,6 +226,7 @@ pub fn cog_plus(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   let math = cur.math.take().unwrap();
   match math.itos(n1 + n2, &mut state) {
     Ok(s) => {
+      state.current().math = Some(math);
       let mut vw = state.pool.get_vword(s.len());
       vw.str_word.push_str(&s);
       state.pool.add_string(s);
@@ -157,5 +250,10 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "radix", cog_radix);
   add_word!(state, "cd-delim", cog_cd_delim);
   add_word!(state, "digits", cog_digits);
-  add_word!(state, "+", cog_plus);
+  add_word!(state, "get-base", cog_get_base);
+  add_word!(state, "get-negc", cog_get_negc);
+  add_word!(state, "get-radix", cog_get_radix);
+  add_word!(state, "get-cd-delim", cog_get_cd_delim);
+  add_word!(state, "get-digits", cog_get_digits);
+  //add_word!(state, "+", cog_plus);
 }
