@@ -119,6 +119,16 @@ pub fn cog_put(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   state
 }
 
+pub fn cog_dip(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let vdip = state.current().stack.pop().unwrap();
+  let v = state.current().stack.pop().unwrap();
+  state.current().stack.push(vdip);
+  state = state.evalf(w);
+  state.current().stack.push(v);
+  state
+}
+
 pub fn cog_if(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   if state.current_ref().stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let v_truth = get_word!(state, w);
@@ -293,6 +303,7 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "prepose", cog_prepose);
   add_word!(state, "put", cog_put);
   add_word!(state, "if", cog_if, EVAL);
+  add_word!(state, "dip", cog_dip);
   add_word!(state, "split", cog_split);
   add_word!(state, "vat", cog_vat);
   add_word!(state, "substack", cog_substack);

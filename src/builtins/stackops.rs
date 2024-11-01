@@ -18,11 +18,9 @@ pub fn cog_drop(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 
 pub fn cog_swap(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
-  let Some(v1) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let Some(v2) = stack.pop() else {
-    stack.push(v1);
-    return state.eval_error("TOO FEW ARGUMENTS", w)
-  };
+  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let v1 = stack.pop().unwrap();
+  let v2 = stack.pop().unwrap();
   stack.push(v1);
   stack.push(v2);
   state
