@@ -770,8 +770,7 @@ impl CognitionState {
     if let Some(ref word_table) = old.word_table {
       new.word_table = Some(self.pool.get_word_table());
       for (key, word_def) in word_table.iter() {
-        let v = self.value_copy(&word_def);
-        new.word_table.as_mut().unwrap().insert(self.string_copy(key), self.pool.get_word_def(v));
+        new.word_table.as_mut().unwrap().insert(self.string_copy(key), word_def.clone());
       }
     }
   }
