@@ -801,6 +801,13 @@ impl CognitionState {
         if let Some(ref word) = verror.str_word {
           new_verror.str_word = Some(self.string_copy(word));
         }
+        if let Some(ref loc) = verror.loc {
+          let mut new_loc = self.pool.get_verror_loc(loc.filename.len());
+          new_loc.filename.push_str(&loc.filename);
+          new_loc.line.push_str(&loc.line);
+          new_loc.column.push_str(&loc.column);
+          new_verror.loc = Some(new_loc);
+        }
         Value::Error(new_verror)
       },
       Value::FLLib(vfllib) => {
