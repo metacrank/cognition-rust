@@ -3,7 +3,6 @@
 use std::process::ExitCode;
 use std::env;
 use std::fs;
-use std::time::Instant;
 
 use cognition::*;
 use cognition::macros::*;
@@ -65,37 +64,6 @@ fn main() -> ExitCode {
     }
 
   }
-  let mut vecc = Vec::new();
-  for _ in 0..1000 {
-    // Read code from file
-    let filename = &args[opts.fileidx + 1];
-    let fs_result = fs::read_to_string(filename);
-    if let Err(e) = fs_result {
-      println!("Could not open file for reading: {filename}: {e}");
-      return ExitCode::from(4);
-    }
-    let source: String = fs_result.unwrap();
-    let mut parser = state.parser.take().unwrap();
-    if let Some(s) = parser.source() { state.pool.add_string(s) }
-    parser.reset(source, Some(state.string_copy(filename)));
-    state.parser = Some(parser);
-
-    let now = Instant::now();
-    // Parse and eval loop
-    loop {
-      let w = state.parser_get_next();
-      match w {
-        Some(v) => state = state.eval(v),
-        None => break,
-      }
-      if state.exited { break }
-    }
-    vecc.push(now.elapsed().as_micros());
-
-  }
-  let mut sum = 0;
-  for i in vecc.iter() { sum += i }
-  println!("sum: {}", sum);
 
   if !opts.q { print_end(&state); }
 
