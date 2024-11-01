@@ -203,7 +203,8 @@ pub fn cog_print(mut state: CognitionState, w: Option<&Value>) -> CognitionState
 
 pub fn cog_read(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut vword = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-  if stdin().read_line(&mut vword.str_word).is_err() {
+  let stream = stdin();
+  if stream.read_line(&mut vword.str_word).is_err() {
     state.pool.add_vword(vword);
     return state.eval_error("READ FAILED", w);
   }

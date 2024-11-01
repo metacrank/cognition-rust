@@ -62,7 +62,6 @@ fn main() -> ExitCode {
       }
       if state.exited { break }
     }
-
   }
 
   if !opts.q { print_end(&state); }
@@ -153,8 +152,6 @@ fn usage(code: u8) -> ExitCode {
 fn help() -> ExitCode {
   usage(0);
   println!(" -h    --help            print this help message");
-  println!(" -f    --free            recursively free metastack at end to break reference");
-  println!("                           cycles and avoid leaking memory (to be implemented)");
   println!(" -q    --quiet           don't show state information at program end");
   println!(" -s N  --sources N       specify N source files to be composed (default is N=1)");
   println!(" -v    --version         print version information");

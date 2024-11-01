@@ -343,7 +343,7 @@ pub fn cog_unsinglet(mut state: CognitionState, w: Option<&Value>) -> CognitionS
 }
 
 pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let Some(v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let Some(mut v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let stack = v.value_stack_ref();
   if stack.len() == 0 {
     state.pool.add_val(v);
@@ -353,10 +353,18 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     state.current().stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w);
   }
-  // if v.is_stack() {
-  //   state.family.stack.push(&v as *const Value);
-  // }
-  for v in stack.iter() {
+  let val = match &mut v {
+    Value::Stack(vstack) => {
+      let mut new_vstack = state.pool.get_vstack(vstack.container.stack.len());
+      std::mem::swap(&mut new_vstack.container.stack, &mut vstack.container.stack);
+      let wd = state.pool.get_word_def(v);
+      state.family.push(wd);
+      Value::Stack(new_vstack)
+    },
+    Value::Macro(_) => v,
+    _ => bad_value_err!(),
+  };
+  for v in val.value_stack_ref().iter() {
     let mut parser = state.pool.get_parser();
     parser.reset(state.string_copy(&v.vword_ref().str_word), None);
     loop {
@@ -369,8 +377,10 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     }
     state.pool.add_parser(parser);
   }
-  // if v.is_stack() { state.family.stack.pop(); }
-  state.pool.add_val(v);
+  if val.is_stack() {
+    if let Some(wd) = state.family.pop() {
+      state.pool.add_word_def(wd) }}
+  state.pool.add_val(val);
   state
 }
 
