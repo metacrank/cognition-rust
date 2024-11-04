@@ -1,0 +1,88 @@
+ldfgldftgldfdtgl
+df 
+ 
+dfiff0123456789↊↋🜘 digits f ̅ negc f . radix f , cd-delim f : meta-radix f ; meta-delim f
+a b compose f base f 1 crank ing 11000 base
+
+5 crank 2crank 2 crank
+1 crank unglue swap quote prepose def
+
+2crank ing 2 crank 18 itoc spc
+2crank ing 1 crank swap quote def
+2crank ing 2 crank 9 itoc tab
+2crank ing 1 crank swap quote def
+2crank ing 2 crank ↊ itoc endl
+2crank ing 1 crank swap quote def
+2crank ing 2 crank 1↋̅ itoc cret
+2crank ing 1 crank swap quote def
+2crank ing 0 crank
+2crank ing 1 crank tab delim tab ignore
+2crank ing 0 crank
+2crank ing 0 crank false ff 1
+2crank ing 1 crank cut unaliasf
+2crank ing 0 crank 0
+2crank ing 1 crank cut swap quote
+2crank ing 1 crank def
+2crank ing 2 crank f unglue
+2crank ing 1 crank def
+2crank ing 0 crank
+2crank ing 2 crank setd dup def? eval seti dup def? eval sets dup def? eval
+2crank ing 2 crank s quote unglue prepose swap compose def compose drop
+2crank ing 1 crank if
+2crank ing 2 crank i quote unglue prepose swap compose def compose drop
+2crank ing 1 crank if
+2crank ing 2 crank d quote unglue prepose swap compose def compose drop
+2crank ing 1 crank if
+2crank ing 0 crank
+2crank ing 0 crank #
+2crank ing 0 crank geti getd gets crankbase f d f i endl s
+2crank ing 1 crank compose compose compose compose compose compose compose compose compose
+2crank ing 0 crank drop halt crank s d i
+2crank ing 1 crank compose compose compose compose compose VMACRO cast quote compose
+2crank ing 0 crank halt 1 quote ing 1 quote ing metacrank
+2crank ing 1 crank compose compose compose compose VMACRO cast
+2crank ing 1 crank def
+2crank ing 2 crank # singlet # delim
+2crank ing 0 crank
+2crank ing 1 crank # Readable Comment Definition (#):
+2crank ing 1 crank #( geti getd gets crankbase '' d '' i '\n' s ( drop halt crank s d i ) halt 1 1 metacrank )
+2crank ing 1 crank
+2crank ing 1 crank #'crank file2: ['file1 load...']' emulates the behaviour of 'crank -s 2 file1 file2'
+2crank ing 0 crank load
+2crank ing 2 crank esize unglue swap unglue fread unglue swap unglue esize unglue = unglue
+2crank ing 1 crank compose compose compose compose compose
+2crank ing 2 crank evalstr unglue
+2crank ing 1 crank quote compose
+2crank ing 2 crank edrop unglue coglib-dir unglue / quote concat unglue swap unglue concat unglue fread unglue evalstr unglue
+2crank ing 1 crank compose compose compose compose compose compose compose quote compose
+2crank ing 2 crank if unglue
+2crank ing 1 crank compose def
+2crank ing 1 crank
+2crank ing 1 crank ### We have applied the following changes to the state:
+2crank ing 1 crank #
+2crank ing 1 crank # ---Parser---
+2crank ing 1 crank # Set the delims to ' \n\t#'
+2crank ing 1 crank # Set the ignored to ' \n\t'
+2crank ing 1 crank # Set the singlets to '#'
+2crank ing 1 crank # Unaliased 'f' (the only falias now is 'ing'
+2crank ing 1 crank #
+2crank ing 1 crank # ---Math---
+2crank ing 1 crank # Set the digits to: 0123456789↊↋🜘
+2crank ing 1 crank # Set the negc to U0305 (Combining Overline)
+2crank ing 1 crank # Set the radix point to be the period (.)
+2crank ing 1 crank # Set the Cayley-Dickson delimiter to the comma (,)
+2crank ing 1 crank # Set the base to twenty-four (chronimal)
+2crank ing 1 crank #
+2crank ing 1 crank # ---Definitions---
+2crank ing 1 crank #'2crank': ( [ 2 ] crank )
+2crank ing 1 crank #   'spc': [ [ ' ' ] ]
+2crank ing 1 crank #   'tab': [ [ '\t' ] ]
+2crank ing 1 crank #  'endl': [ [ '\n' ] ]
+2crank ing 1 crank #  'cret': [ [ '\r' ] ]
+2crank ing 1 crank #     'f': [ [ '' ] ]
+2crank ing 1 crank #  'false: [ [ '' ] ]
+2crank ing 1 crank #  'setd': ( d )
+2crank ing 1 crank #  'seti': ( i )
+2crank ing 1 crank #  'sets': ( s )
+2crank ing 1 crank #     '#': ( geti getd gets crankbase '' d '' i '\n' s ( drop halt crank s d i ) halt 1 1 metacrank )
+2crank ing 1 crank #  'load': ( esize swap fread swap esize = ( evalstr ) ( edrop coglib-dir [ '/' ] concat swap concat fread evalstr ) if )

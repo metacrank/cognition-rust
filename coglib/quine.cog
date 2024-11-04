@@ -1,0 +1,47 @@
+ldfgldftgldfdtgl
+df 
+ 
+dfiff0123456789↊↋C digits f - negc f . radix f , cd-delim f : meta-radix f ; meta-delim f
+a b compose f base f 1 crank ing 11000 base
+
+gets geti getd compose compose
+2 crank d compose i compose s compose VMACRO cast crank prepose 1 prepose
+metacrank prepose 0 prepose 1 prepose quote eval
+$ dup 1 cut i compose d compose s compose
+1 crank compose compose VMACRO cast
+2 crank crank prepose 1 put VMACRO cast dup eval dup eval eval eval
+1 1 metacrank eval 0
+
+swap eval
+2 crank 1 1 metacrank eval 0
+
+ldfgldftgldfdtgl
+df 
+ 
+dfiff0123456789↊↋C digits f - negc f . radix f , cd-delim f : meta-radix f ; meta-delim f
+a b compose f base f 1 crank ing 11000 base
+
+gets geti getd compose compose
+2 crank d compose i compose s compose VMACRO cast crank prepose 1 prepose
+metacrank prepose 0 prepose 1 prepose quote eval
+ dup 1 cut i compose d compose s compose
+1 crank compose compose VMACRO cast
+2 crank crank prepose 1 put VMACRO cast dup eval dup eval eval eval
+1 1 metacrank eval 0
+
+ drop 2 cut 2C- itoc C2- insert print drop
+13-↋- cut 1 cut swap drop concat 163 cut 1 cut swap drop concat print
+
+eval 2 crank 1 1 metacrank eval 0
+ drop 2 cut swap drop
+2C- itoc 13-↋- insert
+2C- itoc 162- insert
+
+dup evalstr
+ swap 1 cut swap drop concat print
+
+$ drop 2 cut swap drop
+2C- itoc 13-↋- insert
+2C- itoc 164 insert
+
+dup evalstr

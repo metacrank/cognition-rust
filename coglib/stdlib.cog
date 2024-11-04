@@ -1,0 +1,169 @@
+# Cognition Standard Library
+# Apr. 2024
+
+2 crank stdquote.cog load
+
+# Parsing aliases
+[ setd ] dup def? ( ) ( ( d ) def [ d ] undef ) if
+[ seti ] dup def? ( ) ( ( i ) def [ i ] undef ) if
+[ sets ] dup def? ( ) ( ( s ) def [ s ] undef ) if
+
+# Math extension
+[ % ] ( mod ) def
+[ && ] ( and ) def
+[ || ] ( or ) def
+[ ++ ] ( [ 1 ] + ) def
+[ -- ] ( [ 1 ] - ) def
+[ == ] ( dup ( swap dup ( <= ) dip ) dip <= and ) def
+[ zero ] ( [ 0 ] ) def
+[ one ] ( [ 1 ] ) def
+[ two ] ( [ 2 ] ) def
+[ three ] ( [ 3 ] ) def
+[ four ] ( [ 4 ] ) def
+[ negative-zero ] ( [ Ō ] ) def
+[ i ] ( [ ,1 ] ) def
+[ pos? ] ( zero > ) def
+[ neg? ] ( zero < ) def
+[ non-neg? ] ( zero >= ) def
+[ non-pos? ] ( zero <= ) def
+[ zero? ] ( zero == ) def
+[ one? ] ( one == ) def
+[ two? ] ( two == ) def
+[ three? ] ( three == ) def
+[ four? ] ( four == ) def
+[ negative-zero? ] ( negative-zero == ) def
+[ i? ] ( i == ) def
+
+# Metastack extension
+[ meta ] ( qstack reset ) def
+[ meta-unsafe ] ( uncd quote cd reset ) def # more efficient in most cases but does not preserve root in chroots
+[ parent ] ( qstack [ 1 ] crank ) def # qstack halt in baremetal environments
+[ exit-chroot ] ( root popf ) def
+
+# Error extension
+[ ereturn ] ( ethrow return ) def
+
+# Crank-agnostic casting
+[ >macro ] ( "VMACRO" cast ) def
+[ >stack ] ( "VSTACK" cast ) def
+
+[ macro? ] ( type "VMACRO" = ) def
+[ stack? ] ( type "VSTACK" = ) def
+[ empty? ] ( size zero? ) def
+
+# Generating words
+"stdgenlib.cog" load
+
+# Stackops extension
+[ drop ] mkopn
+[ swap ] mkopn
+[ dup ] mkopn
+[ clear ] mkopd
+
+[ nip ] ( swap drop ) defopn
+[ deep ] ( swap dip ) defopd
+[ 2deep ] ( deep deep ) defopd
+[ 3deep ] ( 2deep deep ) defopd
+[ 4deep ] ( 3deep deep ) defopd
+#[ mdeep ]
+
+[ 2spin ] ( swap ) defopd
+[ 3spin ] ( swap 2spind swap ) defopd
+[ 4spin ] ( swap 3spind swap ) defopd
+#[ mspin ]
+
+[ 2rot ] ( swap ) defopn
+[ 3rot ] ( 2rotd swap ) defopn
+[ 4rot ] ( 3rotd swap ) defopn
+#[ mrot ]
+[ -2rot ] ( swap ) defopn
+[ -3rot ] ( swap -2rotd ) defopn
+[ -4rot ] ( swap -3rotd ) defopn
+#[ -mrot ]
+
+[ 1pick ] ( dup ) defopn
+[ 2pick ] ( 1pickd swap ) defopn
+[ 3pick ] ( 2pickd swap ) defopn
+[ 4pick ] ( 3pickd swap ) defopn
+#[ mpick ]
+
+# alias stackops
+[ dropd ] [ nip ] aliasn
+[ dropt ] [ nipd ] aliasn
+[ dropq ] [ nipt ] aliasn
+
+[ evald ] ( deep ) def
+[ 2evald ] ( 2deep ) def
+[ 3evald ] ( 3deep ) def
+[ 4evald ] ( 4deep ) def
+#[ mevald ] ( mdeep ) def
+[ evalt ] ( deepd ) def
+#...
+[ evalq ] ( deept ) def
+#...
+
+[ spin ] ( 3spin ) defopd
+[ rot ] dup [ 3rot ] aliasn mkopdn
+[ -rot ] dup [ -3rot ] aliasn mkopdn
+[ roll ] dup [ 4rot ] aliasn mkopdn
+[ -roll ] dup [ -4rot ] aliasn mkopdn
+[ pick ] dup [ 3pick ] aliasn mkopdn
+[ reach ] dup [ 4pick ] aliasn mkopdn
+
+# still needs some work
+[ eval2 ] ( evald eval ) defopd
+[ eval3 ] ( evald2 eval ) defopd
+[ eval4 ] ( evald3 eval ) defopd
+#[ evaln ]
+[ 2eval ] ( eval eval ) def
+[ 2eval2 ] ( 2evald 2eval ) defopd
+[ 2eval3 ] ( 2evald2 2eval ) defopd
+[ 2eval4 ] ( 2evald3 2eval ) defopd
+#[ 2evaln ]
+[ 3eval ] ( 2eval eval ) def
+[ 3eval2 ] ( 3evald 3eval ) defopd
+[ 3eval3 ] ( 3evald2 3eval ) defopd
+[ 3eval4 ] ( 3evald3 3eval ) defopd
+#[ 3evaln ]
+[ 4eval ] ( 3eval eval ) def
+[ 4eval2 ] ( 4evald 4eval ) defopd
+[ 4eval3 ] ( 4evald2 4eval ) defopd
+[ 4eval4 ] ( 4evald3 4eval ) defopd
+#[ 4evaln ]
+#
+#[ -eval2 ] ( dip eval ) ?
+#[ -eval3 ] ( 2dip -eval2 ) ...
+
+[ deep2 ] ( evald2 ) def
+#...
+
+# Hashtable extension
+[ def ] mkopn
+[ undef ] mkopn
+[ unglue ] mkopn
+
+# Combinators extension
+"stdcombinators.cog" load
+
+# Type-specific wordlists
+[ stack-wordlist ] ( wordlist ( unglue stack? nip ) filter ) def
+[ macro-wordlist ] ( wordlist ( unglue macro? nip ) filter ) def
+
+# Strings extension
+"stdstring.cog" load
+
+# Math extension
+[ factorial ] dup
+( dup ( dup -- factorial * ) ( ++ ) if-pos ) def
+( [ 2 ] swap ++ interval [ 1 ] ( * ) reduce ) def
+
+[ ip ] [ ip? ] ( ( ip ) ( == ) bi ) ( def ) ( mk-if-when-unless ) bi
+[ fp ] [ fp? ] ( ( fp ) ( == ) bi ) ( def ) ( mk-if-when-unless ) bi
+
+[ abs ] ( dup ( neg ) when-neg ) def
+[ factor? ] ( 1.0 * / ip? ) def
+[ even? ] ( [ 2 ] factor? ) def
+[ odd? ] ( even? not ) def
+
+[ even ] ( even? ) mk-if-when-unless
+[ odd ] ( odd? ) mk-if-when-unless

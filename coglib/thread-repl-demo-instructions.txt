@@ -1,4 +1,4 @@
-crank -s 2 coglib/boottest.cog coglib/repl.cog fllib/graphemes/target/debug/libgraphemes.so fllib/multithreading/target/debug/libmultithreading.so
+crank -s 2 coglib/boottest.cog coglib/double-fllib-repl.cog fllib/graphemes/target/debug/libgraphemes.so fllib/multithreading/target/debug/libmultithreading.so
 
 (main):
 'dup quote compose'

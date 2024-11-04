@@ -1,0 +1,206 @@
+# Generalizing Words Lirary
+# Apr. 2024
+
+#[ mkopd ] dup dup (
+#  "d" concat \ d-end concat swap \ d-end concat
+#  unglue quote ( dip ) compose >macro def
+#) def (
+#  dup dup dup dup mkopd dup "d" concat dup dup mkopd "d" concat
+#  swap "3" concat mkopd "3d" concat swap "4" concat mkopd
+#) def (
+#  len [ 1 ] - cut dup int?
+#  ( [ d-end ] swap quote def )
+#  ( [ d-end ] ( "" ) def concat )
+#  if mkopd
+#) def
+
+[ mkopd ] dup dup (
+  \ d-end concat swap \ d-end concat
+  unglue quote ( dip ) compose >macro def
+) def (
+  dup dup dup "d" concat dup ( mkopd ) dip
+  swap "t" concat dup ( mkopd ) dip
+  swap "q" concat mkopd
+) def (
+  len [ 1 ] - cut dup int?
+  ( [ d-end ] swap quote def )
+  ( [ d-end ] ( "" ) def concat )
+  if mkopd
+) def
+
+[ mkop-cur ] (
+  concat ( swap unglue compose dup ) dip dup
+  ( swap def ) dip mkopd ( dup dup ) dip swap
+) def
+
+[ mkop234 ] (
+  dup dup dup unglue swap
+  "2" mkop-cur "3" mkop-cur "4" mkop-cur
+  drop drop drop mkopd
+) def
+
+[ mkop-cur ] undef
+
+[ (mkopn-recurse-quote0) ] ( ( dup ) swap quote compose ( swap concat dup def? ) compose ) def
+[ (mkopn-recurse-quote1) ] (
+  ( ( swap -- ip ) dip dup eval ) swap unglue quote compose
+  ( compose dup ( def ) dip ) compose
+) def
+[ (mkopn-recurse-quote1-single-caching) ] (
+  ( ( drop -- ip ) dip dup eval ) swap unglue quote compose
+  ( compose ) compose
+) def
+[ mkopn-recurse-init ] (
+  dup (mkopn-recurse-quote0) quote >macro
+  ( dip swap ( drop swap drop unglue ) ) compose swap
+) def
+[ mkopn-recurse-end ] (
+  quote compose ( if ) compose
+  quote ( dup eval eval ) swap prepose
+) def
+[ (mkopn-recurse) ] ( mkopn-recurse-init (mkopn-recurse-quote1) mkopn-recurse-end ) def
+[ (mkopn-recurse-single-caching) ] (
+  mkopn-recurse-init (mkopn-recurse-quote1-single-caching) mkopn-recurse-end
+) def
+[ (mkopdn-case) ] ( concat swap ( swap dip ) swap [ 1 ] put dup quote ( def ) dip ) def
+[ mkopn-init ] (
+  dup mkop234
+  # generate the definition of an opn word
+  dup dup "n" concat swap dup
+  ( ip dup [ 1 ] > ) swap
+) def
+[ mkopn-end ] (
+  quote compose swap
+  ( dup one? ) swap
+  unglue ( drop ) prepose quote compose
+  ( ( dup zero? ( drop ) ( drop "INDEX OUT OF RANGE" ereturn ) if ) if ) compose
+  quote compose ( if ) compose def
+  dup dup dup "n" concat unglue quote
+  swap "dn" (mkopdn-case)
+  swap "tn" (mkopdn-case)
+  swap "qn" (mkopdn-case)
+  drop
+) def
+[ mkopn ] ( mkopn-init (mkopn-recurse) mkopn-end ) def
+[ mkopn-single-caching ] ( mkopn-init (mkopn-recurse-single-caching) mkopn-end ) def
+
+[ (mkopn-recurse-quote1) ] undef
+[ (mkopn-recurse-quote1-single-caching) ] undef
+[ mkopn-recurse-init ] undef
+[ mkopn-recurse-end ] undef
+[ (mkopn-recurse) ] undef
+[ (mkopn-recurse-single-caching) ] undef
+[ mkopn-init ] undef
+[ mkopn-end ] undef
+
+# example of a mkopn generated definition:
+#[ opn ] (
+#  ip dup [ 1 ] >
+#  (
+#    (
+#      ( dup "op" swap concat dup def? ) dip swap
+#      ( drop swap drop unglue )
+#      ( ( swap -- ip ) dip dup eval ( op ) compose dup ( def ) dip )
+#      if
+#    ) dup eval eval
+#  )
+#  (
+#    dup one?
+#    ( drop op )
+#    ( dup zero? ( drop ) ( drop "INDEX OUT OF RANGE" ereturn ) if )
+#    if
+#  )
+#  if
+#) def
+#
+#quote could also be: (which won't cache intermediate words)
+#(
+#      ( dup "op" swap concat dup def? ) dip swap
+#      ( drop swap drop unglue )
+#      ( ( drop -- ip ) dip dup eval ( op ) compose )
+#      if
+#    ) dup eval eval
+
+[ mkopdn ] (
+  dup mkopd
+  dup "2" concat mkopd
+  dup "3" concat mkopd
+  dup "4" concat mkopd
+  dup dup dup "n" concat unglue quote
+  swap "dn" (mkopdn-case)
+  swap "tn" (mkopdn-case)
+  swap "qn" (mkopdn-case)
+  drop
+) def
+
+[ bindop-init ] (
+  ( swap ) dip quote ( compose ) compose
+  ( ( concat swap ) dip concat unglue ) swap compose
+  swap quote compose ( swap compose def ) compose
+) def
+
+[ bindopn ] ( (
+    bindop-init
+    ( swap compose dup dup dup dup uncompose "" "" ) dip dup dip
+    ( uncompose "2" "2" ) dip dup dip
+    ( uncompose "3" "3" ) dip dup dip
+    ( uncompose "4" "4" ) dip eval
+    uncompose swap drop "n" concat
+  ) dip def
+) def
+
+[ bindopn-1 ] ( (
+    quote swap quote prepose swap quote prepose dup dip
+    ( swap drop compose ( dup ) dip def ) dip eval
+    bindop-init
+    ( swap compose dup dup dup uncompose "2" "" ) dip dup dip
+    ( uncompose "3" "2" ) dip dup dip
+    ( uncompose "4" "3" ) dip eval
+    uncompose swap drop "n" concat
+  ) dip def
+) def
+
+[ bind234op ] (
+  ( swap ) dip quote ( compose ) compose
+  ( ( concat swap ) dip swap concat unglue ) swap compose
+  swap quote compose ( swap compose def ) compose
+  ( swap compose dup dup dup uncompose "" "" ) dip dup dip
+  ( uncompose "2" "2" ) dip dup dip
+  ( uncompose "3" "3" ) dip dup dip
+  ( uncompose "4" "4" ) dip eval
+) def
+
+[ bindnop ] ( ( ( ( ( dup ) dip ) dip ) dip bind234op "n" concat ) dip def ) def
+
+[ defopd ] ( ( dup ) dip def mkopd ) def
+[ defopn ] ( ( dup ) dip def mkopn ) def
+[ mkbindopn ] ( ( ( ( ( dup ) dip ) dip ) dip ) dip bindopn mkopdn ) def
+[ mkbindopn-1 ] ( ( ( ( ( dup ) dip ) dip ) dip ) dip bindopn-1 mkopdn ) def
+[ mkbindnop ] ( ( ( ( ( dup ) dip ) dip ) dip ) dip bindnop mkopdn ) def
+
+[ aliasn ] ( ( ) swap dup ( ) swap "n" concat unglue bindopn ) def
+
+[ (mkopdn-case) ] undef
+[ bindop-init ] undef
+
+[ undef234n ] (
+  dup "2" concat undef
+  dup "3" concat undef
+  dup "4" concat undef
+  dup "n" concat undef
+) def
+
+[ undefopn ] (
+  dup "d" concat undef234n undef
+  dup "t" concat undef234n undef
+  dup "q" concat undef234n undef
+  undef234n drop
+) def
+
+[ undefopd ] (
+  dup "d" concat undef
+  dup "t" concat undef
+  dup "q" concat undef
+) def
+
+[ undef234n ] undef
