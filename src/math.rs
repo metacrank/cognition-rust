@@ -11,6 +11,14 @@ pub type UnaryOp = HashMap<Digit, Digit>;
 pub type BinaryOp = HashMap<(Digit, Digit), (Digit, Digit)>;
 pub type StrOp = HashMap<String, String>;
 pub type CustomOp = HashMap<Operand, Operand>;
+pub type OpsTable = HashMap<String, Op>;
+
+pub enum Op {
+  Unary(UnaryOp),
+  Binary(BinaryOp),
+  Str(StrOp),
+  Custom(CustomOp),
+}
 
 #[derive(Eq, Hash, PartialEq, Clone)]
 pub struct Digit {
@@ -150,6 +158,8 @@ pub struct Math {
   negc: Option<char>,
   radix: Option<char>,
   delim: Option<char>,
+  meta_radix: Option<char>,
+  meta_delim: Option<char>,
 }
 
 impl Math {
@@ -158,7 +168,8 @@ impl Math {
            d_idx: HashMap::new(), mul: HashMap::new(),
            un_ops: Vec::new(), bin_ops: Vec::new(),
            str_ops: Vec::new(), custom_ops: Vec::new(),
-           negc: None, radix: None, delim: None }
+           negc: None, radix: None, delim: None,
+           meta_radix: None, meta_delim: None }
   }
 
   pub fn clean(&mut self) {
@@ -175,6 +186,8 @@ impl Math {
     self.negc = None;
     self.radix = None;
     self.delim = None;
+    self.meta_radix = None;
+    self.meta_delim = None;
   }
 
   pub fn copy_into(&self, math: &mut Math, state: &mut CognitionState) {
@@ -222,12 +235,19 @@ impl Math {
     math.negc = self.negc.clone();
     math.radix = self.radix.clone();
     math.delim = self.delim.clone();
+    math.meta_radix = self.meta_radix.clone();
+    math.meta_delim = self.meta_delim.clone();
   }
 
   pub fn set_digits(&mut self, s: &String) {
-    self.digits.clear();
+    let mut i: usize = 0;
     for c in s.chars() {
-      self.digits.push(c);
+      if self.digits.len() <= i || self.digits.len() == self.digits.capacity() {
+        self.digits.push(c)
+      } else {
+        self.digits[i] = c;
+      }
+      i += 1;
     }
     self.d_idx.drain();
     for i in 0..self.digits.len() {
@@ -239,10 +259,14 @@ impl Math {
   pub fn set_negc (&mut self, c: char) { self.negc = Some(c) }
   pub fn set_radix(&mut self, c: char) { self.radix = Some(c) }
   pub fn set_delim(&mut self, c: char) { self.delim = Some(c) }
+  pub fn set_meta_radix(&mut self, c: char) { self.meta_radix = Some(c) }
+  pub fn set_meta_delim(&mut self, c: char) { self.meta_delim = Some(c) }
 
   pub fn get_negc (&self) -> Option<char> { self.negc }
   pub fn get_radix (&self) -> Option<char> { self.radix }
   pub fn get_delim (&self) -> Option<char> { self.delim }
+  pub fn get_meta_radix (&self) -> Option<char> { self.meta_radix }
+  pub fn get_meta_delim (&self) -> Option<char> { self.meta_delim }
 
   pub fn unset_negc (&mut self) -> Option<&'static str> {
     if self.base != 0 { return Some("MATH BASE NONZERO") }
@@ -256,12 +280,22 @@ impl Math {
     if self.base != 0 { return Some("MATH BASE NONZERO") }
     self.delim = None; None
   }
+  pub fn unset_meta_radix(&mut self) -> Option<&'static str> {
+    if self.base != 0 { return Some("MATH BASE NONZERO") }
+    self.meta_radix = None; None
+  }
+  pub fn unset_meta_delim(&mut self) -> Option<&'static str> {
+    if self.base != 0 { return Some("MATH BASE NONZERO") }
+    self.meta_delim = None; None
+  }
 
   pub fn set_base(&mut self, base: i32) -> Option<&'static str> {
     if self.digits.len() < (base / 2 + 1) as usize { return Some("MATH DIGITS UNINITIALIZED") }
     if self.negc.is_none() { return Some("MATH NEGC UNINITIALIZED") }
     if self.radix.is_none() { return Some("MATH RADIX UNINITIALIZED") }
     if self.delim.is_none() { return Some("MATH DELIM UNINITIALIZED") }
+    if self.meta_radix.is_none() { return Some("MATH METARADIX UNINITIALIZED") }
+    if self.meta_delim.is_none() { return Some("MATH METADELIM UNINITIALIZED") }
     self.base = base;
     self.mul.drain();
     self.init_mul();

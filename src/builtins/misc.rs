@@ -87,17 +87,46 @@ pub fn cog_setargs(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
 }
 
 pub fn cog_sleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_int!(state, w, isize);
+  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
+  if i > u64::MAX as usize {
+    return state.eval_error("OUT OF BOUNDS", w);
+  } else {
+    let v = state.current().stack.pop().unwrap();
+    state.pool.add_val(v);
+  }
   thread::sleep(time::Duration::from_secs(i as u64));
   state
 }
+pub fn cog_msleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
+  if i > u64::MAX as usize {
+    return state.eval_error("OUT OF BOUNDS", w);
+  } else {
+    let v = state.current().stack.pop().unwrap();
+    state.pool.add_val(v);
+  }
+  thread::sleep(time::Duration::from_millis(i as u64));
+  state
+}
 pub fn cog_usleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_int!(state, w, isize);
+  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
+  if i > u64::MAX as usize {
+    return state.eval_error("OUT OF BOUNDS", w);
+  } else {
+    let v = state.current().stack.pop().unwrap();
+    state.pool.add_val(v);
+  }
   thread::sleep(time::Duration::from_micros(i as u64));
   state
 }
 pub fn cog_nanosleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_int!(state, w, isize);
+  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
+  if i > u64::MAX as usize {
+    return state.eval_error("OUT OF BOUNDS", w);
+  } else {
+    let v = state.current().stack.pop().unwrap();
+    state.pool.add_val(v);
+  }
   thread::sleep(time::Duration::from_nanos(i as u64));
   state
 }
@@ -200,6 +229,87 @@ pub fn cog_void_questionmark(mut state: CognitionState, w: Option<&Value>) -> Co
   state
 }
 
+pub fn cog_coglib_dir(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  match std::env::var("COGLIB_DIR") {
+    Ok(val) => {
+      let mut vword = state.pool.get_vword(val.len());
+      vword.str_word.push_str(&val);
+      state.push_quoted(Value::Word(vword));
+    },
+    Err(_) => {
+      let stack = state.pool.get_vstack(0);
+      state.current().stack.push(Value::Stack(stack));
+    }
+  }
+  state
+}
+
+pub fn cog_getp(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(math) = state.current().math.take() else { return state.eval_error("MATH BASE ZERO", w) };
+  if math.base() == 0 {
+    state.current().math = Some(math);
+    return state.eval_error("MATH BASE ZERO", w)
+  }
+  let array = state.pool.get_capacity();
+  if math.base() == 1 && array.iter().any(|x| *x != 0) {
+    state.current().math = Some(math);
+    return state.eval_error("INVALID NUMBER STRING", w)
+  }
+  let mut vword = state.pool.get_vword(64);
+  for i in array {
+    let s = match math.itos(i, &mut state) {
+      Ok(s) => s,
+      Err(e) => {
+        state.current().math = Some(math);
+        return state.eval_error(e, w)
+      }
+    };
+    vword.str_word.push_str(&s);
+    state.pool.add_string(s);
+    vword.str_word.push(math.get_meta_delim().expect("Math meta-delim was None"));
+  }
+  vword.str_word.pop();
+  state.current().math = Some(math);
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
+// TODO: Take into account position of metaradix
+pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let v = get_word!(state, w);
+  let Some(math) = state.current().math.take() else {
+    state.current().stack.push(v);
+    return state.eval_error("MATH BASE ZERO", w)
+  };
+  if math.base() == 0 {
+    state.current().math = Some(math);
+    state.current().stack.push(v);
+    return state.eval_error("MATH BASE ZERO", w)
+  }
+  let mut array: [isize;32] = [0;32];
+  let mut idx_beg = 0;
+  let mut array_idx = 0;
+  let string = &v.value_stack_ref().first().unwrap().vword_ref().str_word;
+  for (i, c) in string.char_indices() {
+    if array_idx >= 32 { break }
+    if c == math.get_meta_delim().unwrap() {
+      match math.stoi(&string[idx_beg..i]) {
+        Ok(int) => array[array_idx] = int,
+        Err(e) => {
+          state.current().math = Some(math);
+          state.current().stack.push(v);
+          return state.eval_error(e, w)
+        }
+      }
+      idx_beg = i;
+      array_idx += 1;
+    }
+  }
+  state.current().math = Some(math);
+  state.pool.set_capacity(array);
+  state
+}
+
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "nothing");
   add_word!(state, "nop", cog_nop);
@@ -209,11 +319,15 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "getargs", cog_getargs);
   add_word!(state, "setargs", cog_setargs);
   add_word!(state, "sleep", cog_sleep);
-  add_word!(state, "usleep", cog_usleep);
+  add_word!(state, "msleep", cog_msleep);
+  add_word!(state, "μsleep", cog_usleep);
   add_word!(state, "nanosleep", cog_nanosleep);
   add_word!(state, "fllib", cog_fllib);
   add_word!(state, "fllib-filename", cog_fllib_filename);
   add_word!(state, "fllib-count", cog_fllib_count);
   add_word!(state, "void", cog_void);
   add_word!(state, "void?", cog_void_questionmark);
+  add_word!(state, "coglib-dir", cog_coglib_dir);
+  add_word!(state, "getp", cog_getp);
+  add_word!(state, "setp", cog_setp);
 }

@@ -313,8 +313,8 @@ pub fn cog_ctoi(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 }
 
 pub fn cog_itoc(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_int!(state, w, i32, ACTIVE, "INVALID CHAR VALUE");
-  let Some(c) = char::from_u32(i as u32) else {
+  let i = get_unsigned!(state, w, u32, ACTIVE, "INVALID CHAR VALUE");
+  let Some(c) = char::from_u32(i) else {
     return state.eval_error("INVALID CHAR VALUE", w)
   };
   let vword = state.current().stack.last_mut().unwrap().value_stack().first_mut().unwrap().vword_mut();

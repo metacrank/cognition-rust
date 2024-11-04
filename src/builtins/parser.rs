@@ -342,6 +342,62 @@ pub fn cog_unsinglet(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   state
 }
 
+pub fn cog_filename(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(parser) = &mut state.parser else { return state.eval_error("NO PARSER", w) };
+  let Some(filename) = parser.filename.take() else { return state.eval_error("NO FILENAME", w) };
+  let mut vword = state.pool.get_vword(filename.len());
+  vword.str_word.push_str(&filename);
+  state.parser.as_mut().unwrap().filename = Some(filename);
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
+pub fn cog_line(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(ref parser) = state.parser else { return state.eval_error("NO PARSER", w) };
+  if parser.filename.is_none() { return state.eval_error("NO FILENAME", w) }
+  let line = parser.line;
+  let Some(ref math) = state.current_ref().math else { return state.eval_error("MATH BASE ZERO", w) };
+  if math.base() == 0 { return state.eval_error("MATH BASE ZERO", w) }
+  if line > isize::MAX as usize { return state.eval_error("OUT OF BOUNDS", w) }
+  let math = state.current().math.take().unwrap();
+  match math.itos(line as isize, &mut state) {
+    Ok(s) => {
+      let mut v = state.pool.get_vword(s.len());
+      v.str_word.push_str(&s);
+      state.pool.add_string(s);
+      state.push_quoted(Value::Word(v));
+    },
+    Err(e) => {
+      state = state.eval_error(e, w);
+    }
+  }
+  state.current().math = Some(math);
+  state
+}
+
+pub fn cog_column(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(ref parser) = state.parser else { return state.eval_error("NO PARSER", w) };
+  if parser.filename.is_none() { return state.eval_error("NO FILENAME", w) }
+  let column = parser.line;
+  let Some(ref math) = state.current_ref().math else { return state.eval_error("MATH BASE ZERO", w) };
+  if math.base() == 0 { return state.eval_error("MATH BASE ZERO", w) }
+  if column > isize::MAX as usize { return state.eval_error("OUT OF BOUNDS", w) }
+  let math = state.current().math.take().unwrap();
+  match math.itos(column as isize, &mut state) {
+    Ok(s) => {
+      let mut v = state.pool.get_vword(s.len());
+      v.str_word.push_str(&s);
+      state.pool.add_string(s);
+      state.push_quoted(Value::Word(v));
+    },
+    Err(e) => {
+      state = state.eval_error(e, w);
+    }
+  }
+  state.current().math = Some(math);
+  state
+}
+
 pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(mut v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let stack = v.value_stack_ref();
@@ -431,6 +487,9 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "undelim", cog_undelim);
   add_word!(state, "unignore", cog_unignore);
   add_word!(state, "unsinglet", cog_unsinglet);
+  add_word!(state, "filename", cog_filename);
+  add_word!(state, "line", cog_line);
+  add_word!(state, "column", cog_column);
   add_word!(state, "evalstr", cog_evalstr);
   add_word!(state, "strstack", cog_strstack);
 }

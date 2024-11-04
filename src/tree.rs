@@ -24,6 +24,8 @@ impl<K:Ord+Copy+Display,D> Tree<K,D> {
     if let Some(r) = &self.root { r.print() };
   }
 
+  pub fn size(&self) -> usize { Node::size(&self.root) }
+
   pub fn insert(&mut self, key: K, data: D, new: fn(&mut Pool) -> Vec<D>, p: &mut Pool) {
     match self.root.take() {
       Some(r) => self.root = Some(Node::insert(key, data, r, new, p)),
@@ -42,11 +44,6 @@ impl<K:Ord+Copy+Display,D> Tree<K,D> {
   pub fn remove_least_at_least(&mut self, key: K, free: fn(&mut Pool, Vec<D>), p: &mut Pool) -> Option<D> {
     if self.root.is_none() { return None };
     Node::remove_least_at_least(key, &mut self.root, free, p)
-  }
-
-  // Currently does nothing
-  pub fn gc(&mut self, free: fn(&mut Pool, Vec<D>), p: &mut Pool) {
-    if let Some(r) = self.root.take() { self.root = Node::delete_lowest_nodes(r, free, p) }
   }
 }
 
@@ -72,6 +69,12 @@ impl<K:Ord+Display,D> Node<K,D> {
     print!(")");
   }
 
+  fn size(node: &Option<Box<Node<K,D>>>) -> usize {
+    let Some(n) = node else { return 0 };
+    let contrib = if let Some(ref d) = n.data { d.len() } else { 0 };
+    Self::size(&n.node_left) + contrib + Self::size(&n.node_right)
+  }
+
   fn height(node: &Option<Box<Node<K,D>>>) -> i32 {
     node.as_ref().map_or(0, |n| n.height)
   }
@@ -85,6 +88,7 @@ impl<K:Ord+Display,D> Node<K,D> {
     root.node_left = newroot.node_right.take();
     Self::update_height(&mut root);
     newroot.node_right = Some(root);
+    Self::update_height(&mut newroot);
     newroot
   }
 
@@ -93,6 +97,7 @@ impl<K:Ord+Display,D> Node<K,D> {
     root.node_right = newroot.node_left.take();
     Self::update_height(&mut root);
     newroot.node_left = Some(root);
+    Self::update_height(&mut newroot);
     newroot
   }
 
@@ -134,7 +139,7 @@ impl<K:Ord+Display,D> Node<K,D> {
     match diff {
       2 => Self::rotate_left_node(root),
       -2 => Self::rotate_right_node(root),
-      _ => unreachable!(),
+      _ => unreachable!()
     }
   }
 
@@ -238,9 +243,5 @@ impl<K:Ord+Display,D> Node<K,D> {
         retval
       },
     }
-  }
-
-  fn delete_lowest_nodes(root: Box<Node<K,D>>, _free: fn(&mut Pool, Vec<D>), _p: &mut Pool) -> Option<Box<Node<K,D>>> {
-    Some(root)
   }
 }

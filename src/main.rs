@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::process::ExitCode;
 use std::env;
 use std::fs;
@@ -7,9 +5,6 @@ use std::fs;
 use cognition::*;
 use cognition::macros::*;
 use cognition::math::Math;
-
-// to be reimplemented properly
-fn isint(_n: &String) -> bool { true }
 
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
@@ -42,7 +37,10 @@ fn main() -> ExitCode {
   for i in 0..opts.s {
     // Read code from file
     let filename = &args[opts.fileidx + i];
-    let fs_result = fs::read_to_string(filename);
+    let mut fs_result = fs::read_to_string(filename);
+    if let Err(_) = fs_result {
+      if let Ok(dir) = env::var("COGLIB_DIR") {
+        fs_result = fs::read_to_string(format!("{dir}/{filename}")); }}
     if let Err(e) = fs_result {
       println!("Could not open file for reading: {filename}: {e}");
       return ExitCode::from(4);
@@ -88,6 +86,8 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
   math.set_negc('\u{0305}');
   math.set_radix('.');
   math.set_delim(',');
+  math.set_meta_radix(';');
+  math.set_meta_delim(':');
   math.set_base(24);
 
   let (mut h, mut q, mut v) = (false, false, false);
@@ -177,9 +177,9 @@ fn print_end(state: &CognitionState) {
   if let Some(faliases) = &cur.faliases {
     print!("\nFaliases:");
     for alias in faliases.iter() {
-      b" '".print_pretty();
+      print!(" '");
       alias.print_pretty();
-      b"'".print_pretty();
+      print!("'");
     }
   }
   println!("");
@@ -231,6 +231,16 @@ fn print_end(state: &CognitionState) {
     }
     print!("delim: ");
     match math.get_delim() {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
+    }
+    print!("meta-radix: ");
+    match math.get_meta_radix() {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
+    }
+    print!("meta-delim: ");
+    match math.get_meta_delim() {
       Some(c) => println!("'{c}'"),
       None => println!("(none)"),
     }

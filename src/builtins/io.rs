@@ -1,6 +1,7 @@
 use crate::*;
 use std::io::*;
 use std::fs::File;
+use std::io::SeekFrom;
 
 macro_rules! trait_any {
   () => {
@@ -166,6 +167,13 @@ impl Drop for BufWriteCustom {
   }
 }
 
+macro_rules! flush {
+  ($f:expr) => {
+    if let Err(e) = $f.flush() {
+      let _ = stderr().write(format!("{e}").as_bytes()); }
+  }
+}
+
 pub fn questionmark(state: &CognitionState, f: &mut dyn Write) {
   fwrite_check!(f, GRN);
   println!("STACK:");
@@ -173,6 +181,7 @@ pub fn questionmark(state: &CognitionState, f: &mut dyn Write) {
   let cur = state.current_ref();
   for v in cur.stack.iter() { v.fprint(f, "\n"); }
   fwrite_check!(f, b"\n");
+  flush!(f);
 }
 
 pub fn cog_questionmark(state: CognitionState, _: Option<&Value>) -> CognitionState {
@@ -194,9 +203,11 @@ pub fn cog_print(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
+  let mut stdout = stdout();
   for wv in v.value_stack_ref().iter() {
-    if let Err(e) = stdout().write_all(wv.vword_ref().str_word.as_bytes()) {
+    if let Err(e) = stdout.write_all(wv.vword_ref().str_word.as_bytes()) {
       let _ = stderr().write(format!("{e}").as_bytes()); }}
+  flush!(stdout);
   state.pool.add_val(v);
   state
 }
@@ -494,18 +505,22 @@ pub fn cog_fperiod(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut file.file.as_mut().unwrap(), "\n");
+        flush!(file.file.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut writer.writer.as_mut().unwrap().as_write_mut(), "\n");
+        flush!(writer.writer.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut stream.stream.as_mut().unwrap().as_write_mut(), "\n");
+        flush!(stream.stream.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut bufwriter.bufwriter.as_mut().unwrap().as_write_mut(), "\n");
+        flush!(bufwriter.bufwriter.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else {
         stack.push(v);
@@ -517,10 +532,12 @@ pub fn cog_fperiod(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
       if let Ok(mut file) = File::create_new(&vword.str_word) {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut file, "\n");
+        flush!(file);
         state.pool.add_val(print_v);
       } else if let Ok(mut file) = File::open(&vword.str_word) {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut file, "\n");
+        flush!(file);
         state.pool.add_val(print_v);
       } else {
         stack.push(v);
@@ -559,18 +576,22 @@ pub fn cog_fwrite(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(file.file.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(file.file.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(writer.writer.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(writer.writer.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(stream.stream.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(stream.stream.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(bufwriter.bufwriter.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(bufwriter.bufwriter.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else {
         stack.push(v);
@@ -582,6 +603,7 @@ pub fn cog_fwrite(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
       if let Ok(mut file) = File::create(&vword.str_word) {
         let print_v = stack.pop().unwrap();
         fwrite_check!(file, &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(file);
         state.pool.add_val(print_v);
       } else {
         stack.push(v);
@@ -620,18 +642,22 @@ pub fn cog_fprint(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(file.file.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(file.file.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(writer.writer.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(writer.writer.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(stream.stream.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(stream.stream.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(bufwriter.bufwriter.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(bufwriter.bufwriter.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else {
         stack.push(v);
@@ -643,6 +669,7 @@ pub fn cog_fprint(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
       if let Ok(mut file) = File::options().append(true).create(true).open(&vword.str_word) {
         let print_v = stack.pop().unwrap();
         fwrite_check!(file, &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(file);
         state.pool.add_val(print_v);
       } else {
         stack.push(v);
@@ -758,28 +785,54 @@ pub fn cog_read_until(mut state: CognitionState, w: Option<&Value>) -> Cognition
         stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
       };
-      let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() else {
+      if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
+        let mut bytes = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
+        if let Err(e) = bufreader.bufreader.as_mut().unwrap().read_until(byte, &mut bytes) {
+          let _ = stderr().write(format!("{e}").as_bytes());
+        }
+
+        let mut vword = state.pool.get_vword(0);
+        state.pool.add_string(vword.str_word);
+        vword.str_word = match String::from_utf8(bytes) {
+          Ok(s) => s,
+          Err(e) => {
+            let _ = stderr().write(format!("{e}").as_bytes());
+            state.current().stack.push(v);
+            return state.eval_error("INVALID STRING", w)
+          }
+        };
+        let c = state.current().stack.pop().unwrap();
+        state.pool.add_val(c);
+        state.push_quoted(Value::Word(vword));
+      } else if let Some(reader) = custom.as_any_mut().downcast_mut::<ReadCustom>(){
+        if let Some(stdin) = reader.reader.as_mut().unwrap().as_any_mut().downcast_mut::<Stdin>() {
+          let mut bytes = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
+          let mut lock = stdin.lock();
+          if let Err(e) = lock.read_until(byte, &mut bytes) {
+            let _ = stderr().write(format!("{e}").as_bytes());
+          }
+
+          let mut vword = state.pool.get_vword(0);
+          state.pool.add_string(vword.str_word);
+          vword.str_word = match String::from_utf8(bytes) {
+            Ok(s) => s,
+            Err(e) => {
+              let _ = stderr().write(format!("{e}").as_bytes());
+              state.current().stack.push(v);
+              return state.eval_error("INVALID STRING", w)
+            }
+          };
+          let c = state.current().stack.pop().unwrap();
+          state.pool.add_val(c);
+          state.push_quoted(Value::Word(vword));
+        } else {
+          stack.push(v);
+          return state.eval_error("BAD ARGUMENT TYPE", w)
+        }
+      } else {
         stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
-      let mut bytes = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
-      if let Err(e) = bufreader.bufreader.as_mut().unwrap().read_until(byte, &mut bytes) {
-        let _ = stderr().write(format!("{e}").as_bytes());
       }
-
-      let mut vword = state.pool.get_vword(0);
-      state.pool.add_string(vword.str_word);
-      vword.str_word = match String::from_utf8(bytes) {
-        Ok(s) => s,
-        Err(e) => {
-          let _ = stderr().write(format!("{e}").as_bytes());
-          state.current().stack.push(v);
-          return state.eval_error("INVALID STRING", w)
-        }
-      };
-      let c = state.current().stack.pop().unwrap();
-      state.pool.add_val(c);
-      state.push_quoted(Value::Word(vword));
       state.current().stack.push(v);
     },
     _ => return {
@@ -789,6 +842,62 @@ pub fn cog_read_until(mut state: CognitionState, w: Option<&Value>) -> Cognition
   }
   state
 }
+
+// pub fn cog_skip_until(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+//   let stack = &mut state.current().stack;
+//   if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+//   let mut v = stack.pop().unwrap();
+//   let v_delim = stack.last().unwrap();
+//   if v.value_stack_ref().len() != 1 || v_delim.value_stack_ref().len() != 1 {
+//     stack.push(v);
+//     return state.eval_error("BAD ARGUMENT TYPE", w)
+//   }
+//   let Value::Word(delim_word) = v_delim.value_stack_ref().first().unwrap() else {
+//     stack.push(v);
+//     return state.eval_error("BAD ARGUMENT TYPE", w)
+//   };
+//   if delim_word.str_word.len() != 1 {
+//     stack.push(v);
+//     return state.eval_error("BAD ARGUMENT TYPE", w)
+//   }
+//   let byte = delim_word.str_word.as_bytes()[0].clone();
+//   let val = v.value_stack().first_mut().unwrap();
+//   match val {
+//     Value::Custom(vcustom) => {
+//       let Some(custom) = &mut vcustom.custom else {
+//         stack.push(v);
+//         return state.eval_error("BAD ARGUMENT TYPE", w)
+//       };
+//       if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
+//         if let Err(e) = bufreader.bufreader.as_mut().unwrap().skip_until(byte) {
+//           let _ = stderr().write(format!("{e}").as_bytes());
+//         }
+//         let c = state.current().stack.pop().unwrap();
+//         state.pool.add_val(c);
+//       } else if let Some(reader) = custom.as_any_mut().downcast_mut::<ReadCustom>(){
+//         if let Some(stdin) = reader.reader.as_mut().unwrap().as_any_mut().downcast_mut::<Stdin>() {
+//           if let Err(e) = stdin.lock().skip_until(byte) {
+//             let _ = stderr().write(format!("{e}").as_bytes());
+//           }
+//           let c = state.current().stack.pop().unwrap();
+//           state.pool.add_val(c);
+//         } else {
+//           stack.push(v);
+//           return state.eval_error("BAD ARGUMENT TYPE", w)
+//         }
+//       } else {
+//         stack.push(v);
+//         return state.eval_error("BAD ARGUMENT TYPE", w)
+//       }
+//       state.current().stack.push(v);
+//     },
+//     _ => return {
+//       stack.push(v);
+//       state.eval_error("BAD ARGUMENT TYPE", w)
+//     },
+//   }
+//   state
+// }
 
 pub fn cog_read_line(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
@@ -804,16 +913,29 @@ pub fn cog_read_line(mut state: CognitionState, w: Option<&Value>) -> CognitionS
         stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
       };
-      let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() else {
+      if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
+        let mut vword = state.pool.get_vword(DEFAULT_STRING_LENGTH);
+        if let Err(e) = bufreader.bufreader.as_mut().unwrap().read_line(&mut vword.str_word) {
+          let _ = stderr().write(format!("{e}").as_bytes());
+        }
+        state.push_quoted(Value::Word(vword));
+        state.current().stack.push(v);
+      } else if let Some(reader) = custom.as_any_mut().downcast_mut::<ReadCustom>() {
+        if let Some(stdin) = reader.reader.as_mut().unwrap().as_any_mut().downcast_mut::<Stdin>() {
+          let mut vword = state.pool.get_vword(DEFAULT_STRING_LENGTH);
+          if let Err(e) = stdin.read_line(&mut vword.str_word) {
+            let _ = stderr().write(format!("{e}").as_bytes());
+          }
+          state.push_quoted(Value::Word(vword));
+          state.current().stack.push(v);
+        } else {
+          stack.push(v);
+          return state.eval_error("BAD ARGUMENT TYPE", w)
+        }
+      } else {
         stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
       };
-      let mut vword = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-      if let Err(e) = bufreader.bufreader.as_mut().unwrap().read_line(&mut vword.str_word) {
-        let _ = stderr().write(format!("{e}").as_bytes());
-      }
-      state.push_quoted(Value::Word(vword));
-      state.current().stack.push(v);
     },
     _ => return {
       stack.push(v);
@@ -823,9 +945,331 @@ pub fn cog_read_line(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   state
 }
 
-// TODO: add seeking with the Seek trait
-// Maybe in separate fllib?
-// 'fs' fllib would be useful
+macro_rules! match_seek {
+  ($state:ident,$w:ident,$stack:ident,$file:expr,$v:ident,$idxval:ident,$seek:expr) => {
+    match $file.seek($seek) {
+      Err(_) => {
+        $stack.push($v);
+        $stack.push($idxval);
+        return $state.eval_error("SEEK FAILED", $w)
+      },
+      Ok(_) => $state.pool.add_val($idxval)
+    }
+  }
+}
+macro_rules! try_seek {
+  ($state:ident,$w:ident,$stack:ident,$stream:expr,$v:ident,$idxval:ident,$seek:expr) => {
+    if let Some(file) = $stream.as_mut().unwrap().as_any_mut().downcast_mut::<File>() {
+      match_seek!($state, $w, $stack, file, $v, $idxval, $seek);
+    } else if $stream.as_mut().unwrap().as_any_mut().downcast_mut::<Empty>().is_some() {
+      $state.pool.add_val($idxval)
+    } else {
+      $stack.push($v);
+      $stack.push($idxval);
+      return $state.eval_error("NOT SEEKABLE", $w)
+    }
+  }
+}
+
+pub fn cog_seek(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let idx = get_unsigned!(state, w, isize, ACTIVE) as usize;
+  let idxval = if idx > u64::MAX as usize {
+    return state.eval_error("OUT OF BOUNDS", w);
+  } else {
+    state.current().stack.pop().unwrap()
+  };
+  let idx = idx as u64;
+  let stack = &mut state.current().stack;
+  let mut v = stack.pop().unwrap();
+  if v.value_stack_ref().len() != 1 {
+    stack.push(v);
+    stack.push(idxval);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let val = v.value_stack().first_mut().unwrap();
+  match val {
+    Value::Custom(vcustom) => {
+      let Some(custom) = &mut vcustom.custom else {
+        stack.push(v);
+        stack.push(idxval);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      };
+      if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+        match_seek!(state, w, stack, file.file.as_mut().unwrap(), v, idxval, SeekFrom::Start(idx));
+      } else if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
+        try_seek!(state, w, stack, bufreader.bufreader, v, idxval, SeekFrom::Start(idx));
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        try_seek!(state, w, stack, bufwriter.bufwriter, v, idxval, SeekFrom::Start(idx));
+      } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
+        if ReadWriteAny::as_any_mut(stream.stream.as_mut().unwrap()).downcast_mut::<Empty>().is_some() {
+          state.pool.add_val(idxval)
+        } else if let Some(file) = ReadWriteAny::as_any_mut(stream.stream.as_mut().unwrap()).downcast_mut::<File>() {
+          match_seek!(state, w, stack, file, v, idxval, SeekFrom::Start(idx));
+        } else {
+          stack.push(v);
+          return state.eval_error("NOT SEEKABLE", w)
+        }
+      } else {
+        stack.push(v);
+        stack.push(idxval);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      }
+      state.current().stack.push(v);
+    },
+    _ => return {
+      stack.push(v);
+      stack.push(idxval);
+      state.eval_error("BAD ARGUMENT TYPE", w)
+    },
+  }
+  state
+}
+
+pub fn cog_seek_end(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let val = v.value_stack().first_mut().unwrap();
+  match val {
+    Value::Custom(vcustom) => {
+      let Some(custom) = &mut vcustom.custom else {
+        stack.push(v);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      };
+      if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+        if file.file.as_mut().unwrap().seek(SeekFrom::End(0)).is_err() {
+          return state.eval_error("SEEK FAILED", w)
+        }
+      } else if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
+        if let Some(file) = bufreader.bufreader.as_mut().unwrap().as_any_mut().downcast_mut::<File>() {
+          if file.seek(SeekFrom::End(0)).is_err() {
+            return state.eval_error("SEEK FAILED", w)
+          }
+        } else {
+          stack.push(v);
+          return state.eval_error("NOT SEEKABLE", w)
+        }
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        if let Some(file) = bufwriter.bufwriter.as_mut().unwrap().as_any_mut().downcast_mut::<File>() {
+          if file.seek(SeekFrom::End(0)).is_err() {
+            return state.eval_error("SEEK FAILED", w)
+          }
+        } else {
+          stack.push(v);
+          return state.eval_error("NOT SEEKABLE", w)
+        }
+      } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
+        if let Some(file) = ReadWriteAny::as_any_mut(stream.stream.as_mut().unwrap()).downcast_mut::<File>() {
+          if file.seek(SeekFrom::End(0)).is_err() {
+            return state.eval_error("SEEK FAILED", w)
+          }
+        } else if ReadWriteAny::as_any(stream.stream.as_ref().unwrap()).downcast_ref::<Empty>().is_none() {
+          stack.push(v);
+          return state.eval_error("NOT SEEKABLE", w)
+        }
+      } else {
+        stack.push(v);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      }
+      state.current().stack.push(v);
+    },
+    _ => {
+      stack.push(v);
+      return state.eval_error("BAD ARGUMENT TYPE", w)
+    },
+  }
+  state
+}
+
+macro_rules! streampos {
+  ($state:ident,$w:ident,$stream:expr,$v:ident) => {
+    match $stream.stream_position() {
+      Ok(i) => {
+        let Some(math) = $state.current().math.take() else {
+          $state.current().stack.push($v);
+          return $state.eval_error("MATH BASE ZERO", $w)
+        };
+        if i as usize > isize::MAX as usize {
+          $state.current().stack.push($v);
+          return $state.eval_error("OUT OF BOUNDS", $w)
+        }
+        match math.itos(i as isize, &mut $state) {
+          Ok(s) => {
+            $state.current().math = Some(math);
+            let mut vword = $state.pool.get_vword(s.len());
+            vword.str_word.push_str(&s);
+            $state.pool.add_string(s);
+            $state.current().stack.push($v);
+            $state.push_quoted(Value::Word(vword))
+          },
+          Err(e) => {
+            $state.current().math = Some(math);
+            $state.current().stack.push($v);
+            return $state.eval_error(e, $w)
+          }
+        }
+      },
+      Err(_) => {
+        $state.current().stack.push($v);
+        return $state.eval_error("STREAM POSITION FAILED", $w)
+      }
+    }
+  }
+}
+
+pub fn cog_streampos(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let val = v.value_stack().first_mut().unwrap();
+  match val {
+    Value::Custom(vcustom) => {
+      let Some(custom) = &mut vcustom.custom else {
+        stack.push(v);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      };
+      if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+        streampos!(state, w, file.file.as_mut().unwrap(), v);
+      } else if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
+        if let Some(file) = bufreader.bufreader.as_mut().unwrap().as_any_mut().downcast_mut::<File>() {
+          streampos!(state, w, file, v);
+        } else if let Some(empty) = bufreader.bufreader.as_mut().unwrap().as_any_mut().downcast_mut::<Empty>() {
+          streampos!(state, w, empty, v);
+        } else {
+          stack.push(v);
+          return state.eval_error("NOT SEEKABLE", w)
+        }
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        if let Some(file) = bufwriter.bufwriter.as_mut().unwrap().as_any_mut().downcast_mut::<File>() {
+          streampos!(state, w, file, v);
+        } else if let Some(empty) = bufwriter.bufwriter.as_mut().unwrap().as_any_mut().downcast_mut::<Empty>() {
+          streampos!(state, w, empty, v);
+        } else {
+          stack.push(v);
+          return state.eval_error("NOT SEEKABLE", w)
+        }
+      } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
+        if let Some(file) = ReadWriteAny::as_any_mut(stream.stream.as_mut().unwrap()).downcast_mut::<File>() {
+          streampos!(state, w, file, v);
+        } else if let Some(empty) = ReadWriteAny::as_any_mut(stream.stream.as_mut().unwrap()).downcast_mut::<Empty>() {
+          streampos!(state, w, empty, v);
+        } else {
+          stack.push(v);
+          return state.eval_error("NOT SEEKABLE", w)
+        }
+      } else {
+        stack.push(v);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      }
+    },
+    _ => {
+      stack.push(v);
+      return state.eval_error("BAD ARGUMENT TYPE", w)
+    },
+  }
+  state
+}
+
+pub fn cog_seek_relative(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let idx = get_int!(state, w, i64, ACTIVE);
+  let stack = &mut state.current().stack;
+  let idxval = stack.pop().unwrap();
+  let mut v = stack.pop().unwrap();
+  if v.value_stack_ref().len() != 1 {
+    stack.push(v);
+    stack.push(idxval);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let val = v.value_stack().first_mut().unwrap();
+  match val {
+    Value::Custom(vcustom) => {
+      let Some(custom) = &mut vcustom.custom else {
+        stack.push(v);
+        stack.push(idxval);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      };
+      if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+        match_seek!(state, w, stack, file.file.as_mut().unwrap(), v, idxval, SeekFrom::Current(idx));
+      } else if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
+        try_seek!(state, w, stack, bufreader.bufreader, v, idxval, SeekFrom::Current(idx));
+      } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
+        try_seek!(state, w, stack, bufwriter.bufwriter, v, idxval, SeekFrom::Current(idx));
+      } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
+        if ReadWriteAny::as_any_mut(stream.stream.as_mut().unwrap()).downcast_mut::<Empty>().is_some() {
+          state.pool.add_val(idxval)
+        } else if let Some(file) = ReadWriteAny::as_any_mut(stream.stream.as_mut().unwrap()).downcast_mut::<File>() {
+          match_seek!(state, w, stack, file, v, idxval, SeekFrom::Current(idx));
+        } else {
+          stack.push(v);
+          return state.eval_error("NOT SEEKABLE", w)
+        }
+      } else {
+        stack.push(v);
+        stack.push(idxval);
+        return state.eval_error("BAD ARGUMENT TYPE", w)
+      }
+      state.current().stack.push(v);
+    },
+    _ => return {
+      stack.push(v);
+      stack.push(idxval);
+      state.eval_error("BAD ARGUMENT TYPE", w)
+    },
+  }
+  state
+}
+
+macro_rules! iotype_questionmark {
+  ($state:ident,$w:ident,$type:ty) => {{
+    let Some(v) = $state.current_ref().stack.last() else {
+      return $state.eval_error("TOO FEW ARGUMENTS", $w)
+    };
+    let vstack = v.value_stack_ref();
+    if vstack.len() == 1 {
+      if let Value::Custom(vcustom) = vstack.first().unwrap() {
+        if let Some(ref custom) = vcustom.custom {
+          if custom.as_any().downcast_ref::<$type>().is_some() {
+            let mut vw = $state.pool.get_vword(1);
+            vw.str_word.push('t');
+            $state.push_quoted(Value::Word(vw));
+            return $state
+          }
+        }
+      }
+    }
+    let vw = $state.pool.get_vword(0);
+    $state.push_quoted(Value::Word(vw));
+    $state
+  }}
+}
+
+pub fn cog_file_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  iotype_questionmark!(state, w, FileCustom)
+}
+pub fn cog_reader_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  iotype_questionmark!(state, w, ReadCustom)
+}
+pub fn cog_writer_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  iotype_questionmark!(state, w, WriteCustom)
+}
+pub fn cog_bufreader_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  iotype_questionmark!(state, w, BufReadCustom)
+}
+pub fn cog_bufwriter_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  iotype_questionmark!(state, w, BufWriteCustom)
+}
+pub fn cog_stream_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  iotype_questionmark!(state, w, ReadWriteCustom)
+}
+
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "?", cog_questionmark);
   add_word!(state, ".", cog_period);
@@ -852,5 +1296,16 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "fprint", cog_fprint);
   add_word!(state, "fread", cog_fread);
   add_word!(state, "read-until", cog_read_until);
+  // add_word!(state, "skip-until", cog_skip_until); // currently experimental rust stdlib feature
   add_word!(state, "read-line", cog_read_line);
+  add_word!(state, "seek", cog_seek);
+  add_word!(state, "seek-end", cog_seek_end);
+  add_word!(state, "streampos", cog_streampos);
+  add_word!(state, "seek-relative", cog_seek_relative);
+  add_word!(state, "file?", cog_file_questionmark);
+  add_word!(state, "reader?", cog_reader_questionmark);
+  add_word!(state, "writer?", cog_writer_questionmark);
+  add_word!(state, "bufreader?", cog_bufreader_questionmark);
+  add_word!(state, "bufwriter?", cog_bufwriter_questionmark);
+  add_word!(state, "stream?", cog_stream_questionmark);
 }

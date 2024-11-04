@@ -272,7 +272,10 @@ macro_rules! is_value_type {
 
 impl Value {
   pub fn print(&self, end: &'static str) {
-    self.fprint(&mut stdout(), end);
+    let mut f = stdout();
+    self.fprint(&mut f, end);
+    if let Err(e) = f.flush() {
+      let _ = std::io::stderr().write(format!("{e}").as_bytes()); }
   }
   pub fn fprint(&self, f: &mut dyn Write, end: &'static str) {
     match self {

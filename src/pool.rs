@@ -29,9 +29,12 @@ pub struct Pool {
   parsers: Option<Vec<Parser>>,
 
   un_ops: Option<Vec<UnaryOp>>,
-  pub bin_ops: Option<Vec<BinaryOp>>,
-  pub str_ops: Option<Vec<StrOp>>,
-  pub custom_ops: Option<Vec<CustomOp>>,
+  bin_ops: Option<Vec<BinaryOp>>,
+  str_ops: Option<Vec<StrOp>>,
+  custom_ops: Option<Vec<CustomOp>>,
+  ops_tables: Option<Vec<OpsTable>>,
+
+  reg: [isize; 8],
 }
 
 trait DisregardPool {
@@ -150,6 +153,9 @@ impl Pool {
       bin_ops: None,
       str_ops: None,
       custom_ops: None,
+      ops_tables: None,
+
+      reg: [0; 8],
     }
   }
 
@@ -250,6 +256,66 @@ impl Pool {
     if let Some(ref custom_ops) = self.custom_ops {
       println!("custom_ops: {}", custom_ops.len());
     }
+    if let Some(ref ops_tables) = self.ops_tables {
+      println!("ops_tables: {}", ops_tables.len());
+    }
+
+    print!("reg: [{}", self.reg[0]);
+    for i in &self.reg[1..] {
+      print!(", {}", i);
+    }
+    println!("]");
+  }
+
+  pub fn get_capacity(&self) -> [isize;32] {
+    [
+      self.vwords.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.vstacks.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.vmacros.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.verrors.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.vcustoms.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.vfllibs.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+
+      self.verror_locs.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.stacks.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.strings.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.stringss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.crankss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.maths.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.digitss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+      self.intss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize) as isize),
+
+      self.word_tables.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.word_defs.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.families.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.faliasess.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.parsers.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+
+      self.un_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.bin_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.str_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.custom_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+      self.ops_tables.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize) as isize),
+
+      self.reg[0],
+      self.reg[1],
+      self.reg[2],
+      self.reg[3],
+      self.reg[4],
+      self.reg[5],
+      self.reg[6],
+      self.reg[7]
+    ]
+  }
+
+  pub fn set_capacity(&mut self, _capacity: [isize;32]) {
+
+
+
+
+
+
+
   }
 
   pub fn add_val(&mut self, v: Value) {
@@ -325,17 +391,28 @@ impl Pool {
     pool_push!(p, self, self.parsers, Vec::<Parser>::with_capacity(DEFAULT_STACK_SIZE));
   }
 
-  pub fn add_un_ops(&mut self, o: UnaryOp) {
+  pub fn add_op(&mut self, o: Op) {
+    match o {
+      Op::Unary(u) => self.add_un_op(u),
+      Op::Binary(b) => self.add_bin_op(b),
+      Op::Str(s) => self.add_str_op(s),
+      Op::Custom(c) => self.add_custom_op(c),
+    }
+  }
+  pub fn add_un_op(&mut self, o: UnaryOp) {
     pool_push!(o, self, self.un_ops, Vec::<UnaryOp>::with_capacity(DEFAULT_STACK_SIZE));
   }
-  pub fn add_bin_ops(&mut self, o: BinaryOp) {
+  pub fn add_bin_op(&mut self, o: BinaryOp) {
     pool_push!(o, self, self.bin_ops, Vec::<BinaryOp>::with_capacity(DEFAULT_STACK_SIZE));
   }
-  pub fn add_str_ops(&mut self, o: StrOp) {
+  pub fn add_str_op(&mut self, o: StrOp) {
     pool_push!(o, self, self.str_ops, Vec::<StrOp>::with_capacity(DEFAULT_STACK_SIZE));
   }
-  pub fn add_custom_ops(&mut self, o: CustomOp) {
+  pub fn add_custom_op(&mut self, o: CustomOp) {
     pool_push!(o, self, self.custom_ops, Vec::<CustomOp>::with_capacity(DEFAULT_STACK_SIZE));
+  }
+  pub fn add_ops_table(&mut self, ot: OpsTable) {
+    pool_push!(ot, self ,self.ops_tables, Vec::<OpsTable>::with_capacity(DEFAULT_STACK_SIZE));
   }
 
   pub fn get_vword(&mut self, capacity: usize) -> Box<VWord> {
@@ -411,6 +488,9 @@ impl Pool {
   pub fn get_vfllib(&mut self, f: CognitionFunction) -> Box<VFLLib> {
     pool_pop_val!(self.vfllibs, Value::FLLib(mut vfllib), vfllib, {
       vfllib.fllib = f;
+      if let Some(s) = vfllib.str_word.take() {
+        self.add_string(s)
+      }
     });
     Box::new(VFLLib::with_fn(f))
   }
@@ -506,5 +586,14 @@ impl Pool {
   pub fn get_custom_op(&mut self) -> CustomOp {
     pool_pop!(self.custom_ops, mut op, op, { op.drain() });
     CustomOp::new()
+  }
+  pub fn get_ops_table(&mut self) -> OpsTable {
+    pool_pop!(self.ops_tables, mut op, op, {
+      for (key, op) in op.drain() {
+        self.add_string(key);
+        self.add_op(op);
+      }
+    });
+    OpsTable::new()
   }
 }

@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn cog_crank(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let base = get_int!(state, w);
+  let base = get_unsigned!(state, w);
   let cur = state.current();
   if cur.cranks.is_none() {
     state.current().cranks = Some(state.pool.get_cranks(1));
@@ -17,8 +17,11 @@ pub fn cog_crank(mut state: CognitionState, w: Option<&Value>) -> CognitionState
 }
 
 pub fn cog_metacrank(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let (meta, base) = get_2_ints!(state, w);
+  let (meta, base) = get_2_ints!(state, w, isize, ACTIVE);
+  if meta < 0 || base < 0 || base > i32::MAX as isize { return state.eval_error("OUT OF BOUNDS", w) }
   let meta = meta as usize;
+  let base = base as i32;
+  for _ in 0..2 { let v = state.current().stack.pop().unwrap(); state.pool.add_val(v) }
   if state.current().cranks.is_none() {
     state.current().cranks = Some(state.pool.get_cranks(meta));
   }
@@ -63,7 +66,7 @@ macro_rules! cog_crank_val {
 }
 macro_rules! cog_metacrank_val {
   ($state:ident,$w:ident,$letpat:pat,$valexpr:expr) => {{
-    let idx = get_int!($state, $w, usize, ACTIVE);
+    let idx = get_unsigned!($state, $w, isize, ACTIVE) as usize;
     let cur = $state.current();
     let math = cur.math.take().unwrap();
     let base = if let Some(ref cranks) = cur.cranks {
