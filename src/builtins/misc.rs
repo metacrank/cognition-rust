@@ -227,6 +227,77 @@ pub fn cog_void_questionmark(mut state: CognitionState, w: Option<&Value>) -> Co
   state
 }
 
+pub fn cog_custom_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(v) = stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
+  let vword = if v.value_stack_ref().first().unwrap().is_custom() {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
+pub fn cog_control_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(v) = stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
+  let vword = if v.value_stack_ref().first().unwrap().is_control() {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
+pub fn cog_fllib_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(v) = stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
+  let vword = if v.value_stack_ref().first().unwrap().is_fllib() {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
+pub fn cog_same_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let v2 = stack.last().unwrap();
+  let v1 = stack.get(stack.len() - 2).unwrap();
+  if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let truth = match (v1.value_stack_ref().first().unwrap(), v2.value_stack_ref().first().unwrap()) {
+    (Value::Control(vcontrol1),Value::Control(vcontrol2)) => vcontrol1 == vcontrol2,
+    (Value::Control(_),Value::FLLib(_)) => false,
+    (Value::FLLib(_),Value::Control(_)) => false,
+    (Value::FLLib(vfllib1),Value::FLLib(vfllib2)) => vfllib1.fllib == vfllib2.fllib,
+    _ => return state.eval_error("BAD ARGUMENT TYPE", w),
+  };
+  let vword = if truth {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
 pub fn cog_var(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut vw = get_word!(state, w);
   let vword = vw.value_stack_ref().first().unwrap().vword_ref();
@@ -268,7 +339,7 @@ pub fn cog_getp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
     };
     vword.str_word.push_str(&s);
     state.pool.add_string(s);
-    vword.str_word.push(math.get_meta_delim().expect("Math meta-delim was None"));
+    vword.str_word.push(math.get_delim().expect("Math delim was None"));
   }
   vword.str_word.pop();
   state.current().math = Some(math);
@@ -288,17 +359,13 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
     return state.eval_error("MATH BASE ZERO", w)
   }
   let mut array: [isize;32] = [0;32];
-  let mut array_idx = 31;
+  let mut idx_beg = 0;
+  let mut array_idx = 0;
   let string = &v.value_stack_ref().first().unwrap().vword_ref().str_word;
-  let mut iter = string.char_indices().rev();
-  let mut idx_last = loop {
-    let Some((i, c)) = iter.next() else { break string.len() };
-    if c == math.get_meta_radix().unwrap() { break i }
-  };
-  let iter = string[..idx_last].char_indices().rev();
-  for (i, c) in iter {
-    if c == math.get_meta_delim().unwrap() {
-      match math.stoi(&string[i+1..idx_last]) {
+  for (i, c) in string.char_indices() {
+    if array_idx >= 32 { break }
+    if c == math.get_delim().unwrap() {
+      match math.stoi(&string[idx_beg..i]) {
         Ok(int) => array[array_idx] = int,
         Err(e) => {
           state.current().math = Some(math);
@@ -306,18 +373,17 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
           return state.eval_error(e, w)
         }
       }
-      if array_idx == 0 { break }
-      idx_last = i;
-      array_idx -= 1;
+      idx_beg = i + c.len_utf8();
+      array_idx += 1;
     }
-    if i == 0 {
-      match math.stoi(&string[..idx_last]) {
-        Ok(int) => array[array_idx] = int,
-        Err(e) => {
-          state.current().math = Some(math);
-          state.current().stack.push(v);
-          return state.eval_error(e, w)
-        }
+  }
+  if array_idx < 32 {
+    match math.stoi(&string[idx_beg..]) {
+      Ok(int) => array[array_idx] = int,
+      Err(e) => {
+        state.current().math = Some(math);
+        state.current().stack.push(v);
+        return state.eval_error(e, w)
       }
     }
   }
@@ -329,6 +395,7 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "nothing");
   add_word!(state, "nop", cog_nop);
+  add_word!(state, "ghost", GHOST);
   add_word!(state, "return", RETURN);
   add_word!(state, "exit", cog_exit);
   add_word!(state, "reset", cog_reset);
@@ -343,6 +410,10 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "fllib-count", cog_fllib_count);
   add_word!(state, "void", cog_void);
   add_word!(state, "void?", cog_void_questionmark);
+  add_word!(state, "custom?", cog_custom_questionmark);
+  add_word!(state, "control?", cog_control_questionmark);
+  add_word!(state, "fllib?", cog_fllib_questionmark);
+  add_word!(state, "same?", cog_same_questionmark);
   add_word!(state, "var", cog_var);
   add_word!(state, "getp", cog_getp);
   add_word!(state, "setp", cog_setp);

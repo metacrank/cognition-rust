@@ -175,6 +175,21 @@ impl Math {
     }
   }
 
+  pub fn with_capacity(capacity: usize) -> Self {
+    Self {
+      base: 0,
+      digits: Vec::with_capacity(capacity),
+      d_idx: HashMap::new(),
+      mul: HashMap::new(),
+      ops_table: OpsTable::new(),
+      negc: None,
+      radix: None,
+      delim: None,
+      meta_radix: None,
+      meta_delim: None
+    }
+  }
+
   pub fn clean(&mut self, p: &mut Pool) {
     self.base = 0;
     self.digits.clear();

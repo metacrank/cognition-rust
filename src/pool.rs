@@ -1,7 +1,6 @@
 use crate::*;
 use crate::tree::*;
 use crate::math::*;
-use std::mem::size_of;
 
 type ITree<T> = Tree<usize, T>;
 type VTree = ITree<Value>;
@@ -61,21 +60,20 @@ pub struct Pool {
   bin_ops: Option<Vec<BinaryOp>>,
   str_ops: Option<Vec<StrOp>>,
   custom_ops: Option<Vec<CustomOp>>,
-  // ops_tables: Option<Vec<OpsTable>>,
 
   nodes: Nodes,
 }
 
 trait DisregardPool {
-  fn pnew(_p: &mut Pool) -> Self;
-  fn pdrop(_p: &mut Pool, _v: Self);
+  fn pnew(_: &mut Pool) -> Self;
+  fn pdrop(_: &mut Pool, _v: Self);
 }
 
 impl<T> DisregardPool for Vec<T> {
-  fn pnew(_p: &mut Pool) -> Self {
+  fn pnew(_: &mut Pool) -> Self {
     Self::with_capacity(DEFAULT_STACK_SIZE)
   }
-  fn pdrop(_p: &mut Pool, _v: Self) {}
+  fn pdrop(_: &mut Pool, _v: Self) {}
 }
 
 macro_rules! pool_insert {
@@ -152,7 +150,6 @@ macro_rules! pool_pop_val {
     }
   };
 }
-
 macro_rules! pool_pop_node {
   ($stack:expr,$letpattern:pat,$retval:tt,$key:expr,$data:expr,$mod:block) => {
     if let Some($letpattern) = $stack.pop() {
@@ -164,6 +161,22 @@ macro_rules! pool_pop_node {
       $retval.node_right = None;
       return $retval;
     }
+  }
+}
+macro_rules! set_size {
+  ($self:ident,$tree:expr,$capacity:expr,$default_key:expr,$create:expr,$node_new:expr,$new:expr,$gc:expr) => {
+    let mut tree = if $tree.is_none() { Tree::new() } else { $tree.take().unwrap() };
+    tree.set_size($capacity as usize, $default_key, $create, $node_new, $new, $gc, $self);
+    $tree = Some(tree);
+  };
+  ($self:ident,$stack:expr,$capacity:expr,$new_item:expr,$getstack:expr) => {
+    let mut stack = if $stack.is_none() { $getstack($self) } else { $stack.take().unwrap() };
+    set_size!(stack, $capacity, $new_item);
+    $stack = Some(stack);
+  };
+  ($stack:expr,$capacity:expr,$new_item:expr) => {
+    let f = || $new_item();
+    $stack.resize_with($capacity as usize, f);
   }
 }
 
@@ -192,7 +205,6 @@ impl Pool {
       bin_ops: None,
       str_ops: None,
       custom_ops: None,
-      // ops_tables: None,
 
       nodes: Nodes::new(),
     }
@@ -200,163 +212,259 @@ impl Pool {
 
   pub fn print(&self) {
     if let Some(ref vwords) = self.vwords {
-      print!("{} vwords: ", vwords.count());
-      vwords.print();
-      println!("");
+      let size = vwords.size();
+      if size > 0 {
+        print!("{} vwords: ", size);
+        vwords.print();
+        println!("");
+      }
     }
     if let Some(ref vstacks) = self.vstacks {
-      print!("{} vstacks: ", vstacks.count());
-      vstacks.print();
-      println!("");
+      let size = vstacks.size();
+      if size > 0 {
+        print!("{} vstacks: ", size);
+        vstacks.print();
+        println!("");
+      }
     }
     if let Some(ref vmacros) = self.vmacros {
-      print!("{} vmacros: ", vmacros.count());
-      vmacros.print();
-      println!("");
+      let size = vmacros.size();
+      if size > 0 {
+        print!("{} vmacros: ", size);
+        vmacros.print();
+        println!("");
+      }
     }
     if let Some(ref verrors) = self.verrors {
-      print!("{} verrors: ", verrors.count());
-      verrors.print();
-      println!("");
+      let size = verrors.size();
+      if size > 0 {
+        print!("{} verrors: ", size);
+        verrors.print();
+        println!("");
+      }
     }
     if let Some(ref verror_locs) = self.verror_locs {
-      print!("{} verror_locs: ", verror_locs.count());
-      verror_locs.print();
-      println!("");
+      let size = verror_locs.size();
+      if size > 0 {
+        print!("{} verror_locs: ", size);
+        verror_locs.print();
+        println!("");
+      }
     }
     if let Some(ref vfllibs) = self.vfllibs {
-      println!("{} vfllibs", vfllibs.len());
+      if vfllibs.len() > 0 { println!("{} vfllibs", vfllibs.len()) }
     }
     if let Some(ref stacks) = self.stacks {
-      print!("{} stacks: ", stacks.count());
-      stacks.print();
-      println!("");
+      let size = stacks.size();
+      if size > 0 {
+        print!("{} stacks: ", size);
+        stacks.print();
+        println!("");
+      }
     }
     if let Some(ref strings) = self.strings {
-      print!("{} strings: ", strings.count());
-      strings.print();
-      println!("");
+      let size = strings.size();
+      if size > 0 {
+        print!("{} strings: ", size);
+        strings.print();
+        println!("");
+      }
     }
     if let Some(ref stringss) = self.stringss {
-      print!("{} stringss: ", stringss.count());
-      stringss.print();
-      println!("");
+      let size = stringss.size();
+      if size > 0 {
+        print!("{} stringss: ", size);
+        stringss.print();
+        println!("");
+      }
     }
     if let Some(ref crankss) = self.crankss {
-      print!("{} crankss: ", crankss.count());
-      crankss.print();
-      println!("");
+      let size = crankss.size();
+      if size > 0 {
+        print!("{} crankss: ", size);
+        crankss.print();
+        println!("");
+      }
     }
     if let Some(ref maths) = self.maths {
-      print!("{} maths: ", maths.count());
-      maths.print();
-      println!("");
+      let size = maths.size();
+      if size > 0 {
+        print!("{} maths: ", size);
+        maths.print();
+        println!("");
+      }
     }
     if let Some(ref digitss) = self.digitss {
-      print!("{} digitss: ", digitss.count());
-      digitss.print();
-      println!("");
+      let size = digitss.size();
+      if size > 0 {
+        print!("{} digitss: ", size);
+        digitss.print();
+        println!("");
+      }
     }
     if let Some(ref intss) = self.intss {
-      print!("{} intss: ", intss.count());
-      intss.print();
-      println!("");
+      let size = intss.size();
+      if size > 0 {
+        print!("{} intss: ", size);
+        intss.print();
+        println!("");
+      }
     }
     if let Some(ref faliasess) = self.faliasess {
-      print!("{} faliasess: ", faliasess.count());
-      faliasess.print();
-      println!("");
+      let size = faliasess.size();
+      if size > 0 {
+        print!("{} faliasess: ", size);
+        faliasess.print();
+        println!("");
+      }
     }
     if let Some(ref word_tables) = self.word_tables {
-      print!("{} word_tables: ", word_tables.count());
-      word_tables.print();
-      println!("");
+      let size = word_tables.size();
+      if size > 0 {
+        print!("{} word_tables: ", size);
+        word_tables.print();
+        println!("");
+      }
     }
     if let Some(ref word_defs) = self.word_defs {
-      println!("{} word_defs", word_defs.len());
+      if word_defs.len() > 0 { println!("{} word_defs", word_defs.len()) }
     }
     if let Some(ref families) = self.families {
-      println!("{} families", families.len());
+      if families.len() > 0 { println!("{} families", families.len()) }
     }
 
     if let Some(ref un_ops) = self.un_ops {
-      println!("{} un_ops", un_ops.len());
+      if un_ops.len() > 0 { println!("{} un_ops", un_ops.len()) }
     }
     if let Some(ref bin_ops) = self.bin_ops {
-      println!("{} bin_ops", bin_ops.len());
+      if bin_ops.len() > 0 { println!("{} bin_ops", bin_ops.len()) }
     }
     if let Some(ref str_ops) = self.str_ops {
-      println!("{} str_ops", str_ops.len());
+      if str_ops.len() > 0 { println!("{} str_ops", str_ops.len()) }
     }
     if let Some(ref custom_ops) = self.custom_ops {
-      println!("{} custom_ops", custom_ops.len());
+      if custom_ops.len() > 0 { println!("{} custom_ops", custom_ops.len()) }
     }
 
-    println!("{} value nodes", self.nodes.value.len());
-    println!("{} verr_loc nodes", self.nodes.verr_loc.len());
-    println!("{} stack nodes", self.nodes.stack.len());
-    println!("{} string nodes", self.nodes.string.len());
-    println!("{} strings nodes", self.nodes.strings.len());
-    println!("{} cranks nodes", self.nodes.cranks.len());
-    println!("{} math nodes", self.nodes.math.len());
-    println!("{} digits nodes", self.nodes.digits.len());
-    println!("{} ints nodes", self.nodes.ints.len());
-    println!("{} faliases nodes", self.nodes.faliases.len());
-    println!("{} word_table nodes", self.nodes.word_table.len());
+    if self.nodes.value.len() > 0 {
+      println!("{} value nodes", self.nodes.value.len());
+    }
+    if self.nodes.verr_loc.len() > 0 {
+      println!("{} verr_loc nodes", self.nodes.verr_loc.len());
+    }
+    if self.nodes.stack.len() > 0 {
+      println!("{} stack nodes", self.nodes.stack.len());
+    }
+    if self.nodes.string.len() > 0 {
+      println!("{} string nodes", self.nodes.string.len());
+    }
+    if self.nodes.strings.len() > 0 {
+      println!("{} strings nodes", self.nodes.strings.len());
+    }
+    if self.nodes.cranks.len() > 0 {
+      println!("{} cranks nodes", self.nodes.cranks.len());
+    }
+    if self.nodes.math.len() > 0 {
+      println!("{} math nodes", self.nodes.math.len());
+    }
+    if self.nodes.digits.len() > 0 {
+      println!("{} digits nodes", self.nodes.digits.len());
+    }
+    if self.nodes.ints.len() > 0 {
+      println!("{} ints nodes", self.nodes.ints.len());
+    }
+    if self.nodes.faliases.len() > 0 {
+      println!("{} faliases nodes", self.nodes.faliases.len());
+    }
+    if self.nodes.word_table.len() > 0 {
+      println!("{} word_table nodes", self.nodes.word_table.len());
+    }
   }
 
   pub fn get_capacity(&self) -> [isize;32] {
     [
-      (self.vwords.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<char>()) as isize,
-      (self.vstacks.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<Value>()) as isize,
-      (self.vmacros.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<Value>()) as isize,
-      (self.verrors.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<char>()) as isize,
+      self.vwords.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.vstacks.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.vmacros.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.verrors.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
 
-      (self.verror_locs.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<char>()) as isize,
-      (self.vfllibs.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) * size_of::<Value>()) as isize,
-      (self.stacks.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<Value>()) as isize,
-      (self.strings.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<char>()) as isize,
+      self.verror_locs.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.vfllibs.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) as isize,
+      self.stacks.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.strings.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
 
-      (self.stringss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<String>()) as isize,
-      (self.crankss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<Crank>()) as isize,
-      (self.maths.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<Digit>()) as isize,
-      (self.digitss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<Digit>()) as isize,
+      self.stringss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.crankss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.maths.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.digitss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
 
-      (self.intss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<i32>()) as isize,
-      (self.faliasess.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * size_of::<String>()) as isize,
-      (self.word_tables.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) * (size_of::<String>() + size_of::<WordDef>())) as isize,
-      (self.word_defs.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) * size_of::<WordDef>()) as isize,
+      self.intss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.faliasess.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.word_tables.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.word_defs.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) as isize,
 
-      (self.families.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) * size_of::<Family>()) as isize,
-      (self.un_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) * size_of::<UnaryOp>()) as isize,
-      (self.bin_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) * size_of::<BinaryOp>()) as isize,
-      (self.str_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) * size_of::<StrOp>()) as isize,
+      self.families.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) as isize,
+      self.un_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) as isize,
+      self.bin_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) as isize,
+      self.str_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) as isize,
 
-      (self.custom_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) * size_of::<CustomOp>()) as isize,
-      (self.nodes.value.len().min(isize::MAX as usize) * size_of::<Node<usize, Value>>()) as isize,
-      (self.nodes.verr_loc.len().min(isize::MAX as usize) * size_of::<Node<usize, VErrorLoc>>()) as isize,
-      (self.nodes.stack.len().min(isize::MAX as usize) * size_of::<Node<usize, Stack>>()) as isize,
+      self.custom_ops.as_ref().map_or(0, |v| v.len().min(isize::MAX as usize)) as isize,
+      self.nodes.value.len().min(isize::MAX as usize) as isize,
+      self.nodes.verr_loc.len().min(isize::MAX as usize) as isize,
+      self.nodes.stack.len().min(isize::MAX as usize) as isize,
 
-      (self.nodes.string.len().min(isize::MAX as usize) * size_of::<Node<usize, String>>()) as isize,
-      (self.nodes.strings.len().min(isize::MAX as usize) * size_of::<Node<usize, Strings>>()) as isize,
-      (self.nodes.cranks.len().min(isize::MAX as usize) * size_of::<Node<usize, Cranks>>()) as isize,
-      (self.nodes.math.len().min(isize::MAX as usize) * size_of::<Node<usize, Math>>()) as isize,
+      self.nodes.string.len().min(isize::MAX as usize) as isize,
+      self.nodes.strings.len().min(isize::MAX as usize) as isize,
+      self.nodes.cranks.len().min(isize::MAX as usize) as isize,
+      self.nodes.math.len().min(isize::MAX as usize) as isize,
 
-      (self.nodes.digits.len().min(isize::MAX as usize) * size_of::<Node<usize, Digits>>()) as isize,
-      (self.nodes.ints.len().min(isize::MAX as usize) * size_of::<Node<usize, Vec<i32>>>()) as isize,
-      (self.nodes.faliases.len().min(isize::MAX as usize) * size_of::<Node<usize, Faliases>>()) as isize,
-      (self.nodes.word_table.len().min(isize::MAX as usize) * size_of::<Node<usize, WordTable>>()) as isize
+      self.nodes.digits.len().min(isize::MAX as usize) as isize,
+      self.nodes.ints.len().min(isize::MAX as usize) as isize,
+      self.nodes.faliases.len().min(isize::MAX as usize) as isize,
+      self.nodes.word_table.len().min(isize::MAX as usize) as isize
     ]
   }
 
-  pub fn set_capacity(&mut self, _capacity: [isize;32]) {
+  pub fn set_capacity(&mut self, capacity: [isize;32]) {
+    set_size!(self, self.vwords, capacity[0], DEFAULT_STRING_LENGTH, init_vword, Self::get_value_node, Self::get_stack_for_pool, Self::add_stack);
+    set_size!(self, self.vstacks, capacity[1], DEFAULT_STACK_SIZE, init_vstack, Self::get_value_node, Self::get_stack_for_pool, Self::add_stack);
+    set_size!(self, self.vmacros, capacity[2], DEFAULT_STACK_SIZE, init_vmacro, Self::get_value_node, Self::get_stack_for_pool, Self::add_stack);
+    set_size!(self, self.verrors, capacity[3], DEFAULT_STRING_LENGTH, init_verror, Self::get_value_node, Self::get_stack_for_pool, Self::add_stack);
 
+    set_size!(self, self.verror_locs, capacity[4], DEFAULT_STRING_LENGTH, init_verr_loc, Self::get_verr_loc_node, Vec::<VErrorLoc>::pnew, Vec::<VErrorLoc>::pdrop);
+    set_size!(self, self.vfllibs, capacity[5], init_vfllib, Self::get_stack_for_pool);
+    set_size!(self, self.stacks, capacity[6], DEFAULT_STACK_SIZE, Stack::with_capacity, Self::get_stack_node, Vec::<Stack>::pnew, Vec::<Stack>::pdrop);
+    set_size!(self, self.strings, capacity[7], DEFAULT_STRING_LENGTH, String::with_capacity, Self::get_string_node, Self::get_strings_for_pool, Self::add_strings);
 
+    set_size!(self, self.stringss, capacity[8], DEFAULT_STACK_SIZE, Strings::with_capacity, Self::get_strings_node, Vec::<Strings>::pnew, Vec::<Strings>::pdrop);
+    set_size!(self, self.crankss, capacity[9], DEFAULT_STACK_SIZE, Cranks::with_capacity, Self::get_cranks_node, Vec::<Cranks>::pnew, Vec::<Cranks>::pdrop);
+    set_size!(self, self.maths, capacity[10], DEFAULT_BASE, Math::with_capacity, Self::get_math_node, Vec::<Math>::pnew, Vec::<Math>::pdrop);
+    set_size!(self, self.digitss, capacity[11], DEFAULT_STACK_SIZE, Digits::with_capacity, Self::get_digits_node, Vec::<Digits>::pnew, Vec::<Digits>::pdrop);
 
+    set_size!(self, self.intss, capacity[12], DEFAULT_STACK_SIZE, Vec::<i32>::with_capacity, Self::get_ints_node, Vec::<Vec<i32>>::pnew, Vec::<Vec<i32>>::pdrop);
+    set_size!(self, self.faliasess, capacity[13], DEFAULT_FALIASES_SIZE, Faliases::with_capacity, Self::get_faliases_node, Vec::<Faliases>::pnew, Vec::<Faliases>::pdrop);
+    set_size!(self, self.word_tables, capacity[14], DEFAULT_WORD_TABLE_SIZE, WordTable::with_capacity, Self::get_word_table_node, Vec::<WordTable>::pnew, Vec::<WordTable>::pdrop);
+    set_size!(self, self.word_defs, capacity[15], init_word_def, Vec::<WordDef>::pnew);
 
+    set_size!(self, self.families, capacity[16], init_family, Vec::<Family>::pnew);
+    set_size!(self, self.un_ops, capacity[17], UnaryOp::new, Vec::<UnaryOp>::pnew);
+    set_size!(self, self.bin_ops, capacity[18], BinaryOp::new, Vec::<BinaryOp>::pnew);
+    set_size!(self, self.str_ops, capacity[19], StrOp::new, Vec::<StrOp>::pnew);
 
+    set_size!(self, self.custom_ops, capacity[20], CustomOp::new, Vec::<CustomOp>::pnew);
+    set_size!(self.nodes.value, capacity[21], init_inode::<Value>);
+    set_size!(self.nodes.verr_loc, capacity[22], init_inode::<VErrorLoc>);
+    set_size!(self.nodes.stack, capacity[23], init_inode::<Stack>);
 
+    set_size!(self.nodes.string, capacity[24], init_inode::<String>);
+    set_size!(self.nodes.strings, capacity[25], init_inode::<Strings>);
+    set_size!(self.nodes.cranks, capacity[26], init_inode::<Cranks>);
+    set_size!(self.nodes.math, capacity[27], init_inode::<Math>);
 
+    set_size!(self.nodes.digits, capacity[28], init_inode::<Digits>);
+    set_size!(self.nodes.ints, capacity[29], init_inode::<Vec<i32>>);
+    set_size!(self.nodes.faliases, capacity[30], init_inode::<Faliases>);
+    set_size!(self.nodes.word_table, capacity[31], init_inode::<WordTable>);
   }
 
   pub fn add_val(&mut self, v: Value) {
@@ -674,4 +782,34 @@ impl Pool {
     pool_pop_node!(self.nodes.word_table, mut n, n, key, data, {});
     Box::new(Node::<usize, WordTable>::new(key, data))
   }
+}
+
+pub fn init_vword(capacity: usize) -> Value {
+  Value::Word(Box::new(VWord::with_capacity(capacity)))
+}
+pub fn init_vstack(capacity: usize) -> Value {
+  Value::Stack(Box::new(VStack::with_capacity(capacity)))
+}
+pub fn init_vmacro(capacity: usize) -> Value {
+  Value::Macro(Box::new(VMacro::with_capacity(capacity)))
+}
+pub fn init_verror(capacity: usize) -> Value {
+  Value::Error(Box::new(VError::with_capacity(capacity)))
+}
+pub fn init_verr_loc(capacity: usize) -> VErrorLoc {
+  VErrorLoc{ filename: String::with_capacity(capacity),
+             line: String::with_capacity(4),
+             column: String::with_capacity(4) }
+}
+pub fn init_vfllib() -> Value {
+  Value::FLLib(Box::new(VFLLib::with_nop()))
+}
+pub fn init_word_def() -> WordDef {
+  WordDef::new(Value::Control(VControl::Ghost))
+}
+pub fn init_family() -> Family {
+  Family::with_capacity(DEFAULT_STACK_SIZE)
+}
+pub fn init_inode<D>() -> Box<Node<usize, D>> {
+  Box::new(Node{ key: 0, data: None, height: 1, node_left: None, node_right: None })
 }

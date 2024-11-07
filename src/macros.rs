@@ -16,6 +16,7 @@ pub const DEFAULT_STRING_LENGTH: usize = 24;
 pub const DEFAULT_BUFFER_CAPACITY: usize = 576;
 pub const DEFAULT_WORD_TABLE_SIZE: usize = 576;
 pub const DEFAULT_FALIASES_SIZE: usize = 24;
+pub const DEFAULT_BASE: usize = 24;
 
 // pub const EVAL: crate::Value = crate::Value::Control(crate::VControl::Eval);
 // pub const RETURN: crate::Value = crate::Value::Control(crate::VControl::Eval);
@@ -114,6 +115,11 @@ macro_rules! build_macro {
     vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Return));
     vmacro
   }};
+  ($state:ident,$n:expr,GHOST $(,$fi:ident)*) => {{
+    let mut vmacro = build_macro!($state, $n $(,$fi)*);
+    vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Ghost));
+    vmacro
+  }};
   ($state:ident,$n:expr,$fn:ident $(,$fi:ident)*) => {{
     let mut vmacro = build_macro!($state, $n $(,$fi)*);
     let v = $state.pool.get_vfllib($fn);
@@ -142,6 +148,11 @@ macro_rules! add_word {
   ($state:ident,$name:literal,RETURN) => {
     let mut vmacro = build_macro!($state, 1);
     vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Return));
+    $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
+  };
+  ($state:ident,$name:literal,GHOST) => {
+    let mut vmacro = build_macro!($state, 1);
+    vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Ghost));
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
   };
   ($state:ident,$name:literal,$f:ident) => {

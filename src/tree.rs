@@ -24,8 +24,29 @@ impl<K:Ord+Copy+Display,D> Tree<K,D> {
     if let Some(r) = &self.root { r.print() };
   }
 
-  pub fn count(&self) -> usize {
-    Node::count(&self.root)
+  pub fn size(&self) -> usize {
+    Node::size(&self.root)
+  }
+
+  pub fn set_size(&mut self, size: usize, default_key: K, create: fn (K) -> D,
+                  node_new: fn(&mut Pool, K, Vec<D>) -> Box<Node<K,D>>,
+                  new: fn(&mut Pool) -> Vec<D>, free: fn(&mut Pool, Vec<D>), p: &mut Pool) {
+    let mut current_size = self.size();
+    if size < current_size {
+      loop {
+        self.gc(free, p);
+        current_size = self.size();
+        if size >= current_size { return }
+      }
+    }
+    if self.root.is_none() {
+      let vec = new(p);
+      self.root = Some(node_new(p, default_key, vec));
+    }
+    let root = self.root.as_mut().unwrap();
+    let data = root.data.as_mut().expect("Tree error: invalid node");
+    let diff = size - current_size;
+    for _ in 0..diff { data.push(create(root.key.clone())) }
   }
 
   pub fn insert(&mut self, key: K, data: D, node_new: fn(&mut Pool, K, Vec<D>) -> Box<Node<K,D>>, new: fn(&mut Pool) -> Vec<D>, p: &mut Pool) {
@@ -77,10 +98,10 @@ impl<K:Ord+Display,D> Node<K,D> {
     print!(")");
   }
 
-  fn count(node: &Option<Box<Self>>) -> usize {
+  fn size(node: &Option<Box<Self>>) -> usize {
     let Some(n) = node else { return 0 };
     let contrib = if let Some(ref d) = n.data { d.len() } else { 0 };
-    Self::count(&n.node_left) + contrib + Self::count(&n.node_right)
+    Self::size(&n.node_left) + contrib + Self::size(&n.node_right)
   }
 
   fn height(node: &Option<Box<Self>>) -> i32 {
@@ -272,39 +293,5 @@ impl<K:Ord+Display,D> Node<K,D> {
     }
     root.update_height();
     Some(root)
-  }
-}
-
-impl<D> Tree<usize,D> {
-  pub fn size(&self) -> usize { Node::size(&self.root) }
-
-  pub fn set_size(&mut self, size: usize, default_capacity: usize, create: fn (usize) -> D, node_new: fn(&mut Pool, usize, Vec<D>) -> Box<Node<usize,D>>,
-                  new: fn(&mut Pool) -> Vec<D>, free: fn(&mut Pool, Vec<D>), p: &mut Pool) {
-    let mut current_size = self.size();
-    if size < current_size {
-      loop {
-        self.gc(free, p);
-        current_size = self.size();
-        if size >= current_size { return }
-      }
-    }
-    if self.root.is_none() {
-      let vec = new(p);
-      self.root = Some(node_new(p, default_capacity, vec));
-    }
-    let root = self.root.as_mut().unwrap();
-    let capacity = root.key;
-    let diff = (size - current_size) / capacity;
-    for _ in 0..diff {
-      root.data.as_mut().expect("Tree error: invalid node").push(create(capacity))
-    }
-  }
-}
-
-impl<D> Node<usize,D> {
-  fn size(node: &Option<Box<Self>>) -> usize {
-    let Some(n) = node else { return 0 };
-    let contrib = if let Some(ref d) = n.data { d.len() * n.key } else { 0 };
-    Self::size(&n.node_left) + contrib + Self::size(&n.node_right)
   }
 }

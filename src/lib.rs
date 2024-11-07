@@ -195,6 +195,7 @@ pub struct VCustom {
 pub enum VControl {
   Eval,
   Return,
+  Ghost,
 }
 
 impl VWord {
@@ -347,6 +348,7 @@ impl Value {
         match vcontrol {
           VControl::Eval   => { fwrite_check!(f, b"eval"); },
           VControl::Return => { fwrite_check!(f, b"return"); },
+          VControl::Ghost => { fwrite_check!(f, b"ghost"); },
         }
         fwrite_check!(f, COLOR_RESET);
       },
@@ -821,10 +823,6 @@ impl CognitionState {
       },
       Value::Custom(vcustom) => Value::Custom({
         VCustom::with_custom(vcustom.custom.copyfunc())
-        // match vcustom.custom {
-        //   Some(ref custom) => self.pool.get_vcustom(custom.copyfunc()),
-        //   None             => VCustom{ custom: None },
-        // }
       }),
       Value::Control(vcontrol) => Value::Control(vcontrol.clone()),
     }
@@ -888,8 +886,6 @@ impl CognitionState {
         if try_eval {
           if let Some(ref wt) = self.current_ref().word_table {
             if let Some(wd) = wt.get(&v.vword_ref().str_word) {
-              //self = self.evalstack_new(new_word_def, None, Some(&v), false);
-              //self.pool.add_val(v);
               let new_word_def = wd.clone();
               break (self, RecurseControl::Def(new_word_def, v))
             }
@@ -922,8 +918,6 @@ impl CognitionState {
       if try_eval {
         if let Some(ref wt) = family_container.word_table {
           if let Some(wd) = wt.get(&v.vword_ref().str_word) {
-            // self = self.evalstack_new(wd.clone(), None, Some(&v), false);
-            // self.pool.add_val(v);
             let new_word_def = wd.clone();
             self.family.push(family_stack);
             break (self, RecurseControl::Def(new_word_def, v))
@@ -979,7 +973,6 @@ impl CognitionState {
       },
       Value::Control(VControl::Eval) => {
         if self.is_high_tide() || force_eval {
-          self.pool.add_val(v);
           if cranking { self.current().inc_crank() }
           let (new_self, result) = self.get_evalf_val(callword);
           let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
@@ -992,8 +985,15 @@ impl CognitionState {
         }
       },
       Value::Control(VControl::Return) => {
-        if force_eval { return (self, RecurseControl::Return) }
+        if self.is_high_tide() || force_eval { return (self, RecurseControl::Return) }
+        else {
+          self.push_quoted(v);
+          let (new_self, result) = self.get_crank_val();
+          let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
+          return (new_self, RecurseControl::Crank(wd, defstack))
+        }
       },
+      Value::Control(VControl::Ghost) => {}
       _ => {
         self.current().stack.push(v);
         if cranking {

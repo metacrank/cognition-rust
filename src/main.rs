@@ -39,8 +39,12 @@ fn main() -> ExitCode {
     let filename = &args[opts.fileidx + i];
     let mut fs_result = fs::read_to_string(filename);
     if let Err(_) = fs_result {
-      if let Ok(dir) = env::var("COGLIB_DIR") {
-        fs_result = fs::read_to_string(format!("{dir}/{filename}")); }}
+      if let Some(ref dir) = opts.c {
+        fs_result = fs::read_to_string(format!("{dir}/{filename}"));
+      } else if let Ok(dir) = env::var("COGLIB_DIR") {
+        fs_result = fs::read_to_string(format!("{dir}/{filename}"));
+      }
+    }
     if let Err(e) = fs_result {
       println!("Could not open file for reading: {filename}: {e}");
       return ExitCode::from(4);
@@ -69,6 +73,7 @@ fn main() -> ExitCode {
 
 struct Config {
   h: bool,
+  c: Option<String>,
   q: bool,
   v: bool,
   s: usize,
@@ -91,6 +96,7 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
   math.set_base(24);
 
   let (mut h, mut q, mut v) = (false, false, false);
+  let mut c = None;
   let mut s: i32 = -1;
   let mut fileidx = 0;
 
@@ -100,6 +106,12 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
       "-h" | "--help" => {
         if h { return Err(usage(1)); }
         else { h = true; }
+      }
+      "-c" | "--coglib-dir" => {
+        if c.is_some() { return Err(usage(1)); }
+        else if i + 1 == argc { return Err(usage(3)); }
+        i += 1;
+        c = Some(args[i].clone());
       }
       "-q" | "--quit" => {
         if q { return Err(usage(1)); }
@@ -141,17 +153,18 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
 
   let s: usize = if s < 0 { 1 } else { s as usize };
 
-  Ok(Config{h, q, v, s, fileidx})
+  Ok(Config{h, c, q, v, s, fileidx})
 }
 
 fn usage(code: u8) -> ExitCode {
-  println!("Usage: crank [-hfqsv] [file...] [arg...]");
+  println!("Usage: crank [-hcqsv] [file...] [arg...]");
   ExitCode::from(code)
 }
 
 fn help() -> ExitCode {
   usage(0);
   println!(" -h    --help            print this help message");
+  println!(" -c    --coglib-dir DIR  use DIR as a secondary source directory");
   println!(" -q    --quiet           don't show state information at program end");
   println!(" -s N  --sources N       specify N source files to be composed (default is N=1)");
   println!(" -v    --version         print version information");
@@ -160,7 +173,7 @@ fn help() -> ExitCode {
 
 fn version() -> ExitCode {
   println!("Authors: Matthew Hinton, Preston Pan, MIT License 2024");
-  println!("cognition, version 0.1.2 alpha");
+  println!("cognition, version 0.2.0 alpha");
   ExitCode::from(0)
 }
 
