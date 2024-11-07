@@ -225,28 +225,28 @@ pub fn cog_read(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 
 pub fn cog_stdout(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let boxed_custom = Box::new(WriteCustom{ writer: Some(Box::new(stdout())) });
-  let vcustom = state.pool.get_vcustom(boxed_custom);
+  let vcustom = VCustom::with_custom(boxed_custom);
   state.push_quoted(Value::Custom(vcustom));
   state
 }
 
 pub fn cog_stdin(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let boxed_custom = Box::new(ReadCustom{ reader: Some(Box::new(stdin())) });
-  let vcustom = state.pool.get_vcustom(boxed_custom);
+  let vcustom = VCustom::with_custom(boxed_custom);
   state.push_quoted(Value::Custom(vcustom));
   state
 }
 
 pub fn cog_stderr(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let boxed_custom = Box::new(WriteCustom{ writer: Some(Box::new(stderr())) });
-  let vcustom = state.pool.get_vcustom(boxed_custom);
+  let vcustom = VCustom::with_custom(boxed_custom);
   state.push_quoted(Value::Custom(vcustom));
   state
 }
 
 pub fn cog_empty(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let boxed_custom = Box::new(ReadWriteCustom{ stream: Some(Box::new(empty())) });
-  let vcustom = state.pool.get_vcustom(boxed_custom);
+  let vcustom = VCustom::with_custom(boxed_custom);
   state.push_quoted(Value::Custom(vcustom));
   state
 }
@@ -259,7 +259,7 @@ pub fn cog_fopen(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     return state.eval_error("INVALID FILENAME", w);
   };
   let boxed_custom = Box::new(ReadCustom{ reader: Some(Box::new(file)) });
-  let vcustom = state.pool.get_vcustom(boxed_custom);
+  let vcustom = VCustom::with_custom(boxed_custom);
   state.push_quoted(Value::Custom(vcustom));
   state
 }
@@ -273,7 +273,7 @@ pub fn cog_file(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
     state.current().stack.push(v);
     return state.eval_error("INVALID FILENAME", w);
   };
-  let vcustom = state.pool.get_vcustom(boxed_custom);
+  let vcustom = VCustom::with_custom(boxed_custom);
   state.push_quoted(Value::Custom(vcustom));
   state
 }
@@ -287,7 +287,7 @@ pub fn cog_file_new(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
     state.current().stack.push(v);
     return state.eval_error("INVALID FILENAME", w);
   };
-  let vcustom = state.pool.get_vcustom(boxed_custom);
+  let vcustom = VCustom::with_custom(boxed_custom);
   state.push_quoted(Value::Custom(vcustom));
   state
 }
@@ -301,7 +301,7 @@ pub fn cog_file_append(mut state: CognitionState, w: Option<&Value>) -> Cognitio
     state.current().stack.push(v);
     return state.eval_error("INVALID FILENAME", w);
   };
-  let vcustom = state.pool.get_vcustom(boxed_custom);
+  let vcustom = VCustom::with_custom(boxed_custom);
   state.push_quoted(Value::Custom(vcustom));
   state
 }
@@ -313,17 +313,15 @@ pub fn cog_reader(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   let Value::Custom(vcustom) = v.value_stack().first_mut().unwrap() else {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let Some(custom) = &mut vcustom.custom else {
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  };
+  let custom = &mut vcustom.custom;
   if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
     let boxed: Box<dyn ReadAny> = Box::new(file.file.take().unwrap());
     let reader = Some(boxed);
-    vcustom.custom = Some(Box::new(ReadCustom{ reader }));
+    vcustom.custom = Box::new(ReadCustom{ reader });
   } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
     let boxed: Box<dyn ReadAny> = Box::new(stream.stream.take().unwrap());
     let reader = Some(boxed);
-    vcustom.custom = Some(Box::new(ReadCustom{ reader }));
+    vcustom.custom = Box::new(ReadCustom{ reader });
   } else if custom.as_any_mut().downcast_mut::<ReadCustom>().is_some() {
   } else if custom.as_any_mut().downcast_mut::<BufReadCustom>().is_some() {
   } else { return state.eval_error("BAD ARGUMENT TYPE", w) };
@@ -337,17 +335,15 @@ pub fn cog_writer(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   let Value::Custom(vcustom) = v.value_stack().first_mut().unwrap() else {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let Some(custom) = &mut vcustom.custom else {
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  };
+  let custom = &mut vcustom.custom;
   if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
     let boxed: Box<dyn WriteAny> = Box::new(file.file.take().unwrap());
     let writer = Some(boxed);
-    vcustom.custom = Some(Box::new(WriteCustom{ writer }));
+    vcustom.custom = Box::new(WriteCustom{ writer });
   } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
     let boxed: Box<dyn WriteAny> = Box::new(stream.stream.take().unwrap());
     let writer = Some(boxed);
-    vcustom.custom = Some(Box::new(WriteCustom{ writer }));
+    vcustom.custom = Box::new(WriteCustom{ writer });
   } else if custom.as_any_mut().downcast_mut::<BufReadCustom>().is_some() {
   } else if custom.as_any_mut().downcast_mut::<BufWriteCustom>().is_some() {
   } else { return state.eval_error("BAD ARGUMENT TYPE", w) };
@@ -361,7 +357,7 @@ pub fn cog_bufreader(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   let Value::Custom(vcustom) = v.value_stack().first_mut().unwrap() else {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let Some(custom) = &mut vcustom.custom else { return state.eval_error("BAD ARGUMENT TYPE", w) };
+  let custom = &mut vcustom.custom;
   let boxed: Box<dyn ReadAny> = if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
     Box::new(file.file.take().unwrap())
   } else if let Some(reader) = custom.as_any_mut().downcast_mut::<ReadCustom>() {
@@ -370,7 +366,7 @@ pub fn cog_bufreader(mut state: CognitionState, w: Option<&Value>) -> CognitionS
      Box::new(stream.stream.take().unwrap())
   } else { return state.eval_error("BAD ARGUMENT TYPE", w) };
   let bufreader = Some(BufReader::new(boxed));
-  vcustom.custom = Some(Box::new(BufReadCustom{ bufreader }));
+  vcustom.custom = Box::new(BufReadCustom{ bufreader });
   state
 }
 
@@ -381,7 +377,7 @@ pub fn cog_bufwriter(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   let Value::Custom(vcustom) = v.value_stack().first_mut().unwrap() else {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let Some(custom) = &mut vcustom.custom else { return state.eval_error("BAD ARGUMENT TYPE", w) };
+  let custom = &mut vcustom.custom;
   let boxed: Box<dyn WriteAny> = if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
     Box::new(file.file.take().unwrap())
   } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
@@ -390,7 +386,7 @@ pub fn cog_bufwriter(mut state: CognitionState, w: Option<&Value>) -> CognitionS
      Box::new(stream.stream.take().unwrap())
   } else { return state.eval_error("BAD ARGUMENT TYPE", w) };
   let bufwriter = Some(BufWriter::new(boxed));
-  vcustom.custom = Some(Box::new(BufWriteCustom{ bufwriter }));
+  vcustom.custom = Box::new(BufWriteCustom{ bufwriter });
   state
 }
 
@@ -401,18 +397,18 @@ pub fn cog_unbuffer(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   let Value::Custom(vcustom) = v.value_stack().first_mut().unwrap() else {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let Some(custom) = &mut vcustom.custom else { return state.eval_error("BAD ARGUMENT TYPE", w) };
+  let custom = &mut vcustom.custom;
   if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
     let boxed_unbuffered = bufreader.bufreader.take().unwrap().into_inner();
-    vcustom.custom = Some(Box::new(ReadCustom{ reader: Some(boxed_unbuffered) }));
+    vcustom.custom = Box::new(ReadCustom{ reader: Some(boxed_unbuffered) });
   } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
     let mut bufwriter = bufwriter.bufwriter.take().unwrap();
     let _ = bufwriter.flush();
     match bufwriter.into_inner() {
-      Ok(boxed_unbuffered) => vcustom.custom = Some(Box::new(WriteCustom{ writer: Some(boxed_unbuffered) })),
+      Ok(boxed_unbuffered) => vcustom.custom = Box::new(WriteCustom{ writer: Some(boxed_unbuffered) }),
       Err(e) => {
         let _ = stderr().write(format!("{e}").as_bytes());
-        vcustom.custom = Some(Box::new(Void{}))
+        vcustom.custom = Box::new(Void{})
       }
     }
   } else {
@@ -428,13 +424,11 @@ pub fn cog_stream(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   let Value::Custom(vcustom) = v.value_stack().first_mut().unwrap() else {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let Some(custom) = &mut vcustom.custom else {
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  };
+  let custom = &mut vcustom.custom;
   if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
     let boxed: Box<dyn ReadWriteAny> = Box::new(file.file.take().unwrap());
     let stream = Some(boxed);
-    vcustom.custom = Some(Box::new(ReadWriteCustom{ stream }));
+    vcustom.custom = Box::new(ReadWriteCustom{ stream });
   } else if custom.as_any_mut().downcast_mut::<ReadWriteCustom>().is_some() {
   } else { return state.eval_error("BAD ARGUMENT TYPE", w) };
   state
@@ -450,10 +444,7 @@ pub fn cog_fquestionmark(mut state: CognitionState, w: Option<&Value>) -> Cognit
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         questionmark(&state, &mut file.file.as_mut().unwrap());
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
@@ -498,10 +489,7 @@ pub fn cog_fperiod(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut file.file.as_mut().unwrap(), "\n");
@@ -569,10 +557,7 @@ pub fn cog_fwrite(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(file.file.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
@@ -635,10 +620,7 @@ pub fn cog_fprint(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
         fwrite_check!(file.file.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
@@ -695,10 +677,7 @@ pub fn cog_fread(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let mut vword = if let Ok(metadata) = file.file.as_mut().unwrap().metadata() {
           state.pool.get_vword(metadata.len() as usize)
@@ -781,10 +760,7 @@ pub fn cog_read_until(mut state: CognitionState, w: Option<&Value>) -> Cognition
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
         let mut bytes = Vec::with_capacity(DEFAULT_BUFFER_CAPACITY);
         if let Err(e) = bufreader.bufreader.as_mut().unwrap().read_until(byte, &mut bytes) {
@@ -864,10 +840,7 @@ pub fn cog_read_until(mut state: CognitionState, w: Option<&Value>) -> Cognition
 //   let val = v.value_stack().first_mut().unwrap();
 //   match val {
 //     Value::Custom(vcustom) => {
-//       let Some(custom) = &mut vcustom.custom else {
-//         stack.push(v);
-//         return state.eval_error("BAD ARGUMENT TYPE", w)
-//       };
+//       let custom = &mut vcustom.custom;
 //       if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
 //         if let Err(e) = bufreader.bufreader.as_mut().unwrap().skip_until(byte) {
 //           let _ = stderr().write(format!("{e}").as_bytes());
@@ -909,10 +882,7 @@ pub fn cog_read_line(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
         let mut vword = state.pool.get_vword(DEFAULT_STRING_LENGTH);
         if let Err(e) = bufreader.bufreader.as_mut().unwrap().read_line(&mut vword.str_word) {
@@ -990,11 +960,7 @@ pub fn cog_seek(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        stack.push(idxval);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         match_seek!(state, w, stack, file.file.as_mut().unwrap(), v, idxval, SeekFrom::Start(idx));
       } else if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
@@ -1008,6 +974,7 @@ pub fn cog_seek(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
           match_seek!(state, w, stack, file, v, idxval, SeekFrom::Start(idx));
         } else {
           stack.push(v);
+          stack.push(idxval);
           return state.eval_error("NOT SEEKABLE", w)
         }
       } else {
@@ -1036,10 +1003,7 @@ pub fn cog_seek_end(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         if file.file.as_mut().unwrap().seek(SeekFrom::End(0)).is_err() {
           return state.eval_error("SEEK FAILED", w)
@@ -1131,10 +1095,7 @@ pub fn cog_streampos(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         streampos!(state, w, file.file.as_mut().unwrap(), v);
       } else if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
@@ -1191,11 +1152,7 @@ pub fn cog_seek_relative(mut state: CognitionState, w: Option<&Value>) -> Cognit
   let val = v.value_stack().first_mut().unwrap();
   match val {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        stack.push(v);
-        stack.push(idxval);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         match_seek!(state, w, stack, file.file.as_mut().unwrap(), v, idxval, SeekFrom::Current(idx));
       } else if let Some(bufreader) = custom.as_any_mut().downcast_mut::<BufReadCustom>() {
@@ -1209,6 +1166,7 @@ pub fn cog_seek_relative(mut state: CognitionState, w: Option<&Value>) -> Cognit
           match_seek!(state, w, stack, file, v, idxval, SeekFrom::Current(idx));
         } else {
           stack.push(v);
+          stack.push(idxval);
           return state.eval_error("NOT SEEKABLE", w)
         }
       } else {
@@ -1235,13 +1193,12 @@ macro_rules! iotype_questionmark {
     let vstack = v.value_stack_ref();
     if vstack.len() == 1 {
       if let Value::Custom(vcustom) = vstack.first().unwrap() {
-        if let Some(ref custom) = vcustom.custom {
-          if custom.as_any().downcast_ref::<$type>().is_some() {
-            let mut vw = $state.pool.get_vword(1);
-            vw.str_word.push('t');
-            $state.push_quoted(Value::Word(vw));
-            return $state
-          }
+        let custom = &vcustom.custom;
+        if custom.as_any().downcast_ref::<$type>().is_some() {
+          let mut vw = $state.pool.get_vword(1);
+          vw.str_word.push('t');
+          $state.push_quoted(Value::Word(vw));
+          return $state
         }
       }
     }

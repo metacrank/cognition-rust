@@ -36,7 +36,7 @@ pub fn cog_setf(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
     return state.eval_error("BAD ARGUMENT TYPE", w);
   }
   if state.current().faliases.is_none() {
-    state.current().faliases = Some(state.pool.get_faliases());
+    state.current().faliases = Some(state.pool.get_faliases(DEFAULT_FALIASES_SIZE));
   }
   let mut faliases = state.current().faliases.take().unwrap();
   for s in faliases.drain() { state.pool.add_string(s); }
@@ -60,7 +60,7 @@ pub fn cog_aliasf(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
     return state.eval_error("BAD ARGUMENT TYPE", w);
   }
   if state.current().faliases.is_none() {
-    state.current().faliases = Some(state.pool.get_faliases());
+    state.current().faliases = Some(state.pool.get_faliases(DEFAULT_FALIASES_SIZE));
   }
   let mut faliases = state.current().faliases.take().unwrap();
   for v in lstack.iter() { faliases.insert(state.string_copy(&v.vword_ref().str_word)); }
@@ -401,7 +401,7 @@ pub fn cog_column(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
 pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(mut v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let stack = v.value_stack_ref();
-  if stack.len() == 0 {
+  if stack.len() == 0 || stack.len() > 2 {
     state.pool.add_val(v);
     return state;
   }
@@ -420,19 +420,20 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     Value::Macro(_) => v,
     _ => bad_value_err!(),
   };
-  for v in val.value_stack_ref().iter() {
-    let mut parser = state.pool.get_parser();
-    parser.reset(state.string_copy(&v.vword_ref().str_word), None);
-    loop {
-      let w = parser.get_next(&mut state);
-      match w {
-        Some(v) => state = state.eval(v),
-        None => break,
-      }
-      if state.exited { break }
+  let v = val.value_stack_ref().first().unwrap();
+  let filename = if let Some(v) = val.value_stack_ref().get(1) {
+    Some(state.string_copy(&v.vword_ref().str_word))
+  } else { None };
+  let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)), filename);
+  loop {
+    let w = parser.get_next(&mut state);
+    match w {
+      Some(v) => state = state.eval(v),
+      None => break,
     }
-    state.pool.add_parser(parser);
+    if state.exited { break }
   }
+  state.pool.add_parser(parser);
   if val.is_stack() {
     if let Some(wd) = state.family.pop() {
       state.pool.add_word_def(wd) }}

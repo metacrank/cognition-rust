@@ -130,6 +130,12 @@ pub fn cog_put(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   state
 }
 
+pub fn cog_invert(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(v) = state.current().stack.last_mut() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  v.value_stack().reverse();
+  state
+}
+
 pub fn cog_dip(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
   let vdip = state.current().stack.pop().unwrap();
@@ -337,6 +343,7 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "compose", cog_compose);
   add_word!(state, "prepose", cog_prepose);
   add_word!(state, "put", cog_put);
+  add_word!(state, "invert", cog_invert);
   add_word!(state, "if", cog_if, EVAL);
   add_word!(state, "dip", cog_dip);
   add_word!(state, "split", cog_split);

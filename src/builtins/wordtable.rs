@@ -110,7 +110,7 @@ pub fn cog_bequeath(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   if v_words_stack.iter().all(closure) {
     let v_child_container = &mut v_child.vstack_mut().container;
     if v_child_container.word_table.is_none() {
-      v_child_container.word_table = Some(state.pool.get_word_table());
+      v_child_container.word_table = Some(state.pool.get_word_table(v_words_stack.len() * 2));
     }
     let wt = v_child_container.word_table.as_mut().unwrap();
     for name_v in v_words_stack.iter() {
@@ -119,7 +119,7 @@ pub fn cog_bequeath(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
         wt.insert(name, wd.clone());
       } else {
         if v_child_container.faliases.is_none() {
-          v_child_container.faliases = Some(state.pool.get_faliases());
+          v_child_container.faliases = Some(state.pool.get_faliases(DEFAULT_FALIASES_SIZE));
         }
         v_child_container.faliases.as_mut().unwrap().insert(name);
       }

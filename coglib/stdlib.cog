@@ -38,6 +38,8 @@
 [ meta ] ( qstack reset ) def
 [ meta-unsafe ] ( uncd quote cd reset ) def # more efficient in most cases but does not preserve root in chroots
 [ parent ] ( qstack [ 1 ] crank ) def # qstack halt in baremetal environments
+[ pop ] ( ( uncd ) dip ) def
+[ popf ] ( ( uncdf ) dip ) def
 [ exit-chroot ] ( root popf ) def
 
 # Error extension

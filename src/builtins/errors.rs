@@ -152,10 +152,7 @@ pub fn cog_fewrite(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
 
   match v.value_stack().first_mut().unwrap() {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        state.current().stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         estack.last().as_ref().unwrap().fprint(file.file.as_mut().unwrap(), "\n");
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
@@ -201,10 +198,7 @@ pub fn cog_feprint(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
 
   match v.value_stack().first_mut().unwrap() {
     Value::Custom(vcustom) => {
-      let Some(custom) = &mut vcustom.custom else {
-        state.current().stack.push(v);
-        return state.eval_error("BAD ARGUMENT TYPE", w)
-      };
+      let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         estack.last().as_ref().unwrap().fprint(file.file.as_mut().unwrap(), "\n");
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {

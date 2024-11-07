@@ -150,10 +150,7 @@ pub struct Math {
   d_idx: HashMap<char, i32>,
   mul: HashMap<(char, char), (i32, i32)>,
 
-  pub un_ops: Vec<UnaryOp>,
-  pub bin_ops: Vec<BinaryOp>,
-  pub str_ops: Vec<StrOp>,
-  pub custom_ops: Vec<CustomOp>,
+  pub ops_table: OpsTable,
 
   negc: Option<char>,
   radix: Option<char>,
@@ -164,24 +161,30 @@ pub struct Math {
 
 impl Math {
   pub fn new() -> Self {
-    Self { base: 0, digits: Vec::<char>::new(),
-           d_idx: HashMap::new(), mul: HashMap::new(),
-           un_ops: Vec::new(), bin_ops: Vec::new(),
-           str_ops: Vec::new(), custom_ops: Vec::new(),
-           negc: None, radix: None, delim: None,
-           meta_radix: None, meta_delim: None }
+    Self {
+      base: 0,
+      digits: Vec::new(),
+      d_idx: HashMap::new(),
+      mul: HashMap::new(),
+      ops_table: OpsTable::new(),
+      negc: None,
+      radix: None,
+      delim: None,
+      meta_radix: None,
+      meta_delim: None
+    }
   }
 
-  pub fn clean(&mut self) {
+  pub fn clean(&mut self, p: &mut Pool) {
     self.base = 0;
     self.digits.clear();
     self.d_idx.drain();
     self.mul.drain();
 
-    for ht in self.un_ops.iter_mut()     { ht.drain(); }
-    for ht in self.bin_ops.iter_mut()    { ht.drain(); }
-    for ht in self.str_ops.iter_mut()    { ht.drain(); }
-    for ht in self.custom_ops.iter_mut() { ht.drain(); }
+    for (key, op) in self.ops_table.drain() {
+      p.add_string(key);
+      p.add_op(op);
+    }
 
     self.negc = None;
     self.radix = None;
@@ -190,6 +193,7 @@ impl Math {
     self.meta_delim = None;
   }
 
+  // Assumes that the new math is clean
   pub fn copy_into(&self, math: &mut Math, state: &mut CognitionState) {
     math.base = self.base.clone();
     for d in self.digits.iter() {
@@ -204,34 +208,40 @@ impl Math {
     for ((d11, d12), (d21, d22)) in self.mul.iter() {
       math.mul.insert((d11.clone(), d12.clone()), (d21.clone(), d22.clone()));
     }
-    for op in self.un_ops.iter() {
-      let mut new_op = state.pool.get_un_op();
-      for (d1, d2) in op.iter() {
-        new_op.insert(d1.clone(), d2.clone());
-      }
-      math.un_ops.push(new_op);
+    for (key, op) in self.ops_table.iter() {
+      let new_op = match op {
+        Op::Unary(u) => {
+          let mut table = state.pool.get_un_op();
+          for (operand1, operand2) in u.iter() {
+            table.insert(operand1.clone(), operand2.clone());
+          }
+          Op::Unary(table)
+        },
+        Op::Binary(b) => {
+          let mut table = state.pool.get_bin_op();
+          for (operand1, operand2) in b.iter() {
+            table.insert(operand1.clone(), operand2.clone());
+          }
+          Op::Binary(table)
+        },
+        Op::Str(s) => {
+          let mut table = state.pool.get_str_op();
+          for (operand1, operand2) in s.iter() {
+            table.insert(operand1.clone(), operand2.clone());
+          }
+          Op::Str(table)
+        },
+        Op::Custom(c) => {
+          let mut table = state.pool.get_custom_op();
+          for (operand1, operand2) in c.iter() {
+            table.insert(operand1.clone(), operand2.clone());
+          }
+          Op::Custom(table)
+        }
+      };
+      math.ops_table.insert(state.string_copy(key), new_op);
     }
-    for op in self.bin_ops.iter() {
-      let mut new_op = state.pool.get_bin_op();
-      for ((d11, d12), (d21, d22)) in op.iter() {
-        new_op.insert((d11.clone(), d12.clone()), (d21.clone(), d22.clone()));
-      }
-      math.bin_ops.push(new_op);
-    }
-    for op in self.str_ops.iter() {
-      let mut new_op = state.pool.get_str_op();
-      for (s1, s2) in op.iter() {
-        new_op.insert(s1.clone(), s2.clone());
-      }
-      math.str_ops.push(new_op);
-    }
-    for op in self.custom_ops.iter() {
-      let mut new_op = state.pool.get_custom_op();
-      for (c1, c2) in op.iter() {
-        new_op.insert(c1.clone(), c2.clone());
-      }
-      math.custom_ops.push(new_op);
-    }
+
     math.negc = self.negc.clone();
     math.radix = self.radix.clone();
     math.delim = self.delim.clone();

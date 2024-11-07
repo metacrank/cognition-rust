@@ -189,7 +189,7 @@ pub struct VFLLib {
   pub str_word: Option<String>,
 }
 pub struct VCustom {
-  pub custom: Option<Box<dyn CustomAny>>,
+  pub custom: Box<dyn CustomAny>,
 }
 #[derive(PartialEq, Eq, Clone)]
 pub enum VControl {
@@ -246,7 +246,7 @@ impl VFLLib {
 }
 impl VCustom {
   pub fn with_custom(custom: Box<dyn CustomAny>) -> VCustom {
-    VCustom{ custom: Some(custom) }
+    VCustom{ custom }
   }
   pub fn with_void() -> VCustom {
     Self::with_custom(Box::new(Void{}))
@@ -335,12 +335,12 @@ impl Value {
         }
       },
       Self::Custom(vcustom) => {
-        if let Some(ref c) = vcustom.custom { c.printfunc(f) }
-        else {
-          fwrite_check!(f, HBLK);
-          fwrite_check!(f, b"(void)");
-          fwrite_check!(f, COLOR_RESET);
-        }
+        vcustom.custom.printfunc(f);
+        // else {
+        //   fwrite_check!(f, HBLK);
+        //   fwrite_check!(f, b"(void)");
+        //   fwrite_check!(f, COLOR_RESET);
+        // }
       },
       Self::Control(vcontrol) => {
         fwrite_check_pretty!(f, GRN);
@@ -751,7 +751,7 @@ impl CognitionState {
       math.copy_into(new_math, self);
     }
     if let Some(ref faliases) = old.faliases {
-      new.faliases = Some(self.pool.get_faliases());
+      new.faliases = Some(self.pool.get_faliases(faliases.capacity()));
       let new_faliases = new.faliases.as_mut().unwrap();
       for alias in faliases.iter() {
         new_faliases.insert(self.string_copy(alias));
@@ -771,7 +771,7 @@ impl CognitionState {
     new.sflag = old.sflag;
 
     if let Some(ref word_table) = old.word_table {
-      new.word_table = Some(self.pool.get_word_table());
+      new.word_table = Some(self.pool.get_word_table(word_table.capacity()));
       for (key, word_def) in word_table.iter() {
         new.word_table.as_mut().unwrap().insert(self.string_copy(key), word_def.clone());
       }
@@ -820,17 +820,18 @@ impl CognitionState {
         Value::FLLib(new_vfllib)
       },
       Value::Custom(vcustom) => Value::Custom({
-        match vcustom.custom {
-          Some(ref custom) => self.pool.get_vcustom(custom.copyfunc()),
-          None             => VCustom{ custom: None },
-        }
+        VCustom::with_custom(vcustom.custom.copyfunc())
+        // match vcustom.custom {
+        //   Some(ref custom) => self.pool.get_vcustom(custom.copyfunc()),
+        //   None             => VCustom{ custom: None },
+        // }
       }),
       Value::Control(vcontrol) => Value::Control(vcontrol.clone()),
     }
   }
 
   pub fn default_faliases(&mut self) -> Option<Faliases> {
-    let mut f = self.pool.get_faliases();
+    let mut f = self.pool.get_faliases(DEFAULT_FALIASES_SIZE);
     f.insert(String::from("f"));
     f.insert(String::from("ing"));
     Some(f)
@@ -851,7 +852,7 @@ impl CognitionState {
 
   pub fn def(&mut self, v: Value, name: String) {
     if self.current_ref().word_table.is_none() {
-      self.current().word_table = Some(self.pool.get_word_table());
+      self.current().word_table = Some(self.pool.get_word_table(DEFAULT_WORD_TABLE_SIZE));
     }
     let word_def = self.pool.get_word_def(v);
     if let Some(v) = self.current().word_table.as_mut().unwrap().insert(name, word_def) {

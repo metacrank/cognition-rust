@@ -205,8 +205,7 @@ pub fn cog_fllib_count(mut state: CognitionState, w: Option<&Value>) -> Cognitio
 }
 
 pub fn cog_void(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
-  let vcustom = state.pool.get_vcustom(Box::new(Void{}));
-  state.push_quoted(Value::Custom(vcustom));
+  state.push_quoted(Value::Custom(VCustom::with_void()));
   state
 }
 
@@ -217,8 +216,7 @@ pub fn cog_void_questionmark(mut state: CognitionState, w: Option<&Value>) -> Co
   let Value::Custom(vcustom) = v.value_stack_ref().first().unwrap() else {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let Some(ref custom) = vcustom.custom else { return state.eval_error("BAD ARGUMENT TYPE", w) };
-  let vword = if custom.as_any().downcast_ref::<Void>().is_some() {
+  let vword = if vcustom.custom.as_any().downcast_ref::<Void>().is_some() {
     let mut vword = state.pool.get_vword(1);
     vword.str_word.push('t');
     vword
@@ -229,16 +227,20 @@ pub fn cog_void_questionmark(mut state: CognitionState, w: Option<&Value>) -> Co
   state
 }
 
-pub fn cog_coglib_dir(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
-  match std::env::var("COGLIB_DIR") {
+pub fn cog_var(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let mut vw = get_word!(state, w);
+  let vword = vw.value_stack_ref().first().unwrap().vword_ref();
+  match std::env::var(&vword.str_word) {
     Ok(val) => {
       let mut vword = state.pool.get_vword(val.len());
       vword.str_word.push_str(&val);
+      state.pool.add_val(vw);
       state.push_quoted(Value::Word(vword));
     },
     Err(_) => {
-      let stack = state.pool.get_vstack(0);
-      state.current().stack.push(Value::Stack(stack));
+      let v = vw.value_stack().pop().unwrap();
+      state.pool.add_val(v);
+      state.current().stack.push(vw);
     }
   }
   state
@@ -327,7 +329,7 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "fllib-count", cog_fllib_count);
   add_word!(state, "void", cog_void);
   add_word!(state, "void?", cog_void_questionmark);
-  add_word!(state, "coglib-dir", cog_coglib_dir);
+  add_word!(state, "var", cog_var);
   add_word!(state, "getp", cog_getp);
   add_word!(state, "setp", cog_setp);
 }

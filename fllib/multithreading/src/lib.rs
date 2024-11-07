@@ -48,7 +48,7 @@ pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     let copy = wrapper;
     CogStateWrapper{ cogstate: copy.cogstate.crank() }
   });
-  let vhandler = state.pool.get_vcustom(Box::new(ThreadCustom{ handle: Some(handle) }));
+  let vhandler = VCustom::with_custom(Box::new(ThreadCustom{ handle: Some(handle) }));
   state.push_quoted(Value::Custom(vhandler));
   state
 }
@@ -67,10 +67,7 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  let Some(custom) = &mut vcustom.custom else {
-    stack.push(v);
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  };
+  let custom = &mut vcustom.custom;
   if let Some(handler) = custom.as_any_mut().downcast_mut::<ThreadCustom>() {
     if let Some(handle) = handler.handle.take() {
       if let Ok(cogstatewrapper) = handle.join() {

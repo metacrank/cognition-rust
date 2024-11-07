@@ -1,26 +1,7 @@
 use cognition::*;
-use std::env::{var,set_var,remove_var};
+use std::env::{set_var,remove_var};
 
-pub fn cog_getenv(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let mut vw = get_word!(state, w);
-  let vword = vw.value_stack_ref().first().unwrap().vword_ref();
-  match var(&vword.str_word) {
-    Ok(val) => {
-      let mut vword = state.pool.get_vword(val.len());
-      vword.str_word.push_str(&val);
-      state.pool.add_val(vw);
-      state.push_quoted(Value::Word(vword));
-    },
-    Err(_) => {
-      let v = vw.value_stack().pop().unwrap();
-      state.pool.add_val(v);
-      state.current().stack.push(vw);
-    }
-  }
-  state
-}
-
-pub fn cog_setenv(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+pub fn cog_set_var(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let (v1, v2) = get_2_words!(state, w);
   let vword1 = v1.value_stack_ref().first().unwrap().vword_ref();
   let vword2 = v2.value_stack_ref().first().unwrap().vword_ref();
@@ -30,7 +11,7 @@ pub fn cog_setenv(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   state
 }
 
-pub fn cog_rmenv(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+pub fn cog_remove_var(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let vw = get_word!(state, w);
   let vword = vw.value_stack_ref().first().unwrap().vword_ref();
   remove_var(&vword.str_word);
@@ -40,7 +21,6 @@ pub fn cog_rmenv(mut state: CognitionState, w: Option<&Value>) -> CognitionState
 
 #[no_mangle]
 pub extern fn add_words(state: &mut CognitionState) {
-  add_word!(state, "getenv", cog_getenv);
-  add_word!(state, "setenv", cog_setenv);
-  add_word!(state, "rmenv", cog_rmenv);
+  add_word!(state, "set-var", cog_set_var);
+  add_word!(state, "remove-var", cog_remove_var);
 }
