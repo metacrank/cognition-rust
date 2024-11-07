@@ -424,16 +424,19 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   let filename = if let Some(v) = val.value_stack_ref().get(1) {
     Some(state.string_copy(&v.vword_ref().str_word))
   } else { None };
-  let mut parser = Parser::new(Some(state.string_copy(&v.vword_ref().str_word)), filename);
+  let oldparser = state.parser.take();
+  state.parser = Some(Parser::new(Some(state.string_copy(&v.vword_ref().str_word)), filename));
   loop {
-    let w = parser.get_next(&mut state);
+    let w = state.parser_get_next();
     match w {
       Some(v) => state = state.eval(v),
       None => break,
     }
     if state.exited { break }
   }
-  state.pool.add_parser(parser);
+  let parser = state.parser.take();
+  state.parser = oldparser;
+  if let Some(parser) = parser { state.pool.add_parser(parser) }
   if val.is_stack() {
     if let Some(wd) = state.family.pop() {
       state.pool.add_word_def(wd) }}
