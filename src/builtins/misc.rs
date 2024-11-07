@@ -276,7 +276,6 @@ pub fn cog_getp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state
 }
 
-// TODO: Take into account position of metaradix
 pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let v = get_word!(state, w);
   let Some(math) = state.current().math.take() else {
@@ -289,13 +288,17 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
     return state.eval_error("MATH BASE ZERO", w)
   }
   let mut array: [isize;32] = [0;32];
-  let mut idx_beg = 0;
-  let mut array_idx = 0;
+  let mut array_idx = 31;
   let string = &v.value_stack_ref().first().unwrap().vword_ref().str_word;
-  for (i, c) in string.char_indices() {
-    if array_idx >= 32 { break }
+  let mut iter = string.char_indices().rev();
+  let mut idx_last = loop {
+    let Some((i, c)) = iter.next() else { break string.len() };
+    if c == math.get_meta_radix().unwrap() { break i }
+  };
+  let iter = string[..idx_last].char_indices().rev();
+  for (i, c) in iter {
     if c == math.get_meta_delim().unwrap() {
-      match math.stoi(&string[idx_beg..i]) {
+      match math.stoi(&string[i+1..idx_last]) {
         Ok(int) => array[array_idx] = int,
         Err(e) => {
           state.current().math = Some(math);
@@ -303,8 +306,19 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
           return state.eval_error(e, w)
         }
       }
-      idx_beg = i;
-      array_idx += 1;
+      if array_idx == 0 { break }
+      idx_last = i;
+      array_idx -= 1;
+    }
+    if i == 0 {
+      match math.stoi(&string[..idx_last]) {
+        Ok(int) => array[array_idx] = int,
+        Err(e) => {
+          state.current().math = Some(math);
+          state.current().stack.push(v);
+          return state.eval_error(e, w)
+        }
+      }
     }
   }
   state.current().math = Some(math);
