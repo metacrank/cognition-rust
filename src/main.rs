@@ -7,6 +7,8 @@ use cognition::*;
 use cognition::macros::*;
 use cognition::math::Math;
 
+const VERSION: &'static str = "0.2.1 alpha";
+
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
   let argc = args.len();
@@ -195,7 +197,7 @@ fn help() -> ExitCode {
 
 fn version() -> ExitCode {
   println!("Authors: Matthew Hinton, Preston Pan, MIT License 2024");
-  println!("cognition, version 0.2.0 alpha");
+  println!("cognition, version {VERSION}");
   ExitCode::from(0)
 }
 
