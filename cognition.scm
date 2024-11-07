@@ -12,16 +12,16 @@
 (define-public cognition
   (package
    (name "cognition")
-   (version "0.1.2")
+   (version "0.2.0")
    (source
     (origin
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "f3306c7ae84df354b8cddf78db6c2ee46a7c74c0")))
+           (commit "b6be32e63923790b1e5e2430e01786be4e6ae15b")))
      (sha256
       (base32
-       "0v67j6n75bqrr4q8awcwzfmj9ssplkhn4picdsb2jymxr3njwas0"))))
+       "0n2z4czpbxn5m69vaja2f7bbq4zcbz04dra690z5ns11jnsnkg3y"))))
    (build-system cargo-build-system)
    (arguments
     `(#:cargo-inputs
