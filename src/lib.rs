@@ -19,7 +19,6 @@ use std::io::Write;
 use std::io::stdout;
 use std::sync::Arc;
 use std::any::Any;
-//use std::time::Instant;
 
 use libloading;
 

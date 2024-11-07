@@ -1,6 +1,7 @@
 use std::process::ExitCode;
 use std::env;
 use std::fs;
+use std::fs::File;
 
 use cognition::*;
 use cognition::macros::*;
@@ -21,6 +22,16 @@ fn main() -> ExitCode {
   if opts.fileidx == 0 && opts.s != 0 {
     return usage(3);
   }
+
+  let mut logfile = if let Some(ref s) = opts.l {
+    match File::options().write(true).truncate(true).create(true).open(s) {
+      Ok(f) => Some(f),
+      Err(e) => {
+        println!("Could not open logfile: {}: {e}", opts.l.as_ref().unwrap());
+        return ExitCode::from(4);
+      }
+    }
+  } else { None };
 
   // Initialize state
   let metastack = Stack::with_capacity(DEFAULT_STACK_SIZE);
@@ -59,7 +70,10 @@ fn main() -> ExitCode {
     loop {
       let w = state.parser_get_next();
       match w {
-        Some(v) => state = state.eval(v),
+        Some(v) => {
+          if let Some(f) = &mut logfile { v.fprint(f, "\n") }
+          state = state.eval(v)
+        },
         None => break,
       }
       if state.exited { break }
@@ -74,6 +88,7 @@ fn main() -> ExitCode {
 struct Config {
   h: bool,
   c: Option<String>,
+  l: Option<String>,
   q: bool,
   v: bool,
   s: usize,
@@ -96,7 +111,7 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
   math.set_base(24);
 
   let (mut h, mut q, mut v) = (false, false, false);
-  let mut c = None;
+  let (mut c, mut l) = (None, None);
   let mut s: i32 = -1;
   let mut fileidx = 0;
 
@@ -112,6 +127,12 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
         else if i + 1 == argc { return Err(usage(3)); }
         i += 1;
         c = Some(args[i].clone());
+      }
+      "-l" | "--log-file" => {
+        if l.is_some() { return Err(usage(1)); }
+        else if i + 1 == argc { return Err(usage(3)); }
+        i += 1;
+        l = Some(args[i].clone());
       }
       "-q" | "--quit" => {
         if q { return Err(usage(1)); }
@@ -153,11 +174,11 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
 
   let s: usize = if s < 0 { 1 } else { s as usize };
 
-  Ok(Config{h, c, q, v, s, fileidx})
+  Ok(Config{h, c, l, q, v, s, fileidx})
 }
 
 fn usage(code: u8) -> ExitCode {
-  println!("Usage: crank [-hcqsv] [file...] [arg...]");
+  println!("Usage: crank [-hclqsv] [file...] [arg...]");
   ExitCode::from(code)
 }
 
@@ -165,6 +186,7 @@ fn help() -> ExitCode {
   usage(0);
   println!(" -h    --help            print this help message");
   println!(" -c    --coglib-dir DIR  use DIR as a secondary source directory");
+  println!(" -l    --log-file FILE   enable token logging to FILE");
   println!(" -q    --quiet           don't show state information at program end");
   println!(" -s N  --sources N       specify N source files to be composed (default is N=1)");
   println!(" -v    --version         print version information");

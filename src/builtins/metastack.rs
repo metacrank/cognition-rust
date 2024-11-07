@@ -55,22 +55,6 @@ pub fn cog_uncdf(mut state: CognitionState, _: Option<&Value>) -> CognitionState
   state
 }
 
-// ( pop === ( uncd ) dip )
-// pub fn cog_pop(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-//   let Some(v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-//   state = cog_uncd(state, w);
-//   state.current().stack.push(v);
-//   state
-// }
-
-// ( popf === ( uncdf ) dip )
-// pub fn cog_popf(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-//   let Some(v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-//   state = cog_uncdf(state, w);
-//   state.current().stack.push(v);
-//   state
-// }
-
 pub fn cog_qstack(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let child = state.pop_cur();
   let mut new_stack = state.pool.get_vstack(DEFAULT_STACK_SIZE);
@@ -124,8 +108,6 @@ pub fn add_words(state: &mut CognitionState) {
   add_word!(state, "ccd", cog_ccd);
   add_word!(state, "uncd", cog_uncd);
   add_word!(state, "uncdf", cog_uncdf);
-  // add_word!(state, "pop", cog_pop);
-  // add_word!(state, "popf", cog_popf);
   add_word!(state, "qstack", cog_qstack);
   add_word!(state, "root", cog_root);
   add_word!(state, "su", cog_su);

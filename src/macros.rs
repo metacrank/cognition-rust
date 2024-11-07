@@ -18,8 +18,9 @@ pub const DEFAULT_WORD_TABLE_SIZE: usize = 576;
 pub const DEFAULT_FALIASES_SIZE: usize = 24;
 pub const DEFAULT_BASE: usize = 24;
 
-// pub const EVAL: crate::Value = crate::Value::Control(crate::VControl::Eval);
-// pub const RETURN: crate::Value = crate::Value::Control(crate::VControl::Eval);
+pub const EVAL: crate::Value = crate::Value::Control(crate::VControl::Eval);
+pub const RETURN: crate::Value = crate::Value::Control(crate::VControl::Return);
+pub const GHOST: crate::Value = crate::Value::Control(crate::VControl::Ghost);
 
 #[macro_export]
 macro_rules! bad_value_err {
@@ -107,17 +108,17 @@ macro_rules! build_macro {
   // handle recursion
   ($state:ident,$n:expr,EVAL $(,$fi:ident)*) => {{
     let mut vmacro = build_macro!($state, $n $(,$fi)*);
-    vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Eval));
+    vmacro.macro_stack.push(EVAL);
     vmacro
   }};
   ($state:ident,$n:expr,RETURN $(,$fi:ident)*) => {{
     let mut vmacro = build_macro!($state, $n $(,$fi)*);
-    vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Return));
+    vmacro.macro_stack.push(RETURN);
     vmacro
   }};
   ($state:ident,$n:expr,GHOST $(,$fi:ident)*) => {{
     let mut vmacro = build_macro!($state, $n $(,$fi)*);
-    vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Ghost));
+    vmacro.macro_stack.push(GHOST);
     vmacro
   }};
   ($state:ident,$n:expr,$fn:ident $(,$fi:ident)*) => {{
@@ -142,17 +143,17 @@ macro_rules! build_macro {
 macro_rules! add_word {
   ($state:ident,$name:literal,EVAL) => {
     let mut vmacro = build_macro!($state, 1);
-    vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Eval));
+    vmacro.macro_stack.push(EVAL);
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
   };
   ($state:ident,$name:literal,RETURN) => {
     let mut vmacro = build_macro!($state, 1);
-    vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Return));
+    vmacro.macro_stack.push(RETURN);
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
   };
   ($state:ident,$name:literal,GHOST) => {
     let mut vmacro = build_macro!($state, 1);
-    vmacro.macro_stack.push($crate::Value::Control($crate::VControl::Ghost));
+    vmacro.macro_stack.push(GHOST);
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
   };
   ($state:ident,$name:literal,$f:ident) => {
