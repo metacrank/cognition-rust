@@ -1,7 +1,30 @@
-#![allow(unused_imports)]
 use cognition::*;
-use unicode_segmentation::Graphemes;
 use unicode_segmentation::UnicodeSegmentation;
+
+pub fn cog_gunconcat(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let mut unconcatlen: usize = 0;
+  for val in v.value_stack_ref().iter() {
+    let Value::Word(word) = val else {
+      stack.push(v);
+      return state.eval_error("BAD ARGUMENT TYPE", w)
+    };
+    unconcatlen += word.str_word.len()
+  }
+  let mut newstack = state.pool.get_vstack(unconcatlen);
+  for val in v.value_stack_ref().iter() {
+    let string = &val.vword_ref().str_word;
+    for g in string.graphemes(true) {
+      let mut vword = state.pool.get_vword(1);
+      vword.str_word.push_str(g);
+      newstack.container.stack.push(Value::Word(vword))
+    }
+  }
+  state.pool.add_val(v);
+  state.current().stack.push(Value::Stack(newstack));
+  state
+}
 
 pub fn cog_gcut(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
@@ -62,14 +85,6 @@ pub fn cog_gcut(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state
 }
 
-pub fn cog_gunconcat(state: CognitionState, _w: Option<&Value>) -> CognitionState {
-  state
-}
-
-pub fn cog_gcat(state: CognitionState, _w: Option<&Value>) -> CognitionState {
-  state
-}
-
 pub fn cog_glen(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut cur_v = state.pop_cur();
   let cur = cur_v.metastack_container();
@@ -80,8 +95,7 @@ pub fn cog_glen(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   if !word_v.is_word() { return state.eval_error("BAD ARGUMENT TYPE", w) }
   let Some(ref math) = cur.math else { return state.eval_error("MATH BASE ZERO", w) };
   if math.base() == 0 { return state.eval_error("MATH BASE ZERO", w) }
-  let mut length: usize = 0;
-  for _ in word_v.vword_ref().str_word.graphemes(true) { length += 1 }
+  let length = word_v.vword_ref().str_word.graphemes(true).count();
   if math.base() == 1 && length != 0 {
     return state.eval_error("MATH BASE ONE", w)
   }
@@ -99,24 +113,168 @@ pub fn cog_glen(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   }
 }
 
-pub fn cog_ginsert(state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_gat(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let mut vint = stack.pop().unwrap();
+  let vstr = stack.last().unwrap();
+  if vint.value_stack_ref().len() != 1 || vstr.value_stack_ref().len() != 1 {
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  if !vint.value_stack_ref().first().unwrap().is_word() || !vstr.value_stack_ref().first().unwrap().is_word() {
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let Some(ref math) = state.current_ref().math else {
+    state.current().stack.push(vint);
+    return state.eval_error("MATH BASE ZERO", w)
+  };
+  let vstr_stack = state.current_ref().stack.last().unwrap().value_stack_ref();
+  let string = &vstr_stack.first().unwrap().vword_ref().str_word;
+  let int = match math.stoi(&vint.value_stack_ref().first().unwrap().vword_ref().str_word) {
+    Ok(i) => if i < 0 || i.abs() as usize >= string.len() {
+      state.current().stack.push(vint);
+      return state.eval_error("OUT OF BOUNDS", w)
+    } else {
+      i as usize
+    },
+    Err(e) => {
+      state.current().stack.push(vint);
+      return state.eval_error(e, w)
+    },
+  };
+  if !string.is_char_boundary(int) {
+    state.current().stack.push(vint);
+    return state.eval_error("INVALID CHAR BOUNDARY", w)
+  }
+  let vstr_stack = state.current_ref().stack.last().unwrap().value_stack_ref();
+  let string = &vstr_stack.first().unwrap().vword_ref().str_word;
+  let s = &mut vint.value_stack().first_mut().unwrap().vword_mut().str_word;
+  s.clear();
+  s.push_str(string[int..].graphemes(true).next().unwrap());
+  state.current().stack.push(vint);
   state
 }
 
-pub fn cog_greverse(state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_gnth(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let mut vint = stack.pop().unwrap();
+  let vstr = stack.last().unwrap();
+  if vint.value_stack_ref().len() != 1 || vstr.value_stack_ref().len() != 1 {
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  if !vint.value_stack_ref().first().unwrap().is_word() || !vstr.value_stack_ref().first().unwrap().is_word() {
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let Some(ref math) = state.current_ref().math else {
+    state.current().stack.push(vint);
+    return state.eval_error("MATH BASE ZERO", w)
+  };
+  let vstr_stack = state.current_ref().stack.last().unwrap().value_stack_ref();
+  let string = &vstr_stack.first().unwrap().vword_ref().str_word;
+  let int = match math.stoi(&vint.value_stack_ref().first().unwrap().vword_ref().str_word) {
+    Ok(i) => if i < 0 || i.abs() as usize >= string.len() {
+      state.current().stack.push(vint);
+      return state.eval_error("OUT OF BOUNDS", w)
+    } else {
+      i as usize
+    },
+    Err(e) => {
+      state.current().stack.push(vint);
+      return state.eval_error(e, w)
+    },
+  };
+  let mut iter = string.graphemes(true);
+  for _ in 0..int { iter.next(); }
+  match iter.next() {
+    Some(g) => {
+      let s = &mut vint.value_stack().first_mut().unwrap().vword_mut().str_word;
+      s.clear();
+      s.push_str(g);
+    },
+    None => {
+      state.current().stack.push(vint);
+      return state.eval_error("OUT OF BOUNDS", w)
+    }
+  }
+  state.current().stack.push(vint);
   state
 }
 
-pub fn cog_gtoi(state: CognitionState, _w: Option<&Value>) -> CognitionState {
+pub fn cog_greverse(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let Value::Word(vw) = v.value_stack_ref().first().unwrap() else {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let mut new_vword = state.pool.get_vword(vw.str_word.len());
+  for g in vw.str_word.graphemes(true).rev() {
+    new_vword.str_word.push_str(g);
+  }
+  state.pool.add_val(v.value_stack().pop().unwrap());
+  v.value_stack().push(Value::Word(new_vword));
+  state.current().stack.push(v);
   state
 }
 
-pub fn cog_itog(state: CognitionState, _w: Option<&Value>) -> CognitionState {
-  state
+pub fn cog_gtoi(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().len() != 1 {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let char_v = v.value_stack().first_mut().unwrap();
+  let Value::Word(vword_char) = char_v else {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let mut graphemes = vword_char.str_word.graphemes(true);
+  let g = graphemes.next();
+  if g.is_none() || graphemes.next().is_some() {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let Some(math) = state.current().math.take() else {
+    state.current().stack.push(v);
+    return state.eval_error("MATH BASE ZERO", w)
+  };
+  let mut agg: isize = 0;
+  for c in g.unwrap().chars().rev() {
+    agg = agg * 0x100000000 + c as isize;
+  }
+  match math.itos(agg, &mut state) {
+    Ok(mut s) => {
+      state.current().math = Some(math);
+      std::mem::swap(&mut vword_char.str_word, &mut s);
+      state.pool.add_string(s);
+      state.current().stack.push(v);
+      state
+    },
+    Err(e) => {
+      state.current().math = Some(math);
+      state.current().stack.push(v);
+      state.eval_error(e, w)
+    }
+  }
 }
 
 #[no_mangle]
-pub extern fn add_words(state: &mut CognitionState) {
-  add_word!(state, "gcut", cog_gcut);
-  add_word!(state, "glen", cog_glen);
+pub extern fn add_words(state: &mut CognitionState, lib: &Library, lib_name: &String) {
+  add_word!(state, lib, lib_name, "gunconcat", cog_gunconcat);
+  add_word!(state, lib, lib_name, "gcut", cog_gcut);
+  add_word!(state, lib, lib_name, "glen", cog_glen);
+  add_word!(state, lib, lib_name, "gat", cog_gat);
+  add_word!(state, lib, lib_name, "gnth", cog_gnth);
+  add_word!(state, lib, lib_name, "greverse", cog_greverse);
+  add_word!(state, lib, lib_name, "gtoi", cog_gtoi);
 }

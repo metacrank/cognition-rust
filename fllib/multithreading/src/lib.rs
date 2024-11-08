@@ -87,9 +87,6 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
         while let Some(arg) = cogstate.args.pop() {
           state.pool.add_val(arg)
         }
-        while let Some(lib) = cogstate.fllibs.pop() {
-          state.fllibs.push(lib)
-        }
       } else {
         let empty = state.pool.get_vstack(0);
         state.current().stack.push(Value::Stack(empty));
@@ -108,7 +105,7 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
 }
 
 #[no_mangle]
-pub extern fn add_words(state: &mut CognitionState) {
-  add_word!(state, "spawn", cog_spawn);
-  add_word!(state, "thread", cog_thread);
+pub extern fn add_words(state: &mut CognitionState, lib: &Library, lib_name: &String) {
+  add_word!(state, lib, lib_name, "spawn", cog_spawn);
+  add_word!(state, lib, lib_name, "thread", cog_thread);
 }

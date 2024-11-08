@@ -471,29 +471,29 @@ pub fn cog_strstack(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   state
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "getf", cog_getf);
-  add_word!(state, "setf", cog_setf);
-  add_word!(state, "aliasf", cog_aliasf);
-  add_word!(state, "unaliasf", cog_unaliasf);
-  add_word!(state, "d", cog_d);
-  add_word!(state, "i", cog_i);
-  add_word!(state, "s", cog_s);
-  add_word!(state, "dtgl", cog_dtgl);
-  add_word!(state, "itgl", cog_itgl);
-  add_word!(state, "stgl", cog_stgl);
-  add_word!(state, "getd", cog_getd);
-  add_word!(state, "geti", cog_geti);
-  add_word!(state, "gets", cog_gets);
-  add_word!(state, "delim", cog_delim);
-  add_word!(state, "ignore", cog_ignore);
-  add_word!(state, "singlet", cog_singlet);
-  add_word!(state, "undelim", cog_undelim);
-  add_word!(state, "unignore", cog_unignore);
-  add_word!(state, "unsinglet", cog_unsinglet);
-  add_word!(state, "filename", cog_filename);
-  add_word!(state, "line", cog_line);
-  add_word!(state, "column", cog_column);
-  add_word!(state, "evalstr", cog_evalstr);
-  add_word!(state, "strstack", cog_strstack);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "getf", cog_getf);
+  add_builtin!(state, "setf", cog_setf);
+  add_builtin!(state, "aliasf", cog_aliasf);
+  add_builtin!(state, "unaliasf", cog_unaliasf);
+  add_builtin!(state, "d", cog_d);
+  add_builtin!(state, "i", cog_i);
+  add_builtin!(state, "s", cog_s);
+  add_builtin!(state, "dtgl", cog_dtgl);
+  add_builtin!(state, "itgl", cog_itgl);
+  add_builtin!(state, "stgl", cog_stgl);
+  add_builtin!(state, "getd", cog_getd);
+  add_builtin!(state, "geti", cog_geti);
+  add_builtin!(state, "gets", cog_gets);
+  add_builtin!(state, "delim", cog_delim);
+  add_builtin!(state, "ignore", cog_ignore);
+  add_builtin!(state, "singlet", cog_singlet);
+  add_builtin!(state, "undelim", cog_undelim);
+  add_builtin!(state, "unignore", cog_unignore);
+  add_builtin!(state, "unsinglet", cog_unsinglet);
+  add_builtin!(state, "filename", cog_filename);
+  add_builtin!(state, "line", cog_line);
+  add_builtin!(state, "column", cog_column);
+  add_builtin!(state, "evalstr", cog_evalstr);
+  add_builtin!(state, "strstack", cog_strstack);
 }

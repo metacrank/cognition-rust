@@ -133,11 +133,11 @@ pub fn cog_bequeath(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   state.eval_error("UNDEFINED WORD", w)
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "def", cog_def);
-  add_word!(state, "undef", cog_undef);
-  add_word!(state, "unglue", cog_unglue);
-  add_word!(state, "def?", cog_def_questionmark);
-  add_word!(state, "wordlist", cog_wordlist);
-  add_word!(state, "bequeath", cog_bequeath);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "def", cog_def);
+  add_builtin!(state, "undef", cog_undef);
+  add_builtin!(state, "unglue", cog_unglue);
+  add_builtin!(state, "def?", cog_def_questionmark);
+  add_builtin!(state, "wordlist", cog_wordlist);
+  add_builtin!(state, "bequeath", cog_bequeath);
 }

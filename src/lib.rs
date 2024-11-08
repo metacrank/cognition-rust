@@ -23,6 +23,9 @@ use std::any::Any;
 use libloading;
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
+pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library, &String);
+
+pub type Functions = Vec<CognitionFunction>;
 pub type Stack = Vec<Value>;
 pub type Cranks = Vec<Crank>;
 pub type Strings = Vec<String>;
@@ -30,6 +33,8 @@ pub type Faliases = HashSet<String>;
 pub type WordDef = Arc<Value>;
 pub type Family = Vec<WordDef>;
 pub type WordTable = HashMap<String, Arc<Value>>;
+
+pub type Library = Arc<libloading::Library>;
 
 pub trait Pretty {
   fn print_pretty(&self);
@@ -87,6 +92,11 @@ pub struct Crank {
   pub base: i32,
 }
 
+pub struct FLLibData {
+  pub library: Library,
+  pub functions: Functions,
+}
+
 pub struct Container {
   pub stack: Stack,
   pub err_stack: Option<Stack>,
@@ -101,6 +111,7 @@ pub struct Container {
   pub sflag: bool,
 
   word_table: Option<WordTable>,
+  pub fllibs: HashMap<String, FLLibData>,
 }
 
 impl Default for Container {
@@ -119,6 +130,7 @@ impl Default for Container {
       sflag: true,
 
       word_table: None,
+      fllibs: HashMap::new()
     }
   }
 }
@@ -183,9 +195,15 @@ pub struct VError {
   str_word: Option<String>,
   loc: Option<VErrorLoc>
 }
+pub struct ForeignLibrary {
+  pub lib: Library,
+  pub lib_name: String,
+}
 pub struct VFLLib {
   fllib: CognitionFunction,
   pub str_word: Option<String>,
+  pub library: Option<ForeignLibrary>,
+  pub key: u32,
 }
 pub struct VCustom {
   pub custom: Box<dyn CustomAny>,
@@ -238,7 +256,7 @@ impl VError {
 }
 impl VFLLib {
   pub fn with_fn(fllib: CognitionFunction) -> VFLLib {
-    VFLLib{ fllib, str_word: None }
+    VFLLib{ fllib, str_word: None, library: None, key: 0}
   }
   pub fn with_nop() -> VFLLib {
     Self::with_fn(builtins::misc::cog_nop)
@@ -336,11 +354,6 @@ impl Value {
       },
       Self::Custom(vcustom) => {
         vcustom.custom.printfunc(f);
-        // else {
-        //   fwrite_check!(f, HBLK);
-        //   fwrite_check!(f, b"(void)");
-        //   fwrite_check!(f, COLOR_RESET);
-        // }
       },
       Self::Control(vcontrol) => {
         fwrite_check_pretty!(f, GRN);
@@ -520,7 +533,7 @@ pub struct CognitionState {
   pub exited: bool,
   pub exit_code: Option<String>,
   pub args: Stack,
-  pub fllibs: Vec<libloading::Library>,
+  pub builtins: Functions,
   pub pool: Pool,
 }
 
@@ -631,7 +644,7 @@ impl CognitionState {
     Self{ chroots: Vec::<Stack>::with_capacity(DEFAULT_STACK_SIZE), stack,
           family: Family::with_capacity(DEFAULT_STACK_SIZE), parser: None,
           exited: false, exit_code: None, args: Stack::new(),
-          fllibs: Vec::<libloading::Library>::new(), pool: Pool::new() }
+          builtins: Vec::with_capacity(BUILTINS_SIZE), pool: Pool::new() }
   }
 
   pub fn verr_loc(&mut self) -> Option<VErrorLoc> {
@@ -669,7 +682,7 @@ impl CognitionState {
     None
   }
 
-  pub fn eval_error(mut self, e: &'static str, w: Option<&Value>) -> Self {
+  pub fn eval_error_mut(&mut self, e: &'static str, w: Option<&Value>) {
     let mut verror = self.pool.get_verror(e.len());
     verror.error.push_str(e);
     verror.str_word = match w {
@@ -683,6 +696,10 @@ impl CognitionState {
     }
     let estack: &mut Stack = &mut self.current().err_stack.as_mut().unwrap();
     estack.push(Value::Error(verror));
+  }
+
+  pub fn eval_error(mut self, e: &'static str, w: Option<&Value>) -> Self {
+    self.eval_error_mut(e, w);
     self
   }
 
@@ -716,6 +733,12 @@ impl CognitionState {
     let retval = parser.get_next(self);
     self.parser = Some(parser);
     retval
+  }
+
+  pub fn fllib_data_copy(&mut self, lib: &FLLibData) -> FLLibData {
+    let mut functions = self.pool.get_functions(lib.functions.len());
+    for f in lib.functions.iter() { functions.push(f.clone()) }
+    FLLibData{ library: lib.library.clone(), functions }
   }
 
   pub fn string_copy(&mut self, s: &String) -> String {
@@ -777,6 +800,9 @@ impl CognitionState {
         new.word_table.as_mut().unwrap().insert(self.string_copy(key), word_def.clone());
       }
     }
+    for (key, lib) in old.fllibs.iter() {
+      new.fllibs.insert(self.string_copy(key), self.fllib_data_copy(lib));
+    }
   }
 
   pub fn value_copy(&mut self, v: &Value) -> Value {
@@ -818,6 +844,13 @@ impl CognitionState {
         if let Some(ref s) = vfllib.str_word {
           new_vfllib.str_word = Some(self.string_copy(s));
         }
+        if let Some(ref library) = vfllib.library {
+          new_vfllib.library = Some(ForeignLibrary{
+            lib: library.lib.clone(),
+            lib_name: self.string_copy(&library.lib_name)
+          });
+        }
+        new_vfllib.key = vfllib.key;
         Value::FLLib(new_vfllib)
       },
       Value::Custom(vcustom) => Value::Custom({

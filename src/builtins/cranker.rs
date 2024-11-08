@@ -103,12 +103,12 @@ pub fn cog_metamodcrank(mut state: CognitionState, w: Option<&Value>) -> Cogniti
   cog_metacrank_val!(state, w, Some(crank), crank.modulo)
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "crank", cog_crank);
-  add_word!(state, "metacrank", cog_metacrank);
-  add_word!(state, "halt", cog_halt);
-  add_word!(state, "crankbase", cog_crankbase);
-  add_word!(state, "modcrank", cog_modcrank);
-  add_word!(state, "metacrankbase", cog_metacrankbase);
-  add_word!(state, "metamodcrank", cog_metamodcrank);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "crank", cog_crank);
+  add_builtin!(state, "metacrank", cog_metacrank);
+  add_builtin!(state, "halt", cog_halt);
+  add_builtin!(state, "crankbase", cog_crankbase);
+  add_builtin!(state, "modcrank", cog_modcrank);
+  add_builtin!(state, "metacrankbase", cog_metacrankbase);
+  add_builtin!(state, "metamodcrank", cog_metamodcrank);
 }

@@ -286,16 +286,16 @@ pub fn cog_esize(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   }
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "eclean", cog_eclean);
-  add_word!(state, "epeek", cog_epeek);
-  add_word!(state, "epop", cog_epop);
-  add_word!(state, "epush", cog_epush);
-  add_word!(state, "edrop", cog_edrop);
-  add_word!(state, "eprint", cog_eprint);
-  add_word!(state, "fewrite", cog_fewrite);
-  add_word!(state, "feprint", cog_feprint);
-  add_word!(state, "eshow", cog_eshow);
-  add_word!(state, "ethrow", cog_ethrow);
-  add_word!(state, "esize", cog_esize);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "eclean", cog_eclean);
+  add_builtin!(state, "epeek", cog_epeek);
+  add_builtin!(state, "epop", cog_epop);
+  add_builtin!(state, "epush", cog_epush);
+  add_builtin!(state, "edrop", cog_edrop);
+  add_builtin!(state, "eprint", cog_eprint);
+  add_builtin!(state, "fewrite", cog_fewrite);
+  add_builtin!(state, "feprint", cog_feprint);
+  add_builtin!(state, "eshow", cog_eshow);
+  add_builtin!(state, "ethrow", cog_ethrow);
+  add_builtin!(state, "esize", cog_esize);
 }

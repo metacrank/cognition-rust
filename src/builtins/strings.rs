@@ -131,6 +131,34 @@ pub fn cog_len(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   }
 }
 
+pub fn cog_clen(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let mut cur_v = state.pop_cur();
+  let cur = cur_v.metastack_container();
+  let Some(v) = cur.stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let v_stack = v.value_stack_ref();
+  if v_stack.len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
+  let word_v = v_stack.first().unwrap();
+  if !word_v.is_word() { return state.eval_error("BAD ARGUMENT TYPE", w) }
+  let Some(ref math) = cur.math else { return state.eval_error("MATH BASE ZERO", w) };
+  if math.base() == 0 { return state.eval_error("MATH BASE ZERO", w) }
+  let length = word_v.vword_ref().str_word.chars().count();
+  if math.base() == 1 && length != 0 {
+    return state.eval_error("MATH BASE ONE", w)
+  }
+  if length > isize::MAX as usize { return state.eval_error("OUT OF BOUNDS", w) }
+  match math.itos(length as isize, &mut state) {
+    Ok(s) => {
+      let mut v = state.pool.get_vword(s.len());
+      v.str_word.push_str(&s);
+      state.pool.add_string(s);
+      state = state.push_cur(cur_v);
+      state.push_quoted(Value::Word(v));
+      state
+    },
+    Err(e) => return state.push_cur(cur_v).eval_error(e, w),
+  }
+}
+
 pub fn cog_cat(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
@@ -171,6 +199,54 @@ pub fn cog_cat(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let s = &mut vint.value_stack().first_mut().unwrap().vword_mut().str_word;
   s.clear();
   s.push(string[int..].chars().next().unwrap().clone());
+  state.current().stack.push(vint);
+  state
+}
+
+pub fn cog_nth(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let mut vint = stack.pop().unwrap();
+  let vstr = stack.last().unwrap();
+  if vint.value_stack_ref().len() != 1 || vstr.value_stack_ref().len() != 1 {
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  if !vint.value_stack_ref().first().unwrap().is_word() || !vstr.value_stack_ref().first().unwrap().is_word() {
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let Some(ref math) = state.current_ref().math else {
+    state.current().stack.push(vint);
+    return state.eval_error("MATH BASE ZERO", w)
+  };
+  let vstr_stack = state.current_ref().stack.last().unwrap().value_stack_ref();
+  let string = &vstr_stack.first().unwrap().vword_ref().str_word;
+  let int = match math.stoi(&vint.value_stack_ref().first().unwrap().vword_ref().str_word) {
+    Ok(i) => if i < 0 || i.abs() as usize >= string.len() {
+      state.current().stack.push(vint);
+      return state.eval_error("OUT OF BOUNDS", w)
+    } else {
+      i as usize
+    },
+    Err(e) => {
+      state.current().stack.push(vint);
+      return state.eval_error(e, w)
+    },
+  };
+  let mut iter = string.chars();
+  for _ in 0..int { iter.next(); }
+  match iter.next() {
+    Some(c) => {
+      let s = &mut vint.value_stack().first_mut().unwrap().vword_mut().str_word;
+      s.clear();
+      s.push(c);
+    },
+    None => {
+      state.current().stack.push(vint);
+      return state.eval_error("OUT OF BOUNDS", w)
+    }
+  }
   state.current().stack.push(vint);
   state
 }
@@ -323,15 +399,17 @@ pub fn cog_itoc(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "concat", cog_concat);
-  add_word!(state, "unconcat", cog_unconcat);
-  add_word!(state, "cut", cog_cut);
-  add_word!(state, "len", cog_len);
-  add_word!(state, "cat", cog_cat);
-  add_word!(state, "insert", cog_insert);
-  add_word!(state, "reverse", cog_reverse);
-  add_word!(state, "word?", cog_word_questionmark);
-  add_word!(state, "ctoi", cog_ctoi);
-  add_word!(state, "itoc", cog_itoc);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "concat", cog_concat);
+  add_builtin!(state, "unconcat", cog_unconcat);
+  add_builtin!(state, "cut", cog_cut);
+  add_builtin!(state, "len", cog_len);
+  add_builtin!(state, "clen", cog_clen);
+  add_builtin!(state, "cat", cog_cat);
+  add_builtin!(state, "nth", cog_nth);
+  add_builtin!(state, "insert", cog_insert);
+  add_builtin!(state, "reverse", cog_reverse);
+  add_builtin!(state, "word?", cog_word_questionmark);
+  add_builtin!(state, "ctoi", cog_ctoi);
+  add_builtin!(state, "itoc", cog_itoc);
 }

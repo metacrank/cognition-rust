@@ -370,23 +370,23 @@ pub fn cog_plus(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   }
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "base", cog_base);
-  add_word!(state, "negc", cog_negc);
-  add_word!(state, "radix", cog_radix);
-  add_word!(state, "cd-delim", cog_cd_delim);
-  add_word!(state, "meta-radix", cog_meta_radix);
-  add_word!(state, "meta-delim", cog_meta_delim);
-  add_word!(state, "digits", cog_digits);
-  add_word!(state, "get-base", cog_get_base);
-  add_word!(state, "get-negc", cog_get_negc);
-  add_word!(state, "get-radix", cog_get_radix);
-  add_word!(state, "get-cd-delim", cog_get_cd_delim);
-  add_word!(state, "get-meta-radix", cog_get_meta_radix);
-  add_word!(state, "get-meta-delim", cog_get_meta_delim);
-  add_word!(state, "get-digits", cog_get_digits);
-  add_word!(state, "=", cog_equals);
-  add_word!(state, "and", cog_and);
-  add_word!(state, "or", cog_or);
-  //add_word!(state, "+", cog_plus);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "base", cog_base);
+  add_builtin!(state, "negc", cog_negc);
+  add_builtin!(state, "radix", cog_radix);
+  add_builtin!(state, "cd-delim", cog_cd_delim);
+  add_builtin!(state, "meta-radix", cog_meta_radix);
+  add_builtin!(state, "meta-delim", cog_meta_delim);
+  add_builtin!(state, "digits", cog_digits);
+  add_builtin!(state, "get-base", cog_get_base);
+  add_builtin!(state, "get-negc", cog_get_negc);
+  add_builtin!(state, "get-radix", cog_get_radix);
+  add_builtin!(state, "get-cd-delim", cog_get_cd_delim);
+  add_builtin!(state, "get-meta-radix", cog_get_meta_radix);
+  add_builtin!(state, "get-meta-delim", cog_get_meta_delim);
+  add_builtin!(state, "get-digits", cog_get_digits);
+  add_builtin!(state, "=", cog_equals);
+  add_builtin!(state, "and", cog_and);
+  add_builtin!(state, "or", cog_or);
+  //add_builtin!(state, "+", cog_plus);
 }

@@ -10,7 +10,7 @@ struct Nodes {
   verr_loc: Vec<Box<Node<usize, VErrorLoc>>>,
   stack: Vec<Box<Node<usize, Stack>>>,
   string: Vec<Box<Node<usize, String>>>,
-  strings: Vec<Box<Node<usize, Strings>>>,
+  functions: Vec<Box<Node<usize, Functions>>>,
   cranks: Vec<Box<Node<usize, Cranks>>>,
   math: Vec<Box<Node<usize, Math>>>,
   digits: Vec<Box<Node<usize, Digits>>>,
@@ -26,7 +26,7 @@ impl Nodes {
       verr_loc: Vec::new(),
       stack: Vec::new(),
       string: Vec::new(),
-      strings: Vec::new(),
+      functions: Vec::new(),
       cranks: Vec::new(),
       math: Vec::new(),
       digits: Vec::new(),
@@ -46,7 +46,7 @@ pub struct Pool {
   vfllibs: Option<Stack>,
   stacks: Option<ITree<Stack>>,
   strings: Option<ITree<String>>,
-  stringss: Option<ITree<Strings>>,
+  functionss: Option<ITree<Functions>>,
   crankss: Option<ITree<Cranks>>,
   maths: Option<ITree<Math>>,
   digitss: Option<ITree<Digits>>,
@@ -191,7 +191,7 @@ impl Pool {
       vfllibs: None,
       stacks: None,
       strings: None,
-      stringss: None,
+      functionss: None,
       crankss: None,
       maths: None,
       digitss: None,
@@ -270,11 +270,11 @@ impl Pool {
         println!("");
       }
     }
-    if let Some(ref stringss) = self.stringss {
-      let size = stringss.size();
+    if let Some(ref functionss) = self.functionss {
+      let size = functionss.size();
       if size > 0 {
-        print!("{} stringss: ", size);
-        stringss.print();
+        print!("{} functionss: ", size);
+        functionss.print();
         println!("");
       }
     }
@@ -358,8 +358,8 @@ impl Pool {
     if self.nodes.string.len() > 0 {
       println!("{} string nodes", self.nodes.string.len());
     }
-    if self.nodes.strings.len() > 0 {
-      println!("{} strings nodes", self.nodes.strings.len());
+    if self.nodes.functions.len() > 0 {
+      println!("{} functions nodes", self.nodes.functions.len());
     }
     if self.nodes.cranks.len() > 0 {
       println!("{} cranks nodes", self.nodes.cranks.len());
@@ -393,7 +393,7 @@ impl Pool {
       self.stacks.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
       self.strings.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
 
-      self.stringss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
+      self.functionss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
       self.crankss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
       self.maths.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
       self.digitss.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
@@ -414,7 +414,7 @@ impl Pool {
       self.nodes.stack.len().min(isize::MAX as usize) as isize,
 
       self.nodes.string.len().min(isize::MAX as usize) as isize,
-      self.nodes.strings.len().min(isize::MAX as usize) as isize,
+      self.nodes.functions.len().min(isize::MAX as usize) as isize,
       self.nodes.cranks.len().min(isize::MAX as usize) as isize,
       self.nodes.math.len().min(isize::MAX as usize) as isize,
 
@@ -434,9 +434,9 @@ impl Pool {
     set_size!(self, self.verror_locs, capacity[4], DEFAULT_STRING_LENGTH, init_verr_loc, Self::get_verr_loc_node, Vec::<VErrorLoc>::pnew, Vec::<VErrorLoc>::pdrop);
     set_size!(self, self.vfllibs, capacity[5], init_vfllib, Self::get_stack_for_pool);
     set_size!(self, self.stacks, capacity[6], DEFAULT_STACK_SIZE, Stack::with_capacity, Self::get_stack_node, Vec::<Stack>::pnew, Vec::<Stack>::pdrop);
-    set_size!(self, self.strings, capacity[7], DEFAULT_STRING_LENGTH, String::with_capacity, Self::get_string_node, Self::get_strings_for_pool, Self::add_strings);
+    set_size!(self, self.strings, capacity[7], DEFAULT_STRING_LENGTH, String::with_capacity, Self::get_string_node, Strings::pnew, Strings::pdrop);
 
-    set_size!(self, self.stringss, capacity[8], DEFAULT_STACK_SIZE, Strings::with_capacity, Self::get_strings_node, Vec::<Strings>::pnew, Vec::<Strings>::pdrop);
+    set_size!(self, self.functionss, capacity[8], DEFAULT_STACK_SIZE, Functions::with_capacity, Self::get_functions_node, Vec::<Functions>::pnew, Vec::<Functions>::pdrop);
     set_size!(self, self.crankss, capacity[9], DEFAULT_STACK_SIZE, Cranks::with_capacity, Self::get_cranks_node, Vec::<Cranks>::pnew, Vec::<Cranks>::pdrop);
     set_size!(self, self.maths, capacity[10], DEFAULT_BASE, Math::with_capacity, Self::get_math_node, Vec::<Math>::pnew, Vec::<Math>::pdrop);
     set_size!(self, self.digitss, capacity[11], DEFAULT_STACK_SIZE, Digits::with_capacity, Self::get_digits_node, Vec::<Digits>::pnew, Vec::<Digits>::pdrop);
@@ -457,7 +457,7 @@ impl Pool {
     set_size!(self.nodes.stack, capacity[23], init_inode::<Stack>);
 
     set_size!(self.nodes.string, capacity[24], init_inode::<String>);
-    set_size!(self.nodes.strings, capacity[25], init_inode::<Strings>);
+    set_size!(self.nodes.functions, capacity[25], init_inode::<Functions>);
     set_size!(self.nodes.cranks, capacity[26], init_inode::<Cranks>);
     set_size!(self.nodes.math, capacity[27], init_inode::<Math>);
 
@@ -500,10 +500,10 @@ impl Pool {
     pool_insert!(s, s.capacity(), self, self.stacks, Stack, Self::get_stack_node, Vec::<Stack>::pnew);
   }
   pub fn add_string(&mut self, s: String) {
-    pool_insert!(s, s.capacity(), self, self.strings, String, Self::get_string_node, Self::get_strings_for_pool);
+    pool_insert!(s, s.capacity(), self, self.strings, String, Self::get_string_node, Strings::pnew);
   }
-  pub fn add_strings(&mut self, ss: Strings) {
-    pool_insert!(ss, ss.capacity(), self, self.stringss, Strings, Self::get_strings_node, Vec::<Strings>::pnew);
+  pub fn add_functions(&mut self, fs: Functions) {
+    pool_insert!(fs, fs.capacity(), self, self.functionss, Functions, Self::get_functions_node, Vec::<Functions>::pnew);
   }
   pub fn add_cranks(&mut self, cs: Cranks) {
     pool_insert!(cs, cs.capacity(), self, self.crankss, Cranks, Self::get_cranks_node, Vec::<Cranks>::pnew);
@@ -560,7 +560,7 @@ impl Pool {
   pub fn add_verr_loc_node(&mut self, n: Box<Node<usize, VErrorLoc>>) { self.nodes.verr_loc.push(n) }
   pub fn add_stack_node(&mut self, n: Box<Node<usize, Stack>>) { self.nodes.stack.push(n) }
   pub fn add_string_node(&mut self, n: Box<Node<usize, String>>) { self.nodes.string.push(n) }
-  pub fn add_strings_node(&mut self, n: Box<Node<usize, Strings>>) { self.nodes.strings.push(n) }
+  pub fn add_functions_node(&mut self, n: Box<Node<usize, Functions>>) { self.nodes.functions.push(n) }
   pub fn add_cranks_node(&mut self, n: Box<Node<usize, Cranks>>) { self.nodes.cranks.push(n) }
   pub fn add_math_node(&mut self, n: Box<Node<usize, Math>>) { self.nodes.math.push(n) }
   pub fn add_digits_node(&mut self, n: Box<Node<usize, Digits>>) { self.nodes.digits.push(n) }
@@ -658,17 +658,12 @@ impl Pool {
     self.get_stack(DEFAULT_STACK_SIZE)
   }
   pub fn get_string(&mut self, capacity: usize) -> String {
-    pool_remove!(self, self.strings, capacity, mut s, s, Self::add_string_node, Self::add_strings, { s.clear() });
+    pool_remove!(self, self.strings, capacity, mut s, s, Self::add_string_node, Strings::pdrop, { s.clear() });
     String::with_capacity(capacity)
   }
-  pub fn get_strings(&mut self, capacity: usize) -> Strings {
-    pool_remove!(self, self.stringss, capacity, mut ss, ss, Self::add_strings_node, Vec::<Strings>::pdrop, {
-      while let Some(s) = ss.pop() { self.add_string(s) }
-    });
-    Strings::with_capacity(capacity)
-  }
-  pub fn get_strings_for_pool(&mut self) -> Strings {
-    self.get_strings(DEFAULT_STACK_SIZE)
+  pub fn get_functions(&mut self, capacity: usize) -> Functions {
+    pool_remove!(self, self.functionss, capacity, mut fs, fs, Self::add_functions_node, Vec::<Functions>::pdrop, { fs.clear() });
+    Functions::with_capacity(capacity)
   }
   pub fn get_cranks(&mut self, capacity: usize) -> Cranks {
     pool_remove!(self, self.crankss, capacity, mut cs, cs, Self::add_cranks_node, Vec::<Cranks>::pdrop, { cs.clear() });
@@ -747,16 +742,12 @@ impl Pool {
     Box::new(Node::<usize, Stack>::new(key, data))
   }
   pub fn get_string_node(&mut self, key: usize, data: Strings) -> Box<Node<usize, String>> {
-    pool_pop_node!(self.nodes.string, mut n, n, key, data, {
-      if let Some(d) = n.data.take() {
-        self.add_strings(d)
-      }
-    });
+    pool_pop_node!(self.nodes.string, mut n, n, key, data, {});
     Box::new(Node::<usize, String>::new(key, data))
   }
-  pub fn get_strings_node(&mut self, key: usize, data: Vec<Strings>) -> Box<Node<usize, Strings>> {
-    pool_pop_node!(self.nodes.strings, mut n, n, key, data, {});
-    Box::new(Node::<usize, Strings>::new(key, data))
+  pub fn get_functions_node(&mut self, key: usize, data: Vec<Functions>) -> Box<Node<usize, Functions>> {
+    pool_pop_node!(self.nodes.functions, mut n, n, key, data, {});
+    Box::new(Node::<usize, Functions>::new(key, data))
   }
   pub fn get_cranks_node(&mut self, key: usize, data: Vec<Cranks>) -> Box<Node<usize, Cranks>> {
     pool_pop_node!(self.nodes.cranks, mut n, n, key, data, {});

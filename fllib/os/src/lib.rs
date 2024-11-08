@@ -20,7 +20,7 @@ pub fn cog_remove_var(mut state: CognitionState, w: Option<&Value>) -> Cognition
 }
 
 #[no_mangle]
-pub extern fn add_words(state: &mut CognitionState) {
-  add_word!(state, "set-var", cog_set_var);
-  add_word!(state, "remove-var", cog_remove_var);
+pub extern fn add_words(state: &mut CognitionState, lib: &Library, lib_name: &String) {
+  add_word!(state, lib, lib_name, "set-var", cog_set_var);
+  add_word!(state, lib, lib_name, "remove-var", cog_remove_var);
 }

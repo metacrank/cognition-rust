@@ -1,6 +1,5 @@
 use crate::*;
 use std::{thread, time};
-use libloading;
 
 pub fn cog_nop(state: CognitionState, _: Option<&Value>) -> CognitionState { state }
 
@@ -131,79 +130,6 @@ pub fn cog_nanosleep(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   state
 }
 
-pub fn cog_fllib(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  let Some(v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let v_stack = v.value_stack_ref();
-  if v_stack.len() != 1 {
-    stack.push(v);
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  }
-  let word_v = v_stack.first().unwrap();
-  if !word_v.is_word() {
-    stack.push(v);
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  }
-  unsafe {
-    let Ok(lib) = libloading::Library::new(&word_v.vword_ref().str_word) else {
-      stack.push(v);
-      return state.eval_error("INVALID FILENAME", w)
-    };
-    let fllib_add_words: libloading::Symbol<unsafe extern fn(&mut CognitionState)> = match lib.get(b"add_words") {
-      Ok(f) => f,
-      Err(_) => {
-        stack.push(v);
-        return state.eval_error("INVALID FLLIB", w)
-      },
-    };
-    fllib_add_words(&mut state);
-    state.fllibs.push(lib);
-  }
-  state.pool.add_val(v);
-  state
-}
-
-pub fn cog_fllib_filename(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let v_stack = v.value_stack();
-  if v_stack.len() != 1 {
-    stack.push(v);
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  }
-  let word_v = v_stack.pop().unwrap();
-  if !word_v.is_word() {
-    v_stack.push(word_v);
-    stack.push(v);
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  }
-  let mut vword = word_v.vword();
-  vword.str_word = libloading::library_filename(vword.str_word).into_string().unwrap();
-  v_stack.push(Value::Word(vword));
-  stack.push(v);
-  state
-}
-
-pub fn cog_fllib_count(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let mut cur_v = state.pop_cur();
-  let cur = cur_v.metastack_container();
-  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  if cur.math.as_ref().unwrap().base() == 0 { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  let length = state.fllibs.len();
-  if length > isize::MAX as usize { return state.push_cur(cur_v).eval_error("OUT OF BOUNDS", w) }
-  match cur.math.as_ref().unwrap().itos(length as isize, &mut state) {
-    Ok(s) => {
-      let mut v = state.pool.get_vword(s.len());
-      v.str_word.push_str(&s);
-      state.pool.add_string(s);
-      state = state.push_cur(cur_v);
-      state.push_quoted(Value::Word(v));
-      state
-    },
-    Err(e) => { return state.push_cur(cur_v).eval_error(e, w) }
-  }
-}
-
 pub fn cog_void(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   state.push_quoted(Value::Custom(VCustom::with_void()));
   state
@@ -247,21 +173,6 @@ pub fn cog_control_questionmark(mut state: CognitionState, w: Option<&Value>) ->
   let Some(v) = stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   if v.value_stack_ref().len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
   let vword = if v.value_stack_ref().first().unwrap().is_control() {
-    let mut vword = state.pool.get_vword(1);
-    vword.str_word.push('t');
-    vword
-  } else {
-    state.pool.get_vword(0)
-  };
-  state.push_quoted(Value::Word(vword));
-  state
-}
-
-pub fn cog_fllib_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  let Some(v) = stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  if v.value_stack_ref().len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
-  let vword = if v.value_stack_ref().first().unwrap().is_fllib() {
     let mut vword = state.pool.get_vword(1);
     vword.str_word.push('t');
     vword
@@ -392,29 +303,25 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "nothing");
-  add_word!(state, "nop", cog_nop);
-  add_word!(state, "ghost", GHOST);
-  add_word!(state, "return", RETURN);
-  add_word!(state, "exit", cog_exit);
-  add_word!(state, "reset", cog_reset);
-  add_word!(state, "getargs", cog_getargs);
-  add_word!(state, "setargs", cog_setargs);
-  add_word!(state, "sleep", cog_sleep);
-  add_word!(state, "msleep", cog_msleep);
-  add_word!(state, "μsleep", cog_usleep);
-  add_word!(state, "nanosleep", cog_nanosleep);
-  add_word!(state, "fllib", cog_fllib);
-  add_word!(state, "fllib-filename", cog_fllib_filename);
-  add_word!(state, "fllib-count", cog_fllib_count);
-  add_word!(state, "void", cog_void);
-  add_word!(state, "void?", cog_void_questionmark);
-  add_word!(state, "custom?", cog_custom_questionmark);
-  add_word!(state, "control?", cog_control_questionmark);
-  add_word!(state, "fllib?", cog_fllib_questionmark);
-  add_word!(state, "same?", cog_same_questionmark);
-  add_word!(state, "var", cog_var);
-  add_word!(state, "getp", cog_getp);
-  add_word!(state, "setp", cog_setp);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "nothing");
+  add_builtin!(state, "nop", cog_nop);
+  add_builtin!(state, "ghost", GHOST);
+  add_builtin!(state, "return", RETURN);
+  add_builtin!(state, "exit", cog_exit);
+  add_builtin!(state, "reset", cog_reset);
+  add_builtin!(state, "getargs", cog_getargs);
+  add_builtin!(state, "setargs", cog_setargs);
+  add_builtin!(state, "sleep", cog_sleep);
+  add_builtin!(state, "msleep", cog_msleep);
+  add_builtin!(state, "μsleep", cog_usleep);
+  add_builtin!(state, "nanosleep", cog_nanosleep);
+  add_builtin!(state, "void", cog_void);
+  add_builtin!(state, "void?", cog_void_questionmark);
+  add_builtin!(state, "custom?", cog_custom_questionmark);
+  add_builtin!(state, "control?", cog_control_questionmark);
+  add_builtin!(state, "same?", cog_same_questionmark);
+  add_builtin!(state, "var", cog_var);
+  add_builtin!(state, "getp", cog_getp);
+  add_builtin!(state, "setp", cog_setp);
 }

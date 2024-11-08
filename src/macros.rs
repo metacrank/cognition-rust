@@ -17,6 +17,7 @@ pub const DEFAULT_BUFFER_CAPACITY: usize = 576;
 pub const DEFAULT_WORD_TABLE_SIZE: usize = 576;
 pub const DEFAULT_FALIASES_SIZE: usize = 24;
 pub const DEFAULT_BASE: usize = 24;
+pub const BUILTINS_SIZE: usize = 192;
 
 pub const EVAL: crate::Value = crate::Value::Control(crate::VControl::Eval);
 pub const RETURN: crate::Value = crate::Value::Control(crate::VControl::Return);
@@ -62,7 +63,6 @@ macro_rules! fwrite_check {
     }
   }
 }
-// pub(crate) use fwrite_check;
 
 #[macro_export]
 macro_rules! fwrite_check_pretty {
@@ -93,7 +93,30 @@ macro_rules! fwrite_check_pretty {
     };
   }}
 }
-// pub(crate) use fwrite_check_pretty;
+
+
+#[macro_export]
+macro_rules! ensure_fllib_data {
+  ($state:ident,$lib:ident,$lib_name:ident) => {
+    let mut cur_v = $state.pop_cur();
+    let fllibs = &mut cur_v.metastack_container().fllibs;
+    if let Some(fd) = fllibs.get_mut($lib_name) {
+      if !std::sync::Arc::ptr_eq(&fd.library, $lib) {
+        $state.eval_error_mut("FLLIB EXISTS", None);
+        $state.stack.push(cur_v);
+        return
+      }
+    } else {
+      let key = $state.string_copy($lib_name);
+      let fd = FLLibData {
+        library: $lib.clone(),
+        functions: $state.pool.get_functions($crate::macros::DEFAULT_STACK_SIZE)
+      };
+      fllibs.insert(key, fd);
+    }
+    $state.stack.push(cur_v);
+  }
+}
 
 /// build_macro! ensures that the macro stack requested from the pool is of appropriate
 /// length no matter the number of function pointer arguments. It does this by keeping
@@ -105,6 +128,10 @@ macro_rules! build_macro {
   ($state:ident,$n:expr) => {
     $state.pool.get_vmacro($n)
   };
+  ($state:ident,$lib:ident,$lib_name:ident,$n:expr) => {{
+    ensure_fllib_data!($state, $lib, $lib_name);
+    build_macro!($state, $n)
+  }};
   // handle recursion
   ($state:ident,$n:expr,EVAL $(,$fi:ident)*) => {{
     let mut vmacro = build_macro!($state, $n $(,$fi)*);
@@ -123,7 +150,41 @@ macro_rules! build_macro {
   }};
   ($state:ident,$n:expr,$fn:ident $(,$fi:ident)*) => {{
     let mut vmacro = build_macro!($state, $n $(,$fi)*);
-    let v = $state.pool.get_vfllib($fn);
+    let mut v = $state.pool.get_vfllib($fn);
+    // will panic if state.builtins grows beyond u32::MAX
+    v.key = $state.builtins.len() as u32;
+    $state.builtins.push($fn.clone());
+    vmacro.macro_stack.push($crate::Value::FLLib(v));
+    vmacro
+  }};
+  ($state:ident,$lib:ident,$lib_name:ident,$n:expr,EVAL $(,$fi:ident)*) => {{
+    let mut vmacro = build_macro!($state,$lib,$lib_name, $n $(,$fi)*);
+    vmacro.macro_stack.push(EVAL);
+    vmacro
+  }};
+  ($state:ident,$lib:ident,$lib_name:ident,$n:expr,RETURN $(,$fi:ident)*) => {{
+    let mut vmacro = build_macro!($state,$lib,$lib_name, $n $(,$fi)*);
+    vmacro.macro_stack.push(RETURN);
+    vmacro
+  }};
+  ($state:ident,$lib:ident,$lib_name:ident,$n:expr,GHOST $(,$fi:ident)*) => {{
+    let mut vmacro = build_macro!($state,$lib,$lib_name, $n $(,$fi)*);
+    vmacro.macro_stack.push(GHOST);
+    vmacro
+  }};
+  ($state:ident,$lib:ident,$lib_name:ident,$n:expr,$fn:ident $(,$fi:ident)*) => {{
+    let mut vmacro = build_macro!($state,$lib,$lib_name, $n $(,$fi)*);
+
+    let mut v = $state.pool.get_vfllib($fn);
+    v.library = Some($crate::ForeignLibrary{
+      lib: $lib.clone(),
+      lib_name: $state.string_copy($lib_name)
+    });
+    let fllib_data = $state.current().fllibs.get_mut($lib_name).unwrap();
+    // will panic if fllib_data.functions grows beyond u32::MAX
+    v.key = fllib_data.functions.len() as u32;
+    fllib_data.functions.push($fn.clone());
+
     vmacro.macro_stack.push($crate::Value::FLLib(v));
     vmacro
   }};
@@ -133,6 +194,12 @@ macro_rules! build_macro {
   };
   ($state:ident,$n:expr,[$fn:ident $($fi:ident)*] $($fr:ident)*) => {
     build_macro!($state, $n + 1, [$($fi)*] $fn $($fr)*)
+  };
+  ($state:ident,$lib:ident,$lib_name:ident,$n:expr,[] $($fr:ident)*) => {
+    build_macro!($state,$lib,$lib_name, $n $(,$fr)*)
+  };
+  ($state:ident,$lib:ident,$lib_name:ident,$n:expr,[$fn:ident $($fi:ident)*] $($fr:ident)*) => {
+    build_macro!($state,$lib,$lib_name, $n + 1, [$($fi)*] $fn $($fr)*)
   }
 }
 /// add_word!(state: CognitionState, name: &'static str, f1, f2, ..., fn: CognitionFunction)
@@ -140,7 +207,7 @@ macro_rules! build_macro {
 /// current stack's word_table. If only one CognitionFunction parameter was given, then the
 /// resulting vfllib str_word value is derived from 'name'. Otherwise, they are all nameless.
 #[macro_export]
-macro_rules! add_word {
+macro_rules! add_builtin {
   ($state:ident,$name:literal,EVAL) => {
     let mut vmacro = build_macro!($state, 1);
     vmacro.macro_stack.push(EVAL);
@@ -161,6 +228,9 @@ macro_rules! add_word {
 
     let mut vfllib = $state.pool.get_vfllib($f);
     vfllib.str_word = Some(String::from($name));
+    // will panic if state.builtins grows beyond u32::MAX
+    vfllib.key = $state.builtins.len() as u32;
+    $state.builtins.push($f.clone());
     vmacro.macro_stack.push($crate::Value::FLLib(vfllib));
 
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
@@ -170,7 +240,40 @@ macro_rules! add_word {
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
   }
 }
-// pub(crate) use add_word;
+#[macro_export]
+macro_rules! add_word {
+  ($state:ident,$lib:ident,$lib_name:ident,$name:literal,EVAL) => {
+    add_builtin!($state, $name, EVAL);
+  };
+  ($state:ident,$lib:ident,$lib_name:ident,$name:literal,RETURN) => {
+    add_builtin!($state, $name, RETURN);
+  };
+  ($state:ident,$lib:ident,$lib_name:ident,$name:literal,GHOST) => {
+    add_builtin!($state, $name, GHOST);
+  };
+  ($state:ident,$lib:ident,$lib_name:ident,$name:literal,$f:ident) => {
+    let mut vmacro = build_macro!($state, $lib, $lib_name, 1);
+
+    let mut vfllib = $state.pool.get_vfllib($f);
+    vfllib.str_word = Some(String::from($name));
+    vfllib.library = Some($crate::ForeignLibrary{
+      lib: $lib.clone(),
+      lib_name: $state.string_copy($lib_name)
+    });
+    let fllib_data = $state.current().fllibs.get_mut($lib_name).unwrap();
+    // will panic if fllib_data.functions grows beyond u32::MAX
+    vfllib.key = fllib_data.functions.len() as u32;
+    fllib_data.functions.push($f.clone());
+
+    vmacro.macro_stack.push($crate::Value::FLLib(vfllib));
+
+    $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
+  };
+  ($state:ident,$lib:ident,$lib_name:ident,$name:literal$ (,$f:ident)*) => {
+    let vmacro = build_macro!($state,$lib,$lib_name, 0, [$($f)*]);
+    $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
+  }
+}
 
 #[macro_export]
 macro_rules! ensure_quoted {

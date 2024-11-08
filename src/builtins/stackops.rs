@@ -54,10 +54,10 @@ pub fn cog_ssize(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   }
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "clear", cog_clear);
-  add_word!(state, "drop", cog_drop);
-  add_word!(state, "swap", cog_swap);
-  add_word!(state, "dup", cog_dup);
-  add_word!(state, "ssize", cog_ssize);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "clear", cog_clear);
+  add_builtin!(state, "drop", cog_drop);
+  add_builtin!(state, "swap", cog_swap);
+  add_builtin!(state, "dup", cog_dup);
+  add_builtin!(state, "ssize", cog_ssize);
 }

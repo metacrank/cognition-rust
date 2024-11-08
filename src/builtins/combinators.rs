@@ -331,26 +331,26 @@ pub fn cog_type(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "eval", EVAL);
-  add_word!(state, "return", RETURN);
-  add_word!(state, "quote", cog_quote);
-  add_word!(state, "child", cog_child);
-  add_word!(state, "stack", cog_stack);
-  add_word!(state, "macro", cog_macro);
-  add_word!(state, "sub", cog_sub);
-  add_word!(state, "cast", cog_cast);
-  add_word!(state, "compose", cog_compose);
-  add_word!(state, "prepose", cog_prepose);
-  add_word!(state, "put", cog_put);
-  add_word!(state, "invert", cog_invert);
-  add_word!(state, "if", cog_if, EVAL);
-  add_word!(state, "dip", cog_dip);
-  add_word!(state, "split", cog_split);
-  add_word!(state, "vat", cog_vat);
-  add_word!(state, "substack", cog_substack);
-  add_word!(state, "del", cog_del);
-  add_word!(state, "uncompose", cog_uncompose);
-  add_word!(state, "size", cog_size);
-  add_word!(state, "type", cog_type);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "eval", EVAL);
+  add_builtin!(state, "return", RETURN);
+  add_builtin!(state, "quote", cog_quote);
+  add_builtin!(state, "child", cog_child);
+  add_builtin!(state, "stack", cog_stack);
+  add_builtin!(state, "macro", cog_macro);
+  add_builtin!(state, "sub", cog_sub);
+  add_builtin!(state, "cast", cog_cast);
+  add_builtin!(state, "compose", cog_compose);
+  add_builtin!(state, "prepose", cog_prepose);
+  add_builtin!(state, "put", cog_put);
+  add_builtin!(state, "invert", cog_invert);
+  add_builtin!(state, "if", cog_if, EVAL);
+  add_builtin!(state, "dip", cog_dip);
+  add_builtin!(state, "split", cog_split);
+  add_builtin!(state, "vat", cog_vat);
+  add_builtin!(state, "substack", cog_substack);
+  add_builtin!(state, "del", cog_del);
+  add_builtin!(state, "uncompose", cog_uncompose);
+  add_builtin!(state, "size", cog_size);
+  add_builtin!(state, "type", cog_type);
 }

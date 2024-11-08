@@ -103,13 +103,13 @@ pub fn cog_chroot(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   state
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "cd", cog_cd);
-  add_word!(state, "ccd", cog_ccd);
-  add_word!(state, "uncd", cog_uncd);
-  add_word!(state, "uncdf", cog_uncdf);
-  add_word!(state, "qstack", cog_qstack);
-  add_word!(state, "root", cog_root);
-  add_word!(state, "su", cog_su);
-  add_word!(state, "chroot", cog_chroot);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "cd", cog_cd);
+  add_builtin!(state, "ccd", cog_ccd);
+  add_builtin!(state, "uncd", cog_uncd);
+  add_builtin!(state, "uncdf", cog_uncdf);
+  add_builtin!(state, "qstack", cog_qstack);
+  add_builtin!(state, "root", cog_root);
+  add_builtin!(state, "su", cog_su);
+  add_builtin!(state, "chroot", cog_chroot);
 }

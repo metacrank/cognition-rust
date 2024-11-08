@@ -1227,42 +1227,42 @@ pub fn cog_stream_questionmark(mut state: CognitionState, w: Option<&Value>) -> 
   iotype_questionmark!(state, w, ReadWriteCustom)
 }
 
-pub fn add_words(state: &mut CognitionState) {
-  add_word!(state, "?", cog_questionmark);
-  add_word!(state, ".", cog_period);
-  add_word!(state, "print", cog_print);
-  add_word!(state, "read", cog_read);
-  add_word!(state, "stdout", cog_stdout);
-  add_word!(state, "stdin", cog_stdin);
-  add_word!(state, "stderr", cog_stderr);
-  add_word!(state, "stdout", cog_stdout);
-  add_word!(state, "empty", cog_empty);
-  add_word!(state, "fopen", cog_fopen);
-  add_word!(state, "file", cog_file);
-  add_word!(state, "file-new", cog_file_new);
-  add_word!(state, "file-append", cog_file_append);
-  add_word!(state, "reader", cog_reader);
-  add_word!(state, "writer", cog_writer);
-  add_word!(state, "bufreader", cog_bufreader);
-  add_word!(state, "bufwriter", cog_bufwriter);
-  add_word!(state, "unbuffer", cog_unbuffer);
-  add_word!(state, "stream", cog_stream);
-  add_word!(state, "f?", cog_fquestionmark);
-  add_word!(state, "f.", cog_fperiod);
-  add_word!(state, "fwrite", cog_fwrite);
-  add_word!(state, "fprint", cog_fprint);
-  add_word!(state, "fread", cog_fread);
-  add_word!(state, "read-until", cog_read_until);
-  // add_word!(state, "skip-until", cog_skip_until); // currently experimental rust stdlib feature
-  add_word!(state, "read-line", cog_read_line);
-  add_word!(state, "seek", cog_seek);
-  add_word!(state, "seek-end", cog_seek_end);
-  add_word!(state, "streampos", cog_streampos);
-  add_word!(state, "seek-relative", cog_seek_relative);
-  add_word!(state, "file?", cog_file_questionmark);
-  add_word!(state, "reader?", cog_reader_questionmark);
-  add_word!(state, "writer?", cog_writer_questionmark);
-  add_word!(state, "bufreader?", cog_bufreader_questionmark);
-  add_word!(state, "bufwriter?", cog_bufwriter_questionmark);
-  add_word!(state, "stream?", cog_stream_questionmark);
+pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "?", cog_questionmark);
+  add_builtin!(state, ".", cog_period);
+  add_builtin!(state, "print", cog_print);
+  add_builtin!(state, "read", cog_read);
+  add_builtin!(state, "stdout", cog_stdout);
+  add_builtin!(state, "stdin", cog_stdin);
+  add_builtin!(state, "stderr", cog_stderr);
+  add_builtin!(state, "stdout", cog_stdout);
+  add_builtin!(state, "empty", cog_empty);
+  add_builtin!(state, "fopen", cog_fopen);
+  add_builtin!(state, "file", cog_file);
+  add_builtin!(state, "file-new", cog_file_new);
+  add_builtin!(state, "file-append", cog_file_append);
+  add_builtin!(state, "reader", cog_reader);
+  add_builtin!(state, "writer", cog_writer);
+  add_builtin!(state, "bufreader", cog_bufreader);
+  add_builtin!(state, "bufwriter", cog_bufwriter);
+  add_builtin!(state, "unbuffer", cog_unbuffer);
+  add_builtin!(state, "stream", cog_stream);
+  add_builtin!(state, "f?", cog_fquestionmark);
+  add_builtin!(state, "f.", cog_fperiod);
+  add_builtin!(state, "fwrite", cog_fwrite);
+  add_builtin!(state, "fprint", cog_fprint);
+  add_builtin!(state, "fread", cog_fread);
+  add_builtin!(state, "read-until", cog_read_until);
+  // add_builtin!(state, "skip-until", cog_skip_until); // currently experimental rust stdlib feature
+  add_builtin!(state, "read-line", cog_read_line);
+  add_builtin!(state, "seek", cog_seek);
+  add_builtin!(state, "seek-end", cog_seek_end);
+  add_builtin!(state, "streampos", cog_streampos);
+  add_builtin!(state, "seek-relative", cog_seek_relative);
+  add_builtin!(state, "file?", cog_file_questionmark);
+  add_builtin!(state, "reader?", cog_reader_questionmark);
+  add_builtin!(state, "writer?", cog_writer_questionmark);
+  add_builtin!(state, "bufreader?", cog_bufreader_questionmark);
+  add_builtin!(state, "bufwriter?", cog_bufwriter_questionmark);
+  add_builtin!(state, "stream?", cog_stream_questionmark);
 }
