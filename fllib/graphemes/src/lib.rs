@@ -270,6 +270,7 @@ pub fn cog_gtoi(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 
 #[no_mangle]
 pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
+  ensure_foreign_library!(state, lib);
   add_word!(state, lib, "gunconcat", cog_gunconcat);
   add_word!(state, lib, "gcut", cog_gcut);
   add_word!(state, lib, "glen", cog_glen);

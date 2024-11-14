@@ -79,20 +79,47 @@ pub fn custom(args: TokenStream, input: TokenStream) -> TokenStream {
       concat!(module_path!(), "::", #name)
     }
   });
-  input.items.push(parse_quote! { fn serde_as_void(&self) -> bool { #serde_as_void } });
+
+  let mut expanded = if args.serde_as_void {
+    quote! {
+      impl CustomTypeData for #custom_type {
+        fn custom_type_name() -> &'static str {
+          concat!(module_path!(), "::", #name)
+        }
+        fn deserialize_fn() -> DeserializeFn<dyn Custom> {
+          (|deserializer| Ok(
+            Box::new(erased_serde::deserialize::<Void>(deserializer)?),
+          )) as DeserializeFn<dyn Custom>
+        }
+      }
+    }
+  } else {
+    quote! {
+      impl CustomTypeData for #custom_type {
+        fn custom_type_name() -> &'static str {
+          concat!(module_path!(), "::", #name)
+        }
+        fn deserialize_fn() -> DeserializeFn<dyn Custom> {
+          (|deserializer| Ok(
+            Box::new(erased_serde::deserialize::<#custom_type>(deserializer)?),
+          )) as DeserializeFn<dyn Custom>
+        }
+      }
+    }
+  };
 
   if serde_as_void {
-    let mut expanded = quote! {
+    expanded.extend(quote! {
       impl ::serde::ser::Serialize for #custom_type {
         fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
         where
           S: ::serde::ser::Serializer,
         { Void::serialize(&Void{}, serializer) }
       }
-    };
-    expanded.extend(quote!{ #input });
-    expanded.into()
-  } else { quote!{ #input }.into() }
+    });
+  }
+  expanded.extend(quote!{ #input });
+  expanded.into()
 }
 
 fn type_name(mut ty: &Type) -> Option<String> {

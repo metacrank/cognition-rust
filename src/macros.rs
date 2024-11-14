@@ -131,18 +131,16 @@ macro_rules! fwrite_check_pretty {
 
 
 #[macro_export]
-macro_rules! ensure_fllib_data {
+macro_rules! ensure_foreign_library {
   ($state:ident,$lib:ident) => {
     let mut fllibs = $state.fllibs.take();
     if fllibs.is_none() {
       fllibs = Some(ForeignLibraries::new());
     }
     if let Some(fd) = fllibs.as_mut().unwrap().get_mut(&$lib.lib_name) {
-      if !std::sync::Arc::ptr_eq(&fd.library, $lib) {
-        $state.eval_error_mut("FLLIB EXISTS", None);
-        $state.fllibs = fllibs;
-        return
-      }
+      $state.eval_error_mut("FLLIB EXISTS", None);
+      $state.fllibs = fllibs;
+      return
     } else {
       let key = $state.string_copy(&$lib.lib_name);
       let fd = ForeignLibrary {
@@ -153,6 +151,17 @@ macro_rules! ensure_fllib_data {
       fllibs.as_mut().unwrap().insert(key, fd);
     }
     $state.fllibs = fllibs;
+  }
+}
+
+#[macro_export]
+macro_rules! register_custom {
+  ($state:ident,$lib:ident,$custom:ty) => {
+    let typename = <$custom as $crate::CustomTypeData>::custom_type_name();
+    let mut new_typename = $state.pool.get_string(typename.len());
+    new_typename.push_str(typename);
+    let fllib_data = $state.fllibs.as_mut().unwrap().get_mut(&$lib.lib_name).unwrap();
+    fllib_data.registry.insert(new_typename, <$custom as $crate::CustomTypeData>::deserialize_fn())
   }
 }
 
@@ -167,7 +176,6 @@ macro_rules! build_macro {
     $state.pool.get_vmacro($n)
   };
   (WORD,$state:ident,$lib:ident,$n:expr) => {{
-    ensure_fllib_data!($state, $lib);
     build_macro!($state, $n)
   }};
   // handle recursion

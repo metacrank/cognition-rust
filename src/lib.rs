@@ -23,6 +23,7 @@ use std::io::{Write, stdout};
 use std::sync::Arc;
 
 pub use ::serde::{Serialize, Deserialize};
+pub use erased_serde;
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type DeserializeFn<T> = fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<T>>;
@@ -83,7 +84,11 @@ pub trait Custom: Any + erased_serde::Serialize {
   fn as_any(&self) -> &dyn Any;
   fn as_any_mut(&mut self) -> &mut dyn Any;
   fn custom_type_name(&self) -> &'static str;
-  fn serde_as_void(&self) -> bool;
+}
+
+pub trait CustomTypeData {
+  fn custom_type_name() -> &'static str;
+  fn deserialize_fn() -> DeserializeFn<dyn Custom>;
 }
 
 /// Useful Custom type
@@ -897,24 +902,13 @@ impl CognitionState {
 
   pub unsafe fn load_fllib(&mut self, lib_name: &String, filename: &String) -> Option<&'static str> {
     let Ok(lib) = libloading::Library::new(filename) else { return Some("INVALID FILENAME") };
-    let fllib_library = FLLibLibrary{ lib, lib_name: self.string_copy(lib_name) };
-    let library = Arc::new(fllib_library);
-    let fllib_add_words: libloading::Symbol<AddWordsFn> = match library.lib.get(b"add_words\0") {
-      Ok(f) => f,
-      Err(_) => {
-        let fllib_library = Arc::into_inner(library);
-        if let Some(fl) = fllib_library {
-          self.pool.add_string(fl.lib_name);
-        }
-        return Some("INVALID FLLIB")
-      }
+    let fllib_add_words = match lib.get::<libloading::Symbol<AddWordsFn>>(b"add_words\0") {
+      Ok(f) => f.into_raw(),
+      Err(_) => return Some("INVALID FLLIB")
     };
-    let name = self.string_copy(lib_name);
-    let foreign_library = ForeignLibrary{ registry: BTreeMap::new(), functions: self.pool.get_functions(0), library: library.clone() };
-    if self.fllibs.is_none() {
-      self.fllibs = Some(ForeignLibraries::new())
-    }
-    self.fllibs.as_mut().unwrap().insert(name, foreign_library);
+    let lib_name = self.string_copy(lib_name);
+    let fllib_library = FLLibLibrary{ lib, lib_name };
+    let library = Arc::new(fllib_library);
     fllib_add_words(self, &library);
     None
   }
