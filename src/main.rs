@@ -376,11 +376,23 @@ fn print_end(state: &CognitionState) {
     println!("uninitialized math\n");
   }
 
+  if let Some(ref fllibs) = state.fllibs {
+    if fllibs.len() > 0 {
+      print!("fllibs: ");
+      let mut names = fllibs.keys();
+      print!("'{}'", names.next().unwrap());
+      for name in names {
+        print!(", '{}'", name);
+      }
+      println!("\n");
+    }
+  }
+
   println!("Pool:");
   state.pool.print();
   println!("");
 
-  if let Some(code) = &state.exit_code {
+  if let Some(ref code) = state.exit_code {
     print!("Exit code: '");
     code.print_pretty();
     println!("'");

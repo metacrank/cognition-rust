@@ -165,6 +165,21 @@ macro_rules! register_custom {
   }
 }
 
+#[macro_export]
+macro_rules! add_custom_pool {
+  ($state:ident,$name:literal,TREE) => {
+    let pool = $crate::pool::CustomPool::Tree($crate::tree::Tree<usize, Box<dyn Custom>>::new());
+    add_custom_pool!($state, $name, pool);
+  };
+  ($state:ident,$name:literal,VEC) => {
+    let pool = $crate::pool::CustomPool::Vec(Vec::<Box<dyn Custom>>::new());
+    add_custom_pool!($state, $name, pool);
+  };
+  ($state:ident,$name:literal,$pool:ident) => {
+    $state.pool.custom_pools.insert(format!("{}::{}", module_path!(), $name), $pool);
+  }
+}
+
 /// build_macro! ensures that the macro stack requested from the pool is of appropriate
 /// length no matter the number of function pointer arguments. It does this by keeping
 /// a running 'Peano' count (0+1+1+1+..) as it recursively reverses the order of those

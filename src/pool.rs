@@ -390,7 +390,13 @@ impl Pool {
     }
 
     if self.custom_pools.len() > 0 {
-      println!("{} custom pools", self.custom_pools.len());
+      print!("{} custom pools: ", self.custom_pools.len());
+      let mut keys = self.custom_pools.keys();
+      print!("{}", keys.next().unwrap());
+      for key in keys {
+        print!(", {}", key);
+      }
+      println!("");
     }
   }
 

@@ -137,6 +137,7 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
 pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
   ensure_foreign_library!(state, lib);
   register_custom!(state, lib, ThreadCustom);
+  add_custom_pool!(state, "ThreadCustoms", VEC);
   add_word!(state, lib, "spawn", cog_spawn);
   add_word!(state, lib, "thread", cog_thread);
 }
