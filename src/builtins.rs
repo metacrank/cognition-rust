@@ -14,6 +14,7 @@ pub mod wordtable;
 use crate::CognitionState;
 
 pub fn add_builtins(state: &mut CognitionState) {
+  state.builtins.clear();
   combinators::add_builtins(state);
   cranker::add_builtins(state);
   errors::add_builtins(state);
