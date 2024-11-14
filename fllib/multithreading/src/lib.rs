@@ -1,11 +1,37 @@
 use cognition::*;
 use std::thread;
 use std::io::Write;
+use std::any::Any;
 
 struct CogStateWrapper { cogstate: CognitionState }
 unsafe impl Send for CogStateWrapper {}
 
 pub struct ThreadCustom { handle: Option<thread::JoinHandle<CogStateWrapper>> }
+
+impl Serialize for ThreadCustom {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: ::serde::ser::Serializer
+  { serializer.serialize_none() }
+}
+impl<'de> Deserialize<'de> for ThreadCustom {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where D: ::serde::de::Deserializer<'de>,
+  {
+    struct ThreadCustomVisitor;
+    impl<'de> ::serde::de::Visitor<'de> for ThreadCustomVisitor {
+      type Value = ThreadCustom;
+      fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("null")
+      }
+      fn visit_none<E: ::serde::de::Error>(self) -> Result<Self::Value, E> {
+        Ok(ThreadCustom{ handle: None })
+      }
+    }
+    deserializer.deserialize_option(ThreadCustomVisitor)
+  }
+}
+
+#[custom]
 impl Custom for ThreadCustom {
   fn printfunc(&self, f: &mut dyn Write) {
     if self.handle.is_none() {
@@ -14,7 +40,7 @@ impl Custom for ThreadCustom {
       fwrite_check!(f, b"(thread)");
     }
   }
-  fn copyfunc(&self) -> Box<dyn CustomAny> {
+  fn copyfunc(&self, _: &mut CognitionState) -> Box<dyn Custom> {
     Box::new(ThreadCustom{ handle: None })
   }
 }
@@ -42,6 +68,9 @@ pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   for arg in cogstate.args.iter() {
     let new_arg = state.value_copy(arg);
     state.args.push(new_arg);
+  }
+  for func in state.builtins.iter() {
+    cogstate.builtins.push(func.clone());
   }
   let wrapper = CogStateWrapper{ cogstate };
   let handle = thread::spawn(move || {
@@ -105,7 +134,7 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
 }
 
 #[no_mangle]
-pub extern fn add_words(state: &mut CognitionState, lib: &Library, lib_name: &String) {
-  add_word!(state, lib, lib_name, "spawn", cog_spawn);
-  add_word!(state, lib, lib_name, "thread", cog_thread);
+pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
+  add_word!(state, lib, "spawn", cog_spawn);
+  add_word!(state, lib, "thread", cog_thread);
 }

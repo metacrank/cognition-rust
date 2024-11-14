@@ -7,23 +7,26 @@ pub mod tree;
 pub mod pool;
 pub mod math;
 pub mod builtins;
+pub mod serde;
 
 use crate::pool::Pool;
 use crate::macros::*;
 use crate::math::Math;
 
-use std::collections::HashSet;
-use std::collections::HashMap;
-use std::default::Default;
-use std::io::Write;
-use std::io::stdout;
-use std::sync::Arc;
-use std::any::Any;
+pub use cognition_macros::*;
 
-use libloading;
+use std::any::Any;
+use std::collections::{HashSet, HashMap, BTreeMap};
+use std::default::Default;
+// use std::error::Error;
+use std::io::{Write, stdout};
+use std::sync::Arc;
+
+pub use ::serde::{Serialize, Deserialize};
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
-pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library, &String);
+pub type DeserializeFn<T> = fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<T>>;
+pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library);
 
 pub type Functions = Vec<CognitionFunction>;
 pub type Stack = Vec<Value>;
@@ -33,8 +36,20 @@ pub type Faliases = HashSet<String>;
 pub type WordDef = Arc<Value>;
 pub type Family = Vec<WordDef>;
 pub type WordTable = HashMap<String, Arc<Value>>;
+pub type ForeignLibraries = HashMap<String, ForeignLibrary>;
 
-pub type Library = Arc<libloading::Library>;
+pub type Library = Arc<FLLibLibrary>;
+
+pub struct FLLibLibrary {
+  pub lib: libloading::Library,
+  pub lib_name: String,
+}
+
+pub struct ForeignLibrary {
+  pub registry: BTreeMap<String, DeserializeFn<dyn Custom>>,
+  pub functions: Vec<CognitionFunction>,
+  pub library: Library,
+}
 
 pub trait Pretty {
   fn print_pretty(&self);
@@ -59,42 +74,36 @@ impl Pretty for [u8] {
   }
 }
 
-pub trait Custom {
+pub trait Custom: Any + erased_serde::Serialize {
   fn printfunc(&self, f: &mut dyn Write);
   // implemented as Box::new(self.clone()) in classes that implement Clone
-  fn copyfunc(&self) -> Box<dyn CustomAny>;
-}
+  fn copyfunc(&self, state: &mut CognitionState) -> Box<dyn Custom>;
 
-pub trait CustomAny: Any + Custom {
+  // usually not implemented by users; use the cognition::custom proc macro
   fn as_any(&self) -> &dyn Any;
   fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-impl<T: Any + Custom> CustomAny for T {
-  fn as_any(&self) -> &dyn Any { self }
-  fn as_any_mut(&mut self) -> &mut dyn Any { self }
+  fn custom_type_name(&self) -> &'static str;
+  fn serde_as_void(&self) -> bool;
 }
 
 /// Useful Custom type
+#[derive(Serialize, Deserialize)]
 pub struct Void {}
+
+#[custom]
 impl Custom for Void {
   fn printfunc(&self, f: &mut dyn Write) {
-    fwrite_check_pretty!(f, b"(void)");
+    fwrite_check!(f, b"(void)");
   }
-  fn copyfunc(&self) -> Box<dyn CustomAny> {
+  fn copyfunc(&self, _: &mut CognitionState) -> Box<dyn Custom> {
     Box::new(Void{})
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Crank {
   pub modulo: i32,
   pub base: i32,
-}
-
-pub struct FLLibData {
-  pub library: Library,
-  pub functions: Functions,
 }
 
 pub struct Container {
@@ -111,7 +120,6 @@ pub struct Container {
   pub sflag: bool,
 
   word_table: Option<WordTable>,
-  pub fllibs: HashMap<String, FLLibData>,
 }
 
 impl Default for Container {
@@ -130,7 +138,6 @@ impl Default for Container {
       sflag: true,
 
       word_table: None,
-      fllibs: HashMap::new()
     }
   }
 }
@@ -176,6 +183,7 @@ impl Container {
   }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct VWord {
   pub str_word: String,
 }
@@ -185,30 +193,29 @@ pub struct VStack {
 pub struct VMacro {
   pub macro_stack: Stack,
 }
+#[derive(Serialize, Deserialize)]
 pub struct VErrorLoc {
   filename: String,
   line: String,
   column: String,
 }
+#[derive(Serialize, Deserialize)]
 pub struct VError {
   error: String,
   str_word: Option<String>,
   loc: Option<VErrorLoc>
 }
-pub struct ForeignLibrary {
-  pub lib: Library,
-  pub lib_name: String,
-}
 pub struct VFLLib {
   fllib: CognitionFunction,
   pub str_word: Option<String>,
-  pub library: Option<ForeignLibrary>,
+  pub library: Option<Library>,
   pub key: u32,
 }
+#[derive(Serialize)]
 pub struct VCustom {
-  pub custom: Box<dyn CustomAny>,
+  pub custom: Box<dyn Custom>,
 }
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum VControl {
   Eval,
   Return,
@@ -263,7 +270,7 @@ impl VFLLib {
   }
 }
 impl VCustom {
-  pub fn with_custom(custom: Box<dyn CustomAny>) -> VCustom {
+  pub fn with_custom(custom: Box<dyn Custom>) -> VCustom {
     VCustom{ custom }
   }
   pub fn with_void() -> VCustom {
@@ -425,6 +432,7 @@ impl Value {
   pub fn is_control(&self) -> bool { is_value_type!(self, Value::Control(_)) }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Parser {
   source: Option<String>,
   filename: Option<String>,
@@ -533,6 +541,7 @@ pub struct CognitionState {
   pub exited: bool,
   pub exit_code: Option<String>,
   pub args: Stack,
+  pub fllibs: Option<ForeignLibraries>,
   pub builtins: Functions,
   pub pool: Pool,
 }
@@ -641,10 +650,18 @@ enum RecurseControl {
 
 impl CognitionState {
   pub fn new(stack: Stack) -> Self {
-    Self{ chroots: Vec::<Stack>::with_capacity(DEFAULT_STACK_SIZE), stack,
-          family: Family::with_capacity(DEFAULT_STACK_SIZE), parser: None,
-          exited: false, exit_code: None, args: Stack::new(),
-          builtins: Vec::with_capacity(BUILTINS_SIZE), pool: Pool::new() }
+    Self{
+      chroots: Vec::<Stack>::with_capacity(DEFAULT_STACK_SIZE),
+      stack,
+      family: Family::with_capacity(DEFAULT_STACK_SIZE),
+      parser: None,
+      exited: false,
+      exit_code: None,
+      args: Stack::new(),
+      fllibs: None,
+      builtins: Vec::with_capacity(BUILTINS_SIZE),
+      pool: Pool::new()
+    }
   }
 
   pub fn verr_loc(&mut self) -> Option<VErrorLoc> {
@@ -735,12 +752,6 @@ impl CognitionState {
     retval
   }
 
-  pub fn fllib_data_copy(&mut self, lib: &FLLibData) -> FLLibData {
-    let mut functions = self.pool.get_functions(lib.functions.len());
-    for f in lib.functions.iter() { functions.push(f.clone()) }
-    FLLibData{ library: lib.library.clone(), functions }
-  }
-
   pub fn string_copy(&mut self, s: &String) -> String {
     let mut newstr = self.pool.get_string(s.len());
     newstr.push_str(s);
@@ -800,9 +811,6 @@ impl CognitionState {
         new.word_table.as_mut().unwrap().insert(self.string_copy(key), word_def.clone());
       }
     }
-    for (key, lib) in old.fllibs.iter() {
-      new.fllibs.insert(self.string_copy(key), self.fllib_data_copy(lib));
-    }
   }
 
   pub fn value_copy(&mut self, v: &Value) -> Value {
@@ -845,16 +853,13 @@ impl CognitionState {
           new_vfllib.str_word = Some(self.string_copy(s));
         }
         if let Some(ref library) = vfllib.library {
-          new_vfllib.library = Some(ForeignLibrary{
-            lib: library.lib.clone(),
-            lib_name: self.string_copy(&library.lib_name)
-          });
+          new_vfllib.library = Some(library.clone());
         }
         new_vfllib.key = vfllib.key;
         Value::FLLib(new_vfllib)
       },
       Value::Custom(vcustom) => Value::Custom({
-        VCustom::with_custom(vcustom.custom.copyfunc())
+        VCustom::with_custom(vcustom.custom.copyfunc(self))
       }),
       Value::Control(vcontrol) => Value::Control(vcontrol.clone()),
     }
@@ -888,6 +893,30 @@ impl CognitionState {
     if let Some(v) = self.current().word_table.as_mut().unwrap().insert(name, word_def) {
       self.pool.add_word_def(v);
     }
+  }
+
+  pub unsafe fn load_fllib(&mut self, lib_name: &String, filename: &String) -> Option<&'static str> {
+    let Ok(lib) = libloading::Library::new(filename) else { return Some("INVALID FILENAME") };
+    let fllib_library = FLLibLibrary{ lib, lib_name: self.string_copy(lib_name) };
+    let library = Arc::new(fllib_library);
+    let fllib_add_words: libloading::Symbol<AddWordsFn> = match library.lib.get(b"add_words\0") {
+      Ok(f) => f,
+      Err(_) => {
+        let fllib_library = Arc::into_inner(library);
+        if let Some(fl) = fllib_library {
+          self.pool.add_string(fl.lib_name);
+        }
+        return Some("INVALID FLLIB")
+      }
+    };
+    let name = self.string_copy(lib_name);
+    let foreign_library = ForeignLibrary{ registry: BTreeMap::new(), functions: self.pool.get_functions(0), library: library.clone() };
+    if self.fllibs.is_none() {
+      self.fllibs = Some(ForeignLibraries::new())
+    }
+    self.fllibs.as_mut().unwrap().insert(name, foreign_library);
+    fllib_add_words(self, &library);
+    None
   }
 
   pub fn push_quoted(&mut self, v: Value) {

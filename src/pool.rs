@@ -37,6 +37,11 @@ impl Nodes {
   }
 }
 
+pub enum CustomPool {
+  Tree(ITree<Box<dyn Custom>>),
+  Vec(Vec<Box<dyn Custom>>)
+}
+
 pub struct Pool {
   vwords: Option<VTree>,
   vstacks: Option<VTree>,
@@ -62,6 +67,8 @@ pub struct Pool {
   custom_ops: Option<Vec<CustomOp>>,
 
   nodes: Nodes,
+
+  pub custom_pools: HashMap<String, CustomPool>,
 }
 
 trait DisregardPool {
@@ -207,6 +214,8 @@ impl Pool {
       custom_ops: None,
 
       nodes: Nodes::new(),
+
+      custom_pools: HashMap::new(),
     }
   }
 
@@ -378,6 +387,10 @@ impl Pool {
     }
     if self.nodes.word_table.len() > 0 {
       println!("{} word_table nodes", self.nodes.word_table.len());
+    }
+
+    if self.custom_pools.len() > 0 {
+      println!("{} custom pools", self.custom_pools.len());
     }
   }
 

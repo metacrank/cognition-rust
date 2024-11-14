@@ -1,11 +1,23 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+#![allow(unreachable_code)]
+#![allow(unused_imports)]
 use std::process::ExitCode;
 use std::env;
 use std::fs;
 use std::fs::File;
 
+use std::any::Any;
+use std::io::Write;
+use std::io::Read;
+
 use cognition::*;
 use cognition::macros::*;
-use cognition::math::Math;
+use cognition::serde::CognitionDeserialize;
+use cognition::builtins::io::ReadWriteCustom;
+
+use serde_json;
+use ::serde::{Serialize, Serializer};
 
 const VERSION: &'static str = "0.2.1 alpha";
 
@@ -19,47 +31,70 @@ fn main() -> ExitCode {
     Ok(o) => o,
   };
 
-  if opts.h { return help(); }
-  if opts.v { return version(); }
-  if opts.fileidx == 0 && opts.s != 0 {
-    return usage(3);
+  if opts.help { return help(); }
+  if opts.version { return version(); }
+  if opts.list_formats { return list_formats(); }
+  if opts.fileidx == 0 && opts.sources != 0 {
+    println!("{}: missing filename", binary_name());
+    return try_help(3)
   }
 
-  let mut logfile = if let Some(ref s) = opts.l {
+  if let Some(ref format) = opts.format {
+    if !DATA_FORMATS.iter().any(|x| x == format) {
+      println!("{}: invalid format -- '{}'", binary_name(), format);
+      return try_help(2)
+    }
+  }
+
+  let mut logfile = if let Some(ref s) = opts.logfile {
     match File::options().write(true).truncate(true).create(true).open(s) {
       Ok(f) => Some(f),
       Err(e) => {
-        println!("Could not open logfile: {}: {e}", opts.l.as_ref().unwrap());
+        println!("{}: could not open logfile: {}: {e}", binary_name(), opts.logfile.as_ref().unwrap());
         return ExitCode::from(4);
       }
     }
   } else { None };
 
   // Initialize state
-  let metastack = Stack::with_capacity(DEFAULT_STACK_SIZE);
-  let mut state = CognitionState::new(metastack);
-  let mut vstack = Box::new(VStack::with_capacity(DEFAULT_STACK_SIZE));
-  vstack.container.faliases = Container::default_faliases();
-  state.stack.push(Value::Stack(vstack));
-  state.parser = Some(Parser::new(None, None));
-  for arg in args[opts.fileidx+opts.s..].iter() {
-    state.args.push(Value::Word(Box::new(VWord{ str_word: arg.clone() })));
-  }
-  builtins::add_builtins(&mut state);
+  let mut state = match opts.load {
+    Some(ref loadfile) => {
+      match load(loadfile) {
+        Ok(state) => state,
+        Err(e) => return e
+      }
+    },
+    None => {
+      let metastack = Stack::with_capacity(DEFAULT_STACK_SIZE);
+      let mut state = CognitionState::new(metastack);
+      let mut vstack = Box::new(VStack::with_capacity(DEFAULT_STACK_SIZE));
+      vstack.container.faliases = Container::default_faliases();
+      state.stack.push(Value::Stack(vstack));
+      for arg in args[(opts.fileidx + opts.sources)..].iter() {
+        state.args.push(Value::Word(Box::new(VWord{ str_word: arg.clone() })));
+      }
+      builtins::add_builtins(&mut state);
+      state
+    }
+  };
 
-  for i in 0..opts.s {
+  if state.parser.is_none() {
+    state.parser = Some(Parser::new(None, None));
+  }
+
+  for i in 0..opts.sources {
     // Read code from file
     let filename = &args[opts.fileidx + i];
     let mut fs_result = fs::read_to_string(filename);
     if let Err(_) = fs_result {
-      if let Some(ref dir) = opts.c {
+      if let Some(ref dir) = opts.coglib {
         fs_result = fs::read_to_string(format!("{dir}/{filename}"));
       } else if let Ok(dir) = env::var("COGLIB_DIR") {
         fs_result = fs::read_to_string(format!("{dir}/{filename}"));
       }
     }
     if let Err(e) = fs_result {
-      println!("Could not open file for reading: {filename}: {e}");
+      println!("{}: could not open file for reading: {filename}: {e}", binary_name());
       return ExitCode::from(4);
     }
     let source: String = fs_result.unwrap();
@@ -82,18 +117,21 @@ fn main() -> ExitCode {
     }
   }
 
-  if !opts.q { print_end(&state); }
+  if !opts.quiet { print_end(&state); }
 
   ExitCode::SUCCESS
 }
 
 struct Config {
-  h: bool,
-  c: Option<String>,
-  l: Option<String>,
-  q: bool,
-  v: bool,
-  s: usize,
+  help: bool,
+  coglib: Option<String>,
+  format: Option<String>,
+  logfile: Option<String>,
+  load: Option<String>,
+  list_formats: bool,
+  quiet: bool,
+  version: bool,
+  sources: usize,
   fileidx: usize,
 }
 
@@ -102,24 +140,15 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
     return Err(usage(1));
   }
 
-  let mut math = Math::new();
-  let digits = String::from("0123456789↊↋🜘");
-  math.set_digits(&digits);
-  math.set_negc('\u{0305}');
-  math.set_radix('.');
-  math.set_delim(',');
-  math.set_meta_radix(';');
-  math.set_meta_delim(':');
-  math.set_base(24);
-
-  let (mut h, mut q, mut v) = (false, false, false);
-  let (mut c, mut l) = (None, None);
+  let (mut h, mut q, mut v, mut lf) = (false, false, false, false);
+  let (mut c, mut f, mut l, mut ll) = (None, None, None, None);
   let mut s: i32 = -1;
   let mut fileidx = 0;
 
   let mut i = 1;
   while i < argc {
-    match args[i].as_str() {
+    let slice = args[i].as_str();
+    match slice {
       "-h" | "--help" => {
         if h { return Err(usage(1)); }
         else { h = true; }
@@ -130,11 +159,27 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
         i += 1;
         c = Some(args[i].clone());
       }
+      "-f" | "--format" => {
+        if f.is_some() { return Err(usage(1)); }
+        else if i + 1 == argc { return Err(usage(3)); }
+        i += 1;
+        f = Some(args[i].clone());
+      }
+      "--list-formats" => {
+        if lf { return Err(usage(1)); }
+        else { lf = true; }
+      }
       "-l" | "--log-file" => {
         if l.is_some() { return Err(usage(1)); }
         else if i + 1 == argc { return Err(usage(3)); }
         i += 1;
         l = Some(args[i].clone());
+      }
+      "-L" | "--load" => {
+        if ll.is_some() { return Err(usage(1)); }
+        else if i + 1 == argc { return Err(usage(3)); }
+        i += 1;
+        ll = Some(args[i].clone());
       }
       "-q" | "--quit" => {
         if q { return Err(usage(1)); }
@@ -151,22 +196,32 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
           return Err(usage(3));
         }
         i += 1;
-        let arg = &args[i];
-        match math.stoi(arg) {
-          Ok(i) => if i < 0 || i > i32::MAX as isize {
-            println!("Index (s) out of range");
-            return Err(ExitCode::from(2))
-          } else {
-            s = i as i32;
-          },
-          Err(_) => return Err(usage(3)),
+        match args[i].parse::<i32>() {
+          Ok(i) => if i < 0 {
+            println!("{}: index out of range", binary_name());
+            return Err(try_help(2))
+          } else { s = i },
+          Err(_) => {
+            println!("{}: '{}': invalid argument", binary_name(), slice);
+            return Err(try_help(3))
+          }
         }
       }
       _ => {
         fileidx = i;
-        if i as i64 + s as i64 > argc as i64 {
-          println!("Missing filename");
-          return Err(ExitCode::from(3));
+        let s: usize = if s < 0 { 1 } else { s as usize };
+
+        for int in i..(i + s.max(0) as usize) {
+          if int >= argc {
+            println!("{}: missing filename", binary_name());
+            return Err(try_help(3))
+          }
+          if let Some(c) = args[int].bytes().next() {
+            if c == b'-' {
+              println!("{}: invalid option -- '{}'", binary_name(), &args[int].get(1..).unwrap());
+              return Err(try_help(2))
+            }
+          }
         }
         break;
       }
@@ -176,29 +231,64 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
 
   let s: usize = if s < 0 { 1 } else { s as usize };
 
-  Ok(Config{h, c, l, q, v, s, fileidx})
+  Ok(Config{ help: h, coglib: c, format: f, logfile: l, load: ll, list_formats: lf, quiet: q, version: v, sources: s, fileidx })
 }
 
+fn binary_name() -> String { if let Some(n) = env::args().next() { n } else { "crank".to_string() } }
+
 fn usage(code: u8) -> ExitCode {
-  println!("Usage: crank [-hclqsv] [file...] [arg...]");
+  println!("usage: {} [-hqv] [--list-formats | -f FORMAT] [-l FILE] [-L FILE] [-s N] [file...] [arg...]", binary_name());
+  try_help(code)
+}
+
+fn try_help(code: u8) -> ExitCode {
+  println!("Try '{} --help' for more information.", binary_name());
   ExitCode::from(code)
 }
 
 fn help() -> ExitCode {
   usage(0);
-  println!(" -h    --help            print this help message");
-  println!(" -c    --coglib-dir DIR  use DIR as a secondary source directory");
-  println!(" -l    --log-file FILE   enable token logging to FILE");
-  println!(" -q    --quiet           don't show state information at program end");
-  println!(" -s N  --sources N       specify N source files to be composed (default is N=1)");
-  println!(" -v    --version         print version information");
-  ExitCode::from(0)
+  println!(" -h, --help            print this help message");
+  println!(" -c, --coglib-dir DIR  use DIR as a secondary source directory");
+  println!(" -f, --format FORMAT   use FORMAT as the load format, see '--load'");
+  println!("     --list-formats    print a list of supported load formats");
+  println!(" -l, --log-file FILE   enable token logging to FILE");
+  println!(" -L, --load FILE       load cognition state from FILE (default format is JSON)");
+  println!("                         for a list of supported formats, see '--list-formats'");
+  println!(" -q, --quiet           don't show state information at program end");
+  println!(" -s, --sources N       specify N source files to be composed (default is N=1)");
+  println!(" -v, --version         print version information");
+  ExitCode::SUCCESS
 }
 
 fn version() -> ExitCode {
-  println!("Authors: Matthew Hinton, Preston Pan, MIT License 2024");
-  println!("cognition, version {VERSION}");
-  ExitCode::from(0)
+  println!("cognition {VERSION}, written by Matthew Hinton and Preston Pan, MIT License 2024");
+  ExitCode::SUCCESS
+}
+
+fn list_formats() -> ExitCode {
+  println!("Currently supported data formats:");
+  for fmt in DATA_FORMATS { println!("{fmt}"); }
+  ExitCode::SUCCESS
+}
+
+fn load(filename: &String) -> Result<CognitionState, ExitCode> {
+  let Ok(file) = std::fs::File::options().read(true).open(filename) else {
+    return Err(ExitCode::from(4))
+  };
+  let mut bufreader = std::io::BufReader::new(file);
+  let mut string = String::new();
+  let _ = bufreader.read_to_string(&mut string);
+  println!("loading... \"{}\"", string);
+
+  let mut deserializer = serde_json::Deserializer::from_str(&string);
+  match crate::serde::deserialize_cognition_state(&mut deserializer) {
+    Ok(state) => Ok(state),
+    Err(e) => {
+      println!("{e}");
+      Err(ExitCode::from(5))
+    }
+  }
 }
 
 fn print_end(state: &CognitionState) {

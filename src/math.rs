@@ -1,4 +1,5 @@
 use crate::*;
+use ::serde::{Serialize, Deserialize};
 
 use std::str::Chars;
 //use std::iter::Rev;
@@ -13,6 +14,7 @@ pub type StrOp = HashMap<String, String>;
 pub type CustomOp = HashMap<Operand, Operand>;
 pub type OpsTable = HashMap<String, Op>;
 
+#[derive(Serialize, Deserialize)]
 pub enum Op {
   Unary(UnaryOp),
   Binary(BinaryOp),
@@ -20,13 +22,13 @@ pub enum Op {
   Custom(CustomOp),
 }
 
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Eq, Hash, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Digit {
   digit: char,
   neg: bool,
 }
 
-#[derive(Eq, Hash, PartialEq, Clone)]
+#[derive(Eq, Hash, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Operand {
   Unary(Digit),
   Binary(Digit, Digit),
@@ -144,6 +146,7 @@ impl Operand {
 //   };
 // }
 
+#[derive(Serialize, Deserialize)]
 pub struct Math {
   base: i32,
   digits: Vec<char>,

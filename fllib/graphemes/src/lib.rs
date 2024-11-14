@@ -269,12 +269,12 @@ pub fn cog_gtoi(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 }
 
 #[no_mangle]
-pub extern fn add_words(state: &mut CognitionState, lib: &Library, lib_name: &String) {
-  add_word!(state, lib, lib_name, "gunconcat", cog_gunconcat);
-  add_word!(state, lib, lib_name, "gcut", cog_gcut);
-  add_word!(state, lib, lib_name, "glen", cog_glen);
-  add_word!(state, lib, lib_name, "gat", cog_gat);
-  add_word!(state, lib, lib_name, "gnth", cog_gnth);
-  add_word!(state, lib, lib_name, "greverse", cog_greverse);
-  add_word!(state, lib, lib_name, "gtoi", cog_gtoi);
+pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
+  add_word!(state, lib, "gunconcat", cog_gunconcat);
+  add_word!(state, lib, "gcut", cog_gcut);
+  add_word!(state, lib, "glen", cog_glen);
+  add_word!(state, lib, "gat", cog_gat);
+  add_word!(state, lib, "gnth", cog_gnth);
+  add_word!(state, lib, "greverse", cog_greverse);
+  add_word!(state, lib, "gtoi", cog_gtoi);
 }

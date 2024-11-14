@@ -18,27 +18,20 @@ pub fn cog_fllib_questionmark(mut state: CognitionState, w: Option<&Value>) -> C
 
 pub fn cog_fllib(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let (v1, v2) = get_2_words!(state, w);
-  let stack = &mut state.current().stack;
   let filename = &v1.value_stack_ref().first().unwrap().vword_ref().str_word;
   let lib_name = &v2.value_stack_ref().first().unwrap().vword_ref().str_word;
-  unsafe {
-    let Ok(lib) = libloading::Library::new(filename) else {
-      stack.push(v1);
-      stack.push(v2);
-      return state.eval_error("INVALID FILENAME", w)
-    };
-    let fllib_add_words: libloading::Symbol<AddWordsFn> = match lib.get(b"add_words\0") {
-      Ok(f) => f,
-      Err(_) => {
-        stack.push(v1);
-        stack.push(v2);
-        return state.eval_error("INVALID FLLIB", w)
-      },
-    };
-    fllib_add_words(&mut state, &Arc::new(lib), lib_name);
+
+  match unsafe { state.load_fllib(lib_name, filename) } {
+    Some(e) => {
+      state.current().stack.push(v1);
+      state.current().stack.push(v2);
+      return state.eval_error(e, w)
+    },
+    None => {
+      state.pool.add_val(v1);
+      state.pool.add_val(v2);
+    }
   }
-  state.pool.add_val(v1);
-  state.pool.add_val(v2);
   state
 }
 
@@ -65,14 +58,16 @@ pub fn cog_fllib_filename(mut state: CognitionState, w: Option<&Value>) -> Cogni
 
 pub fn cog_get_fllibs(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let mut vstack = state.pool.get_vstack(DEFAULT_STACK_SIZE);
-  let mut cur_v = state.pop_cur();
-  for s in cur_v.metastack_container().fllibs.keys() {
-    let mut vword = state.pool.get_vword(s.len());
-    vword.str_word.push_str(s);
-    vstack.container.stack.push(Value::Word(vword));
+  if let Some(libs) = state.fllibs.take() {
+    for s in libs.keys() {
+      let mut vword = state.pool.get_vword(s.len());
+      vword.str_word.push_str(s);
+      vstack.container.stack.push(Value::Word(vword));
+    }
+    state.fllibs = Some(libs)
   }
-  cur_v.metastack_container().stack.push(Value::Stack(vstack));
-  state.push_cur(cur_v)
+  state.current().stack.push(Value::Stack(vstack));
+  state
 }
 
 pub fn cog_name(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
@@ -129,5 +124,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "fllib-filename", cog_fllib_filename);
   add_builtin!(state, "get-fllibs", cog_get_fllibs);
   add_builtin!(state, "name", cog_name);
+  // add_builtin!(state, "set-name", cog_set_name);
   add_builtin!(state, "library", cog_library);
 }

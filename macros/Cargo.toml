@@ -1,15 +1,14 @@
-[workspace]
-
 [package]
-name = "multithreading"
+name = "cognition-macros"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["lib", "cdylib"]
+proc-macro = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cognition = { path = "../.." }
-serde = "1.0"
+proc-macro2 = "1.0.89"
+quote = "1.0.37"
+syn = { version = "2.0.87", features = ["full"] }
