@@ -23,39 +23,123 @@ pub const EVAL: crate::Value = crate::Value::Control(crate::VControl::Eval);
 pub const RETURN: crate::Value = crate::Value::Control(crate::VControl::Return);
 pub const GHOST: crate::Value = crate::Value::Control(crate::VControl::Ghost);
 
-pub const DATA_FORMATS: [&str; 18] = [
-  "JSON", "Postcard", "CBOR", "YAML", "MessagePack", "TOML", "Pickle", "RON", "BSON", "Avro", "JSON5", "URL", "S-expression", "D-Bus", "FlexBuffers", "Bencode", "DynamoDB", "CSV"
+#[macro_export]
+macro_rules! get_from_data_formats {
+  ($filename:ident,$format:ident,$index:tt,$f:tt,$fail1:block,$fail2:block,$ext_slice:tt,$fail3:block) => {
+    match $format {
+      Some($f) => {
+        let mut iter = DATA_FORMATS.iter();
+        loop {
+          let Some(element) = iter.next() else {
+            $fail1
+          };
+          if *element.0 == *$f {
+            break element.$index.clone()
+          }
+        }
+      },
+      None => {
+        let mut rev = $filename.char_indices().rev();
+        let dot_idx = loop {
+          let Some((i, c)) = rev.next() else {
+            $fail2
+          };
+          if c == '.' {
+            break i;
+          }
+        };
+        let $ext_slice = &$filename[dot_idx..];
+        let mut iter = DATA_FORMATS.iter();
+        loop {
+          let Some(element) = iter.next() else {
+            $fail3
+          };
+          if *element.1 == *$ext_slice {
+            break element.$index.clone()
+          }
+        }
+      }
+    }
+  };
+  ($filename:ident,$format:ident,$index:tt,MAIN) => {{
+    get_from_data_formats!($filename, $format, $index, f, {
+      println!("{}: invalid format -- '{}'", binary_name(), f);
+      println!("Run '{} --list-formats' for a list of supported formats and file extensions", binary_name());
+      return Err(try_help(2))
+    }, {
+      println!("{}: could not infer format from nonexistent file extension", binary_name());
+      println!("Please specify a format with '--format|--save-format FORMAT' or include a file extension.");
+      return Err(try_help(2))
+    }, ext_slice, {
+      println!("{}: invalid file extension -- '{}'", binary_name(), ext_slice);
+      println!("Run '{} --list-formats' for a list of supported formats and file extensions", binary_name());
+      return Err(try_help(2))
+    })
+  }}
+}
+
+pub const DATA_FORMATS: [(&str,&str,crate::CogStateDeserializeFn,crate::CogLibsDeserializeFn,crate::CogStateSerializeFn,crate::CogValueSerializeFn,crate::CogValueDeserializeFn); 1] = [
+  ("JSON", ".json",
+   (|f, i, mut state| {
+     let mut deserializer = serde_json::Deserializer::from_str(f);
+     match crate::serde::deserialize_cognition_state_from_state(&mut deserializer, &mut state, i) {
+       Ok(_) => Ok(state),
+       Err(e) => Err((state, Box::new(e)))
+     }
+   }),
+   (|fllibs, mut state| {
+     let mut deserializer = serde_json::Deserializer::from_str(fllibs);
+     match crate::serde::serde_load_fllibs(&mut deserializer, &mut state) {
+       Err(e) => Err((state, Box::new(e))),
+       Ok(opt) => match opt {
+         Some(e) => Err((state, Box::new(e))),
+         None => Ok(state)
+       }
+     }
+   }),
+   (|state, write| {
+     let mut serializer = serde_json::Serializer::new(write);
+     match <crate::CognitionState as ::serde::ser::Serialize>::serialize(state, &mut serializer) {
+       Ok(_) => Ok(()),
+       Err(e) => Err(Box::new(e))
+     }
+   }),
+   (|val, write| {
+     let mut serializer = serde_json::Serializer::new(write);
+     match <crate::Value as ::serde::ser::Serialize>::serialize(val, &mut serializer) {
+       Ok(_) => Ok(()),
+       Err(e) => Err(Box::new(e))
+     }
+   }),
+   (|string, state| {
+     let mut deserializer = serde_json::Deserializer::from_str(string);
+     match <crate::Value as crate::serde::CognitionDeserialize>::cognition_deserialize(&mut deserializer, state) {
+       Ok(v) => Ok(v),
+       Err(e) => Err(Box::new(e))
+     }
+   }),
+  )
+
+  //"JSON", "Postcard", "CBOR", "YAML", "MessagePack", "TOML", "Pickle", "RON", "BSON", "Avro", "JSON5", "URL", "S-expression", "D-Bus", "FlexBuffers", "Bencode", "DynamoDB", "CSV"
 ];
 
+#[macro_export]
+macro_rules! void_deserialize_fn {
+  () => {
+    (|deserializer| Ok(
+     Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
+    )) as crate::DeserializeFn<dyn crate::Custom>
+  }
+}
+
 pub const BUILTIN_CUSTOM_DESERIALIZERS: [(&str, crate::DeserializeFn<dyn crate::Custom>); 7] = [
-  ("cognition::Void",
-   (|deserializer| Ok(
-     Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
-   )) as crate::DeserializeFn<dyn crate::Custom>),
-  ("cognition::builtins::io::ReadWriteCustom",
-   (|deserializer| Ok(
-     Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
-   )) as crate::DeserializeFn<dyn crate::Custom>),
-  ("cognition::builtins::io::FileCustom",
-   (|deserializer| Ok(
-     Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
-   )) as crate::DeserializeFn<dyn crate::Custom>),
-  ("cognition::builtins::io::ReadCustom",
-   (|deserializer| Ok(
-     Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
-   )) as crate::DeserializeFn<dyn crate::Custom>),
-  ("cognition::builtins::io::WriteCustom",
-   (|deserializer| Ok(
-     Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
-   )) as crate::DeserializeFn<dyn crate::Custom>),
-  ("cognition::builtins::io::BufReadCustom",
-   (|deserializer| Ok(
-     Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
-   )) as crate::DeserializeFn<dyn crate::Custom>),
-  ("cognition::builtins::io::BufWriteCustom",
-   (|deserializer| Ok(
-     Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
-   )) as crate::DeserializeFn<dyn crate::Custom>),
+  ("cognition::Void", void_deserialize_fn!{}),
+  ("cognition::builtins::io::ReadWriteCustom", void_deserialize_fn!{}),
+  ("cognition::builtins::io::FileCustom", void_deserialize_fn!{}),
+  ("cognition::builtins::io::ReadCustom", void_deserialize_fn!{}),
+  ("cognition::builtins::io::WriteCustom", void_deserialize_fn!{}),
+  ("cognition::builtins::io::BufReadCustom", void_deserialize_fn!{}),
+  ("cognition::builtins::io::BufWriteCustom", void_deserialize_fn!{})
 ];
 
 #[macro_export]

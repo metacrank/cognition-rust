@@ -7,6 +7,7 @@ pub mod math;
 pub mod metastack;
 pub mod misc;
 pub mod parser;
+pub mod serde;
 pub mod stackops;
 pub mod strings;
 pub mod wordtable;
@@ -24,6 +25,7 @@ pub fn add_builtins(state: &mut CognitionState) {
   metastack::add_builtins(state);
   misc::add_builtins(state);
   parser::add_builtins(state);
+  serde::add_builtins(state);
   stackops::add_builtins(state);
   strings::add_builtins(state);
   wordtable::add_builtins(state);

@@ -59,10 +59,15 @@ pub fn cog_fllib_filename(mut state: CognitionState, w: Option<&Value>) -> Cogni
 pub fn cog_get_fllibs(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let mut vstack = state.pool.get_vstack(DEFAULT_STACK_SIZE);
   if let Some(libs) = state.fllibs.take() {
-    for s in libs.keys() {
-      let mut vword = state.pool.get_vword(s.len());
-      vword.str_word.push_str(s);
-      vstack.container.stack.push(Value::Word(vword));
+    for (k, l) in libs.iter() {
+      let mut vword_name = state.pool.get_vword(k.len());
+      vword_name.str_word.push_str(k);
+      let mut vword_path = state.pool.get_vword(l.library.lib_path.len());
+      vword_path.str_word.push_str(&l.library.lib_path);
+      let mut tmp_vstack = state.pool.get_vstack(2);
+      tmp_vstack.container.stack.push(Value::Word(vword_path));
+      tmp_vstack.container.stack.push(Value::Word(vword_name));
+      vstack.container.stack.push(Value::Stack(tmp_vstack));
     }
     state.fllibs = Some(libs)
   }
@@ -94,6 +99,33 @@ pub fn cog_name(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state
 }
 
+pub fn cog_set_name(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let vname = get_word!(state, w);
+  let stack = &mut state.current().stack;
+  let mut v = stack.pop().unwrap();
+  let vstack = v.value_stack();
+  if vstack.len() != 1 {
+    stack.push(v);
+    stack.push(vname);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let vfirst = vstack.first_mut().unwrap();
+  if !vfirst.is_fllib() {
+    stack.push(v);
+    stack.push(vname);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  if let Some(s) = vfirst.vfllib_mut().str_word.take() {
+    state.pool.add_string(s);
+  }
+  let name = &vname.value_stack_ref().first().unwrap().vword_ref().str_word;
+  vfirst.vfllib_mut().str_word = Some(state.string_copy(name));
+  state.current().stack.push(v);
+  state.pool.add_val(vname);
+  state
+}
+
 pub fn cog_library(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
@@ -109,9 +141,12 @@ pub fn cog_library(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
   if let Some(ref library) = vfirst.vfllib_ref().library {
+    let mut vword = state.pool.get_vword(library.lib_path.len());
+    vword.str_word.push_str(&library.lib_path);
+    vstack.push(Value::Word(vword));
     let mut vword = state.pool.get_vword(library.lib_name.len());
     vword.str_word.push_str(&library.lib_name);
-    vstack.push(Value::Word(vword))
+    vstack.push(Value::Word(vword));
   }
   state.current().stack.push(v);
   state.pool.add_val(vfirst);
@@ -124,6 +159,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "fllib-filename", cog_fllib_filename);
   add_builtin!(state, "get-fllibs", cog_get_fllibs);
   add_builtin!(state, "name", cog_name);
-  // add_builtin!(state, "set-name", cog_set_name);
+  add_builtin!(state, "set-name", cog_set_name);
   add_builtin!(state, "library", cog_library);
 }

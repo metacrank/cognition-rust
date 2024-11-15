@@ -26,8 +26,15 @@ pub use ::serde::{Serialize, Deserialize};
 pub use erased_serde;
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
-pub type DeserializeFn<T> = fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<T>>;
 pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library);
+
+pub type DeserializeFn<T> = fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<T>>;
+pub type CognitionDeserializeResult = Result<CognitionState, (CognitionState, Box<dyn std::fmt::Display>)>;
+pub type CogStateDeserializeFn = fn(&str, bool, CognitionState) -> CognitionDeserializeResult;
+pub type CogLibsDeserializeFn = fn(&str, CognitionState) -> CognitionDeserializeResult;
+pub type CogStateSerializeFn = fn(&CognitionState, &mut dyn Write) -> Result<(), Box<dyn std::fmt::Display>>;
+pub type CogValueSerializeFn = fn(&Value, &mut dyn Write) -> Result<(), Box<dyn std::fmt::Display>>;
+pub type CogValueDeserializeFn = fn(&str, &mut CognitionState) -> Result<Value, Box<dyn std::fmt::Display>>;
 
 pub type Functions = Vec<CognitionFunction>;
 pub type Stack = Vec<Value>;
@@ -44,6 +51,7 @@ pub type Library = Arc<FLLibLibrary>;
 pub struct FLLibLibrary {
   pub lib: libloading::Library,
   pub lib_name: String,
+  pub lib_path: String,
 }
 
 pub struct ForeignLibrary {
@@ -907,7 +915,8 @@ impl CognitionState {
       Err(_) => return Some("INVALID FLLIB")
     };
     let lib_name = self.string_copy(lib_name);
-    let fllib_library = FLLibLibrary{ lib, lib_name };
+    let lib_path = self.string_copy(filename);
+    let fllib_library = FLLibLibrary{ lib, lib_name, lib_path };
     let library = Arc::new(fllib_library);
     fllib_add_words(self, &library);
     None

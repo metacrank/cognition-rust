@@ -1,7 +1,7 @@
 use crate::*;
 use std::fmt;
 use std::marker::PhantomData;
-use ::serde::de::{self, Deserializer, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor};
+use ::serde::de::{self, Deserializer, DeserializeSeed, EnumAccess, IgnoredAny, MapAccess, SeqAccess, VariantAccess, Visitor};
 use ::serde::ser::{Serialize, Serializer, SerializeMap, SerializeSeq, SerializeStruct};
 
 pub struct Wrap<'a, T: ?Sized>(pub &'a T);
@@ -270,8 +270,9 @@ impl Serialize for FLLibLibrary {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where S: Serializer
   {
-    let mut ser = serializer.serialize_struct("Library", 1)?;
+    let mut ser = serializer.serialize_struct("Library", 2)?;
     ser.serialize_field("lib_name", &self.lib_name)?;
+    ser.serialize_field("lib_path", &self.lib_path)?;
     ser.end()
   }
 }
@@ -351,12 +352,8 @@ impl Serialize for Container {
   where S: Serializer
   {
     let mut ser = serializer.serialize_struct("Container", 12)?;
-    ser.serialize_field("stack", &VecWrap(&self.stack))?;
-    let err_stack = match self.err_stack {
-      Some(ref estack) => Some(VecWrap(estack)),
-      None => None
-    };
-    ser.serialize_field("err_stack", &err_stack)?;
+    ser.serialize_field("stack", &self.stack)?;
+    ser.serialize_field("err_stack", &self.err_stack)?;
     ser.serialize_field("cranks", &self.cranks)?;
     ser.serialize_field("math", &self.math)?;
     ser.serialize_field("faliases", &self.faliases)?;
@@ -861,9 +858,7 @@ where S: Serializer
   let mut map = serializer.serialize_map(len)?;
   if let Some(ref libs) = libs {
     for (name, lib) in libs.iter() {
-      let raw_path = lib.library.lib_name.clone();
-      let path = libloading::library_filename(raw_path);
-      map.serialize_entry(name, &path)?;
+      map.serialize_entry(name, &lib.library.lib_path)?;
     }
   }
   map.end()
@@ -917,8 +912,8 @@ impl Serialize for CognitionState {
   where S: Serializer
   {
     let mut ser = serializer.serialize_struct("CognitionState", 8)?;
-    ser.serialize_field("chroots", &VecWrap(&self.chroots))?;
-    ser.serialize_field("stack", &VecWrap(&self.stack))?;
+    ser.serialize_field("chroots", &self.chroots)?;
+    ser.serialize_field("stack", &self.stack)?;
     ser.serialize_field("family", &FamilyWrap(&self.family))?;
     ser.serialize_field("parser", &self.parser)?;
     ser.serialize_field("exited", &self.exited)?;
@@ -945,7 +940,7 @@ impl<'de> CognitionDeserialize<'de> for ForeignLibrariesRepr {
   }
 }
 
-fn cogstate_init() -> CognitionState {
+pub fn cogstate_init() -> CognitionState {
   let mut state = CognitionState::new(Stack::with_capacity(1));
   state.stack.push(Value::Stack(Box::new(VStack::with_capacity(0))));
   crate::builtins::add_builtins(&mut state);
@@ -976,201 +971,226 @@ where
   }
 }
 
-pub fn deserialize_cognition_state_from_state<'de, D>(deserializer: D, state: &mut CognitionState) -> Result<(), D::Error>
-where D: Deserializer<'de>
-{
-  #[derive(Deserialize)]
-  #[serde(field_identifier, rename_all = "snake_case")]
-  enum Field {
-    Chroots,
-    Stack,
-    Family,
-    Parser,
-    Exited,
-    ExitCode,
-    Args,
-    Fllibs,
-    //Pool
-  }
-
-  struct CognitionVisitor<'s> {
-    state: &'s mut CognitionState
-  }
-
-  impl<'s, 'de: 's> Visitor<'de> for CognitionVisitor<'s> {
-    type Value = Void;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-      write!(formatter, "struct CognitionState")
+macro_rules! deserialize_cognition_state_from_state_macro {
+  ($deserializer:ident,$state:ident,$seq:tt,$map:tt,$fllibs:tt,$selfref:tt,$seqblock:block,$mapblock:block) => {{
+    #[derive(Deserialize)]
+    #[serde(field_identifier, rename_all = "snake_case")]
+    enum Field {
+      Chroots,
+      Stack,
+      Family,
+      Parser,
+      Exited,
+      ExitCode,
+      Args,
+      Fllibs,
+      //Pool
     }
 
-    fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
-    where
-      V: SeqAccess<'de>,
-    {
-      let cogseed = CognitionDeserializeSeed::<Vec<Stack>>::new(self.state);
-      let chroots = seq.next_element_seed(cogseed)?
-        .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-      let cogseed = CognitionDeserializeSeed::<Stack>::new(self.state);
-      let stack = seq.next_element_seed(cogseed)?
-        .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-      let cogseed = CognitionDeserializeSeed::<Family>::new(self.state);
-      let family = seq.next_element_seed(cogseed)?
-        .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-      let cogseed = CognitionDeserializeSeed::<Option<Parser>>::new(self.state);
-      let parser = seq.next_element_seed(cogseed)?
-        .ok_or_else(|| de::Error::invalid_length(3, &self))?;
-      let cogseed = CognitionDeserializeSeed::<bool>::new(self.state);
-      let exited = seq.next_element_seed(cogseed)?
-        .ok_or_else(|| de::Error::invalid_length(4, &self))?;
-      let cogseed = CognitionDeserializeSeed::<Option<String>>::new(self.state);
-      let exit_code = seq.next_element_seed(cogseed)?
-        .ok_or_else(|| de::Error::invalid_length(5, &self))?;
-      let cogseed = CognitionDeserializeSeed::<Stack>::new(self.state);
-      let args = seq.next_element_seed(cogseed)?
-        .ok_or_else(|| de::Error::invalid_length(6, &self))?;
-      let cogseed = CognitionDeserializeSeed::<ForeignLibrariesRepr>::new(self.state);
-      let _ = seq.next_element_seed(cogseed)?
-        .ok_or_else(|| de::Error::invalid_length(7, &self))?;
-      //let cogseed = CognitionDeserializeSeed::<Pool>::new(self.state);
-      //let pool = seq.next_element_seed(cogseed)?
-      //  .ok_or_else(|| de::Error::invalid_length(8, &self))?;
-
-      self.state.chroots = chroots;
-      self.state.stack = stack;
-      self.state.family = family;
-      self.state.parser = parser;
-      self.state.exited = exited;
-      self.state.exit_code = exit_code;
-      self.state.args = args;
-      //self.state.pool = pool;
-      Ok(Void{})
+    struct CognitionVisitor<'s> {
+      state: &'s mut CognitionState
     }
 
-    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-    where A: MapAccess<'de>,
-    {
-      let mut chroots = None;
-      let mut stack = None;
-      let mut family = None;
-      let mut parser = None;
-      let mut exited = None;
-      let mut exit_code = None;
-      let mut args = None;
-      //let pool = None;
+    impl<'s, 'de: 's> Visitor<'de> for CognitionVisitor<'s> {
+      type Value = Void;
 
-      let mut fllibs = None;
-
-      while let Some(key) = map.next_key()? {
-        match key {
-          Field::Chroots => {
-            if chroots.is_some() {
-              return Err(de::Error::duplicate_field("chroots"));
-            }
-            let cogseed = CognitionDeserializeSeed::<Vec<Stack>>::new(self.state);
-            chroots = Some(map.next_value_seed(cogseed)?);
-          },
-          Field::Stack => {
-            if stack.is_some() {
-              return Err(de::Error::duplicate_field("stack"));
-            }
-            let cogseed = CognitionDeserializeSeed::<Stack>::new(self.state);
-            stack = Some(map.next_value_seed(cogseed)?);
-          },
-          Field::Family => {
-            if family.is_some() {
-              return Err(de::Error::duplicate_field("family"));
-            }
-            let cogseed = CognitionDeserializeSeed::<Family>::new(self.state);
-            family = Some(map.next_value_seed(cogseed)?);
-          },
-          Field::Parser => {
-            if parser.is_some() {
-              return Err(de::Error::duplicate_field("parser"));
-            }
-            let cogseed = CognitionDeserializeSeed::<Option<Parser>>::new(self.state);
-            parser = Some(map.next_value_seed(cogseed)?);
-          },
-          Field::Exited => {
-            if exited.is_some() {
-              return Err(de::Error::duplicate_field("exited"));
-            }
-            let cogseed = CognitionDeserializeSeed::<bool>::new(self.state);
-            exited = Some(map.next_value_seed(cogseed)?);
-          },
-          Field::ExitCode => {
-            if exit_code.is_some() {
-              return Err(de::Error::duplicate_field("exit_code"));
-            }
-            let cogseed = CognitionDeserializeSeed::<Option<String>>::new(self.state);
-            exit_code = Some(map.next_value_seed(cogseed)?);
-          },
-          Field::Args => {
-            if args.is_some() {
-              return Err(de::Error::duplicate_field("args"));
-            }
-            let cogseed = CognitionDeserializeSeed::<Stack>::new(self.state);
-            args = Some(map.next_value_seed(cogseed)?);
-          },
-          Field::Fllibs => {
-            if fllibs.is_some() {
-              return Err(de::Error::duplicate_field("fllibs"));
-            }
-            let cogseed = CognitionDeserializeSeed::<ForeignLibrariesRepr>::new(self.state);
-            fllibs = Some(map.next_value_seed(cogseed)?);
-          },
-          //Field::Pool => {
-          //  if pool.is_some() {
-          //    return Err(de::Error::duplicate_field("pool"));
-          //  }
-          //  let cogseed = CognitionDeserializeSeed::<Pool>::new(self.state);
-          //  pool = Some(map.next_value_seed(cogseed)?);
-          //},
-        }
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "struct CognitionState")
       }
-      let chroots = chroots.ok_or_else(|| de::Error::missing_field("chroots"))?;
-      let stack = stack.ok_or_else(|| de::Error::missing_field("stack"))?;
-      let family = family.ok_or_else(|| de::Error::missing_field("family"))?;
-      let parser = parser.ok_or_else(|| de::Error::missing_field("parser"))?;
-      let exited = exited.ok_or_else(|| de::Error::missing_field("exited"))?;
-      let exit_code = exit_code.ok_or_else(|| de::Error::missing_field("exit_code"))?;
-      let args = args.ok_or_else(|| de::Error::missing_field("args"))?;
-      //let pool = pool.ok_or_else(|| de::Error::missing_field("pool"))?;
 
-      self.state.chroots = chroots;
-      self.state.stack = stack;
-      self.state.family = family;
-      self.state.parser = parser;
-      self.state.exited = exited;
-      self.state.exit_code = exit_code;
-      self.state.args = args;
-      //self.state.pool = pool;
-      Ok(Void{})
+      fn visit_seq<V>(mut self, mut $seq: V) -> Result<Self::Value, V::Error>
+      where
+        V: SeqAccess<'de>,
+      {
+        let cogseed = CognitionDeserializeSeed::<Vec<Stack>>::new(self.state);
+        let chroots = $seq.next_element_seed(cogseed)?
+          .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+        let cogseed = CognitionDeserializeSeed::<Stack>::new(self.state);
+        let stack = $seq.next_element_seed(cogseed)?
+          .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+        let cogseed = CognitionDeserializeSeed::<Family>::new(self.state);
+        let family = $seq.next_element_seed(cogseed)?
+          .ok_or_else(|| de::Error::invalid_length(2, &self))?;
+        let cogseed = CognitionDeserializeSeed::<Option<Parser>>::new(self.state);
+        let parser = $seq.next_element_seed(cogseed)?
+          .ok_or_else(|| de::Error::invalid_length(3, &self))?;
+        let cogseed = CognitionDeserializeSeed::<bool>::new(self.state);
+        let exited = $seq.next_element_seed(cogseed)?
+          .ok_or_else(|| de::Error::invalid_length(4, &self))?;
+        let cogseed = CognitionDeserializeSeed::<Option<String>>::new(self.state);
+        let exit_code = $seq.next_element_seed(cogseed)?
+          .ok_or_else(|| de::Error::invalid_length(5, &self))?;
+        let cogseed = CognitionDeserializeSeed::<Stack>::new(self.state);
+        let args = $seq.next_element_seed(cogseed)?
+          .ok_or_else(|| de::Error::invalid_length(6, &self))?;
+
+        let $selfref = &mut self;
+        $seqblock
+        //let cogseed = CognitionDeserializeSeed::<Pool>::new(self.state);
+        //let pool = $seq.next_element_seed(cogseed)?
+        //  .ok_or_else(|| de::Error::invalid_length(8, &self))?;
+
+        self.state.chroots = chroots;
+        self.state.stack = stack;
+        self.state.family = family;
+        self.state.parser = parser;
+        self.state.exited = exited;
+        self.state.exit_code = exit_code;
+        self.state.args = args;
+        //self.state.pool = pool;
+        Ok(Void{})
+      }
+
+      fn visit_map<A>(mut self, mut $map: A) -> Result<Self::Value, A::Error>
+      where A: MapAccess<'de>,
+      {
+        let mut chroots = None;
+        let mut stack = None;
+        let mut family = None;
+        let mut parser = None;
+        let mut exited = None;
+        let mut exit_code = None;
+        let mut args = None;
+        //let pool = None;
+
+        let mut $fllibs = false;
+
+        while let Some(key) = $map.next_key()? {
+          match key {
+            Field::Chroots => {
+              if chroots.is_some() {
+                return Err(de::Error::duplicate_field("chroots"));
+              }
+              let cogseed = CognitionDeserializeSeed::<Vec<Stack>>::new(self.state);
+              chroots = Some($map.next_value_seed(cogseed)?);
+            },
+            Field::Stack => {
+              if stack.is_some() {
+                return Err(de::Error::duplicate_field("stack"));
+              }
+              let cogseed = CognitionDeserializeSeed::<Stack>::new(self.state);
+              stack = Some($map.next_value_seed(cogseed)?);
+            },
+            Field::Family => {
+              if family.is_some() {
+                return Err(de::Error::duplicate_field("family"));
+              }
+              let cogseed = CognitionDeserializeSeed::<Family>::new(self.state);
+              family = Some($map.next_value_seed(cogseed)?);
+            },
+            Field::Parser => {
+              if parser.is_some() {
+                return Err(de::Error::duplicate_field("parser"));
+              }
+              let cogseed = CognitionDeserializeSeed::<Option<Parser>>::new(self.state);
+              parser = Some($map.next_value_seed(cogseed)?);
+            },
+            Field::Exited => {
+              if exited.is_some() {
+                return Err(de::Error::duplicate_field("exited"));
+              }
+              let cogseed = CognitionDeserializeSeed::<bool>::new(self.state);
+              exited = Some($map.next_value_seed(cogseed)?);
+            },
+            Field::ExitCode => {
+              if exit_code.is_some() {
+                return Err(de::Error::duplicate_field("exit_code"));
+              }
+              let cogseed = CognitionDeserializeSeed::<Option<String>>::new(self.state);
+              exit_code = Some($map.next_value_seed(cogseed)?);
+            },
+            Field::Args => {
+              if args.is_some() {
+                return Err(de::Error::duplicate_field("args"));
+              }
+              let cogseed = CognitionDeserializeSeed::<Stack>::new(self.state);
+              args = Some($map.next_value_seed(cogseed)?);
+            },
+            Field::Fllibs => {
+              if $fllibs {
+                return Err(de::Error::duplicate_field("fllibs"));
+              }
+              let $selfref = &mut self;
+              $mapblock
+            },
+            //Field::Pool => {
+            //  if pool.is_some() {
+            //    return Err(de::Error::duplicate_field("pool"));
+            //  }
+            //  let cogseed = CognitionDeserializeSeed::<Pool>::new(self.state);
+            //  pool = Some($map.next_value_seed(cogseed)?);
+            //},
+          }
+        }
+        let chroots = chroots.ok_or_else(|| de::Error::missing_field("chroots"))?;
+        let stack = stack.ok_or_else(|| de::Error::missing_field("stack"))?;
+        let family = family.ok_or_else(|| de::Error::missing_field("family"))?;
+        let parser = parser.ok_or_else(|| de::Error::missing_field("parser"))?;
+        let exited = exited.ok_or_else(|| de::Error::missing_field("exited"))?;
+        let exit_code = exit_code.ok_or_else(|| de::Error::missing_field("exit_code"))?;
+        let args = args.ok_or_else(|| de::Error::missing_field("args"))?;
+        //let pool = pool.ok_or_else(|| de::Error::missing_field("pool"))?;
+        if !$fllibs { return Err(de::Error::missing_field("fllibs")) }
+
+        self.state.chroots = chroots;
+        self.state.stack = stack;
+        self.state.family = family;
+        self.state.parser = parser;
+        self.state.exited = exited;
+        self.state.exit_code = exit_code;
+        self.state.args = args;
+        //self.state.pool = pool;
+        Ok(Void{})
+      }
     }
-  }
 
-  let visitor = CognitionVisitor{ state };
-  const FIELDS: &[&str] = &[
-    "chroots",
-    "stack",
-    "family",
-    "parser",
-    "exited",
-    "exit_code",
-    "args",
-    "fllibs",
-    //"pool"
-  ];
-  let _ = deserializer.deserialize_struct("CognitionState", FIELDS, visitor)?;
+    let visitor = CognitionVisitor{ state: $state };
+    const FIELDS: &[&str] = &[
+      "chroots",
+      "stack",
+      "family",
+      "parser",
+      "exited",
+      "exit_code",
+      "args",
+      "fllibs",
+      //"pool"
+    ];
+    let _ = $deserializer.deserialize_struct("CognitionState", FIELDS, visitor)?;
 
-  Ok(())
+    Ok(())
+  }}
 }
 
-pub fn deserialize_cognition_state<'de, D>(deserializer: D) -> Result<CognitionState, D::Error>
+pub fn deserialize_cognition_state_from_state<'de, D>(deserializer: D, state: &mut CognitionState, ignore_fllibs: bool) -> Result<(), D::Error>
+where D: Deserializer<'de>
+{
+  if ignore_fllibs {
+    deserialize_cognition_state_from_state_macro!(deserializer,state,seq,map,fllibs,_selfref, {
+      let _ = seq.next_element::<IgnoredAny>()?
+        .ok_or_else(|| de::Error::invalid_length(7, _selfref))?;
+    }, {
+      let _ = map.next_value::<IgnoredAny>()?;
+      fllibs = true;
+    })
+  } else {
+    deserialize_cognition_state_from_state_macro!(deserializer,state,seq,map,fllibs,selfref, {
+      let cogseed = CognitionDeserializeSeed::<ForeignLibrariesRepr>::new(selfref.state);
+      let _ = seq.next_element_seed(cogseed)?
+        .ok_or_else(|| de::Error::invalid_length(7, selfref))?;
+    },{
+      let cogseed = CognitionDeserializeSeed::<ForeignLibrariesRepr>::new(selfref.state);
+      let _ = map.next_value_seed(cogseed)?;
+      fllibs = true;
+    })
+  }
+}
+
+pub fn deserialize_cognition_state<'de, D>(deserializer: D, ignore_fllibs: bool) -> Result<CognitionState, D::Error>
 where D: Deserializer<'de>
 {
   let mut state = cogstate_init();
-  deserialize_cognition_state_from_state(deserializer, &mut state)?;
+  deserialize_cognition_state_from_state(deserializer, &mut state, ignore_fllibs)?;
   Ok(state)
 }
 
@@ -1183,7 +1203,7 @@ where
     Err(e) => return Err(TripleErr::F(e)),
     Ok(opt) => if let Some(e) = opt { return Err(TripleErr::S(e)) }
   }
-  if let Err(e) = deserialize_cognition_state_from_state(deserializer, state) {
+  if let Err(e) = deserialize_cognition_state_from_state(deserializer, state, true) {
     return Err(TripleErr::D(e))
   }
   Ok(())
