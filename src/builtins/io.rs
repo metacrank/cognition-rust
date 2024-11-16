@@ -467,7 +467,7 @@ pub fn cog_fquestionmark(mut state: CognitionState, w: Option<&Value>) -> Cognit
     Value::Word(vword) => {
       if let Ok(mut file) = File::create_new(&vword.str_word) {
         questionmark(&state, &mut file);
-      } else if let Ok(mut file) = File::open(&vword.str_word) {
+      } else if let Ok(mut file) = File::options().write(true).create(true).open(&vword.str_word) {
         questionmark(&state, &mut file);
       } else {
         stack.push(v);
@@ -527,7 +527,7 @@ pub fn cog_fperiod(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
         print_v.fprint(&mut file, "\n");
         flush!(file);
         state.pool.add_val(print_v);
-      } else if let Ok(mut file) = File::open(&vword.str_word) {
+      } else if let Ok(mut file) = File::options().write(true).create(true).open(&vword.str_word) {
         let print_v = stack.pop().unwrap();
         print_v.fprint(&mut file, "\n");
         flush!(file);

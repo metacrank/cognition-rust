@@ -14,7 +14,6 @@ pub type StrOp = HashMap<String, String>;
 pub type CustomOp = HashMap<Operand, Operand>;
 pub type OpsTable = HashMap<String, Op>;
 
-#[derive(Serialize, Deserialize)]
 pub enum Op {
   Unary(UnaryOp),
   Binary(BinaryOp),
@@ -146,20 +145,19 @@ impl Operand {
 //   };
 // }
 
-#[derive(Serialize, Deserialize)]
 pub struct Math {
-  base: i32,
-  digits: Vec<char>,
-  d_idx: HashMap<char, i32>,
-  mul: HashMap<(char, char), (i32, i32)>,
+  pub base: i32,
+  pub digits: Vec<char>,
+  pub d_idx: HashMap<char, i32>,
+  pub mul: HashMap<(char, char), (i32, i32)>,
 
   pub ops_table: OpsTable,
 
-  negc: Option<char>,
-  radix: Option<char>,
-  delim: Option<char>,
-  meta_radix: Option<char>,
-  meta_delim: Option<char>,
+  pub negc: Option<char>,
+  pub radix: Option<char>,
+  pub delim: Option<char>,
+  pub meta_radix: Option<char>,
+  pub meta_delim: Option<char>,
 }
 
 impl Math {

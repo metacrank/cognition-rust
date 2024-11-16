@@ -16,6 +16,8 @@ pub const DEFAULT_STRING_LENGTH: usize = 24;
 pub const DEFAULT_BUFFER_CAPACITY: usize = 576;
 pub const DEFAULT_WORD_TABLE_SIZE: usize = 576;
 pub const DEFAULT_FALIASES_SIZE: usize = 24;
+pub const DEFAULT_OP_SIZE: usize = 576;
+pub const DEFAULT_OPS_TABLE_SIZE: usize = 24;
 pub const DEFAULT_BASE: usize = 24;
 pub const BUILTINS_SIZE: usize = 192;
 

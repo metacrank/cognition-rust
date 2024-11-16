@@ -1,4 +1,5 @@
 use crate::*;
+use crate::math::*;
 use std::fmt;
 use std::marker::PhantomData;
 use ::serde::de::{self, Deserializer, DeserializeSeed, EnumAccess, IgnoredAny, MapAccess, SeqAccess, VariantAccess, Visitor};
@@ -39,6 +40,29 @@ where T: Sized + Serialize + 'a,
     let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
     for e in self.0 {
       seq.serialize_element(e)?;
+    }
+    seq.end()
+  }
+}
+
+#[derive(Serialize)]
+pub struct Element<K: Serialize,V: Serialize>(K, V);
+
+pub struct MapWrap<'a, K, V>(pub &'a HashMap<K, V>);
+
+impl<K, V> Serialize for MapWrap<'_, K, V>
+where
+  K: Serialize,
+  V: Serialize
+{
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer
+  {
+
+    let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+    for (k, v) in self.0.iter() {
+      let element = Element(k, v);
+      seq.serialize_element(&element)?;
     }
     seq.end()
   }
@@ -382,6 +406,38 @@ impl Serialize for VStack {
   }
 }
 
+impl Serialize for Op {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer
+  {
+    match *self {
+      Op::Unary(ref u)  => serializer.serialize_newtype_variant("Op", 0, "Unary", &MapWrap(u)),
+      Op::Binary(ref b)  => serializer.serialize_newtype_variant("Op", 0, "Binary", &MapWrap(b)),
+      Op::Str(ref s)  => serializer.serialize_newtype_variant("Op", 0, "Str", s),
+      Op::Custom(ref c)  => serializer.serialize_newtype_variant("Op", 0, "Custom", &MapWrap(c)),
+    }
+  }
+}
+
+impl Serialize for Math {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer
+  {
+    let mut ser = serializer.serialize_struct("Math", 10)?;
+    ser.serialize_field("base", &self.base)?;
+    ser.serialize_field("digits", &self.digits)?;
+    ser.serialize_field("d_idx", &MapWrap(&self.d_idx))?;
+    ser.serialize_field("mul", &MapWrap(&self.mul))?;
+    ser.serialize_field("ops_table", &self.ops_table)?;
+    ser.serialize_field("negc", &self.negc)?;
+    ser.serialize_field("radix", &self.radix)?;
+    ser.serialize_field("delim", &self.delim)?;
+    ser.serialize_field("meta_radix", &self.meta_radix)?;
+    ser.serialize_field("meta_delim", &self.meta_delim)?;
+    ser.end()
+  }
+}
+
 pub trait CognitionDeserialize<'de> {
   fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
   where
@@ -406,6 +462,123 @@ impl<'de> CognitionDeserialize<'de> for Library {
     Self: Sized,
   {
     deserialize_library(deserializer, state)
+  }
+}
+
+impl<'de> CognitionDeserialize<'de> for Value {
+  fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    #[derive(Deserialize)]
+    enum Field { Word, Stack, Macro, Error, FLLib, Custom, Control }
+
+    struct CognitionVisitor<'s> {
+      state: &'s mut CognitionState
+    }
+
+    impl<'s, 'de: 's> Visitor<'de> for CognitionVisitor<'s> {
+      type Value = Value;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "enum Value")
+      }
+
+      fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+      where
+        A: EnumAccess<'de>,
+      {
+        let (variant_name, variant_data): (Field, _) = data.variant()?;
+
+        match variant_name {
+          Field::Word => Ok(Value::Word(variant_data.newtype_variant()?)),
+          Field::Stack => {
+            let seed = CognitionDeserializeSeed::<Box<VStack>>::new(self.state);
+            Ok(Value::Stack(variant_data.newtype_variant_seed(seed)?))
+          },
+          Field::Macro => {
+            let seed = CognitionDeserializeSeed::<Box<VMacro>>::new(self.state);
+            Ok(Value::Macro(variant_data.newtype_variant_seed(seed)?))
+          },
+          Field::Error => Ok(Value::Error(variant_data.newtype_variant()?)),
+          Field::FLLib => {
+            let seed = CognitionDeserializeSeed::<Box<VFLLib>>::new(self.state);
+            Ok(Value::FLLib(variant_data.newtype_variant_seed(seed)?))
+          },
+          Field::Custom => {
+            let seed = CognitionDeserializeSeed::<VCustom>::new(self.state);
+            Ok(Value::Custom(variant_data.newtype_variant_seed(seed)?))
+          },
+          Field::Control => Ok(Value::Control(variant_data.newtype_variant()?)),
+        }
+      }
+    }
+
+    let visitor = CognitionVisitor{ state };
+    const FIELDS: &[&str] = &["Word", "Stack", "Macro", "Error", "FLLib", "Custom", "Control"];
+    deserializer.deserialize_enum("Value", FIELDS, visitor)
+  }
+}
+
+impl<'de> CognitionDeserialize<'de> for Op {
+  fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    #[derive(Deserialize)]
+    enum Field { Unary, Binary, Str, Custom }
+
+    struct CognitionVisitor<'s> {
+      state: &'s mut CognitionState
+    }
+
+    impl<'s, 'de: 's> Visitor<'de> for CognitionVisitor<'s> {
+      type Value = Op;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "enum Op")
+      }
+
+      fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+      where
+        A: EnumAccess<'de>,
+      {
+        let (variant_name, variant_data): (Field, _) = data.variant()?;
+
+        match variant_name {
+          Field::Unary => {
+            let seed = CognitionDeserializeSeed::<UnaryOp>::new(self.state);
+            Ok(Op::Unary(variant_data.newtype_variant_seed(seed)?))
+          },
+          Field::Binary => {
+            let seed = CognitionDeserializeSeed::<BinaryOp>::new(self.state);
+            Ok(Op::Binary(variant_data.newtype_variant_seed(seed)?))
+          },
+          Field::Str => Ok(Op::Str(variant_data.newtype_variant()?)),
+          Field::Custom => {
+            let seed = CognitionDeserializeSeed::<CustomOp>::new(self.state);
+            Ok(Op::Custom(variant_data.newtype_variant_seed(seed)?))
+          },
+        }
+      }
+    }
+
+    let visitor = CognitionVisitor{ state };
+    const FIELDS: &[&str] = &["Unary", "Binary", "Str", "Custom"];
+    deserializer.deserialize_enum("Op", FIELDS, visitor)
+  }
+}
+
+impl<'de> CognitionDeserialize<'de> for WordDef {
+  fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    let inner = <Value>::cognition_deserialize(deserializer, state)?;
+    Ok(state.pool.get_word_def(inner))
   }
 }
 
@@ -588,124 +761,170 @@ macro_rules! impl_cognition_deserialize_seq {
   }
 }
 
-impl<'de> CognitionDeserialize<'de> for Value {
-  fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
-  where
-    D: Deserializer<'de>,
-    Self: Sized,
-  {
-    #[derive(Deserialize)]
-    enum Field { Word, Stack, Macro, Error, FLLib, Custom, Control }
-
-    struct CognitionVisitor<'s> {
-      state: &'s mut CognitionState
-    }
-
-    impl<'s, 'de: 's> Visitor<'de> for CognitionVisitor<'s> {
-      type Value = Value;
-
-      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "enum Value")
-      }
-
-      fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
+macro_rules! impl_cognition_deserialize_table {
+  ($type:ty,$state1:tt,$state2:tt,$map:tt,$len:tt,$getmap:block,$elseexpr:block,$expecting:literal,$default_len:expr) => {
+    impl<'de> CognitionDeserialize<'de> for HashMap<String, $type> {
+      fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
       where
-        A: EnumAccess<'de>,
+        D: Deserializer<'de>,
+        Self: Sized,
       {
-        let (variant_name, variant_data): (Field, _) = data.variant()?;
-
-        match variant_name {
-          Field::Word => Ok(Value::Word(variant_data.newtype_variant()?)),
-          Field::Stack => {
-            let seed = CognitionDeserializeSeed::<Box<VStack>>::new(self.state);
-            Ok(Value::Stack(variant_data.newtype_variant_seed(seed)?))
-          },
-          Field::Macro => {
-            let seed = CognitionDeserializeSeed::<Box<VMacro>>::new(self.state);
-            Ok(Value::Macro(variant_data.newtype_variant_seed(seed)?))
-          },
-          Field::Error => Ok(Value::Error(variant_data.newtype_variant()?)),
-          Field::FLLib => {
-            let seed = CognitionDeserializeSeed::<Box<VFLLib>>::new(self.state);
-            Ok(Value::FLLib(variant_data.newtype_variant_seed(seed)?))
-          },
-          Field::Custom => {
-            let seed = CognitionDeserializeSeed::<VCustom>::new(self.state);
-            Ok(Value::Custom(variant_data.newtype_variant_seed(seed)?))
-          },
-          Field::Control => Ok(Value::Control(variant_data.newtype_variant()?)),
+        struct CognitionVisitor<'s> {
+          state: &'s mut CognitionState
         }
+        impl<'s, 'de: 's> Visitor<'de> for CognitionVisitor<'s> {
+          type Value = HashMap<String, $type>;
+
+          fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str($expecting)
+          }
+
+          fn visit_map<V>(mut self, mut map: V) -> Result<Self::Value, V::Error>
+          where
+            V: MapAccess<'de>,
+          {
+            let $len = map.size_hint().unwrap_or($default_len);
+            let $state1 = &mut self.state;
+            let mut $map = $getmap;
+
+            while let Some(key) = map.next_key()? {
+              let cogseed = CognitionDeserializeSeed::<$type>::new(self.state);
+              let Ok(value) = map.next_value_seed(cogseed) else {
+                let $state2 = &mut self.state;
+                $elseexpr;
+                return Err(de::Error::custom(format_args!("invalid element for {}", $expecting)))
+              };
+              $map.insert(key, value);
+            }
+            Ok($map)
+          }
+        }
+
+        let visitor = CognitionVisitor{ state };
+        deserializer.deserialize_map(visitor)
       }
     }
-
-    let visitor = CognitionVisitor{ state };
-    const FIELDS: &[&str] = &["Word", "Stack", "Macro", "Error", "FLLib", "Custom", "Control"];
-    deserializer.deserialize_enum("Value", FIELDS, visitor)
   }
 }
 
-impl<'de> CognitionDeserialize<'de> for WordDef {
-  fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
-  where
-    D: Deserializer<'de>,
-    Self: Sized,
-  {
-    let inner = <Value>::cognition_deserialize(deserializer, state)?;
-    Ok(state.pool.get_word_def(inner))
-  }
-}
-
-impl<'de> CognitionDeserialize<'de> for WordTable {
-  fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
-  where
-    D: Deserializer<'de>,
-    Self: Sized,
-  {
-    struct CognitionVisitor<'s> {
-      state: &'s mut CognitionState
-    }
-    impl<'s, 'de: 's> Visitor<'de> for CognitionVisitor<'s> {
-      type Value = WordTable;
-
-      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("WordTable")
-      }
-
-      fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+macro_rules! impl_cognition_deserialize_map_as_vec {
+  ($type:ty,$subtype1:ty,$subtype2:ty,$state1:tt,$state2:tt,$map:tt,$getmap:block,$elseexpr:block,$expecting:literal,$default_len:expr) => {
+    impl<'de> CognitionDeserialize<'de> for $type {
+      fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
       where
-        V: MapAccess<'de>,
+        D: Deserializer<'de>,
+        Self: Sized,
       {
-        let mut wt = self.state.pool.get_word_table(map.size_hint().unwrap_or(DEFAULT_WORD_TABLE_SIZE));
-
-        while let Some(key) = map.next_key()? {
-          let cogseed = CognitionDeserializeSeed::<WordDef>::new(self.state);
-          let value = map.next_value_seed(cogseed)?;
-          wt.insert(key, value);
+        struct CognitionVisitor<'s> {
+          state: &'s mut CognitionState
         }
-        Ok(wt)
+        impl<'s, 'de: 's> Visitor<'de> for CognitionVisitor<'s> {
+          type Value = $type;
+
+          fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str($expecting)
+          }
+
+          fn visit_seq<V>(mut self, mut seq: V) -> Result<Self::Value, V::Error>
+          where
+            V: SeqAccess<'de>,
+          {
+            let $state1 = &mut self.state;
+            let mut $map = $getmap;
+            loop {
+              let cogseed = CognitionDeserializeSeed::<($subtype1, $subtype2)>::new(self.state);
+              let Ok(element) = seq.next_element_seed(cogseed) else {
+                let $state2 = &mut self.state;
+                $elseexpr;
+                return Err(de::Error::custom(format_args!("invalid element for {}", $expecting)))
+              };
+              let Some(element) = element else { break };
+              $map.insert(element.0, element.1);
+            }
+            Ok($map)
+          }
+        }
+
+        let visitor = CognitionVisitor{ state };
+        deserializer.deserialize_seq(visitor)
       }
     }
-
-    let visitor = CognitionVisitor{ state };
-    deserializer.deserialize_map(visitor)
   }
 }
 
 impl_cognition_deserialize_for_deserialize! {
-  bool,
-  u32,
-  String,
+  bool, u32, i32, char, String,
+  (i32, i32), (char, i32), (char, char),
+  ((i32, i32), (i32, i32)),
+  ((char, char), (i32, i32)),
+  Digit, (Digit, Digit),
+  ((Digit, Digit), (Digit, Digit)),
+  Operand, (Operand, Operand),
+  Vec<Digit>, Vec<char>,
+  Option<char>,
   Option<String>,
   Option<Cranks>,
-  Option<Math>,
   Option<Faliases>,
   Option<Parser>
-  //Pool,
+  //Pool
 }
 
 impl_cognition_deserialize_option!{ Library, "Option<Library>" }
 impl_cognition_deserialize_option!{ Stack, "Option<Stack>" }
 impl_cognition_deserialize_option!{ WordTable, "Option<WordTable>" }
+impl_cognition_deserialize_option!{ Math, "Option<Math>" }
+
+impl_cognition_deserialize_table! {
+  WordDef, state, state, map, len,
+  { state.pool.get_word_table(len) },
+  { state.pool.add_word_table(map); },
+  "WordTable", DEFAULT_WORD_TABLE_SIZE
+}
+
+impl_cognition_deserialize_table! {
+  Op, _state, state, map, len,
+  { OpsTable::with_capacity(len) },
+  {
+    for (k, v) in map.into_iter() {
+      state.pool.add_string(k);
+      state.pool.add_op(v);
+    }
+  },
+  "OpsTable", DEFAULT_OPS_TABLE_SIZE
+}
+
+impl_cognition_deserialize_map_as_vec! {
+  UnaryOp, Digit, Digit, state, state, map,
+  { state.pool.get_un_op() },
+  { state.pool.add_un_op(map); },
+  "UnaryOp", DEFAULT_OP_SIZE
+}
+
+impl_cognition_deserialize_map_as_vec! {
+  BinaryOp, (Digit, Digit), (Digit, Digit), state, state, map,
+  { state.pool.get_bin_op() },
+  { state.pool.add_bin_op(map); },
+  "BinaryOp", DEFAULT_OP_SIZE
+}
+
+impl_cognition_deserialize_map_as_vec! {
+  CustomOp, Operand, Operand, state, state, map,
+  { state.pool.get_custom_op() },
+  { state.pool.add_custom_op(map); },
+  "CustomOp", DEFAULT_OP_SIZE
+}
+
+impl_cognition_deserialize_map_as_vec! {
+  HashMap<char, i32>, char, i32, _state, _state, map,
+  { HashMap::new() }, { },
+  "HashMap<char, i32>", 0
+}
+
+impl_cognition_deserialize_map_as_vec! {
+  HashMap<(char, char), (i32, i32)>, (char, char), (i32, i32), _state, _state, map,
+  { HashMap::new() }, { },
+  "HashMap<(char, char), (i32, i32)>", 0
+}
 
 impl_cognition_deserialize_seq!{
   Value, state, state, stack, len,
@@ -770,6 +989,33 @@ impl_cognition_deserialize_struct! {
   [Iflag, iflag, "iflag", bool],
   [Sflag, sflag, "sflag", bool],
   [WordTable, word_table, "word_table", Option<WordTable>]
+}
+
+impl_cognition_deserialize_struct! {
+  Math, "Math", _state, {
+    let mut math = Math::new();
+    math.base = base;
+    math.digits = digits;
+    math.d_idx = d_idx;
+    math.mul = mul;
+    math.ops_table = ops_table;
+    math.negc = negc;
+    math.radix = radix;
+    math.delim = delim;
+    math.meta_radix = meta_radix;
+    math.meta_delim = meta_delim;
+    Ok(math)
+  }
+  [Base, base, "base", i32],
+  [Digits, digits, "digits", Vec<char>],
+  [DIdx, d_idx, "d_idx", HashMap<char, i32>],
+  [Mul, mul, "mul", HashMap<(char, char), (i32, i32)>],
+  [OpsTable, ops_table, "ops_table", OpsTable],
+  [Negc, negc, "negc", Option<char>],
+  [Radix, radix, "radix", Option<char>],
+  [Delim, delim, "delim", Option<char>],
+  [MetaRadix, meta_radix, "meta_radix", Option<char>],
+  [MetaDelim, meta_delim, "meta_delim", Option<char>]
 }
 
 impl_cognition_deserialize_struct! {
