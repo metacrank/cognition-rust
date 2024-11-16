@@ -29,18 +29,11 @@ fn main() -> ExitCode {
     println!("{}: missing filename", binary_name());
     return try_help(1)
   }
-
   let sources = opts.sources as usize;
-
-  let mut logfile = if let Some(ref s) = opts.logfile {
-    match File::options().write(true).truncate(true).create(true).open(s) {
-      Ok(f) => Some(f),
-      Err(e) => {
-        println!("{}: could not open logfile: {}: {e}", binary_name(), opts.logfile.as_ref().unwrap());
-        return ExitCode::from(4);
-      }
-    }
-  } else { None };
+  let mut logfile = match log(opts.logfile.as_ref()) {
+    Ok(f) => f,
+    Err(e) => return e
+  };
 
   let save_fn = if let Some(ref savefile) = opts.save {
     match get_save_fn(savefile, opts.save_format.as_ref()) {
@@ -358,7 +351,17 @@ fn list_formats() -> ExitCode {
   ExitCode::SUCCESS
 }
 
-
+fn log(logfile: Option<&String>) -> Result<Option<File>, ExitCode> {
+  if let Some(ref s) = logfile {
+    match File::options().write(true).truncate(true).create(true).open(s) {
+      Ok(f) => Ok(Some(f)),
+      Err(e) => {
+        println!("{}: could not open logfile: {}: {e}", binary_name(), s);
+        Err(ExitCode::from(4))
+      }
+    }
+  } else { Ok(None) }
+}
 
 fn load_result(result: CognitionDeserializeResult) -> Result<CognitionState, ExitCode> {
   match result {
@@ -371,7 +374,6 @@ fn load_result(result: CognitionDeserializeResult) -> Result<CognitionState, Exi
 }
 
 fn load(loadfile: &String, format: Option<&String>, fllibs: Option<&String>, suppress_fllibs: bool) -> Result<CognitionState, ExitCode> {
-
   let formats = match format {
     Some(fmt) => {
       let v: Vec<&str> = fmt.split(',').collect();
@@ -383,7 +385,6 @@ fn load(loadfile: &String, format: Option<&String>, fllibs: Option<&String>, sup
     },
     None => None,
   };
-
   let mut state = cognition::serde::cogstate_init();
   let mut ignore_fllibs = false;
 
@@ -392,7 +393,6 @@ fn load(loadfile: &String, format: Option<&String>, fllibs: Option<&String>, sup
       Some(ref fmts) => match fmts.last() { Some(f) => Some(*f), None => None },
       None => None
     };
-
     let file = match fs::read_to_string(fllibs) {
       Ok(f) => f,
       Err(e) => {
@@ -400,10 +400,8 @@ fn load(loadfile: &String, format: Option<&String>, fllibs: Option<&String>, sup
         return Err(ExitCode::from(4))
       }
     };
-
     let deserialize_fn = get_from_data_formats!(fllibs, fllibs_fmt, 3, MAIN);
     state = load_result(deserialize_fn(&file, state))?;
-
     ignore_fllibs = true;
   }
 
@@ -411,7 +409,6 @@ fn load(loadfile: &String, format: Option<&String>, fllibs: Option<&String>, sup
     Some(ref fmts) => match fmts.first() { Some(f) => Some(*f), None => None },
     None => None
   };
-
   let file = match fs::read_to_string(loadfile) {
     Ok(f) => f,
     Err(e) => {

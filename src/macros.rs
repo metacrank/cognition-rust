@@ -78,49 +78,63 @@ macro_rules! get_from_data_formats {
   }}
 }
 
-pub const DATA_FORMATS: [(&str,&str,crate::CogStateDeserializeFn,crate::CogLibsDeserializeFn,crate::CogStateSerializeFn,crate::CogValueSerializeFn,crate::CogValueDeserializeFn); 1] = [
-  ("JSON", ".json",
-   (|f, i, mut state| {
-     let mut deserializer = serde_json::Deserializer::from_str(f);
-     match crate::serde::deserialize_cognition_state_from_state(&mut deserializer, &mut state, i) {
-       Ok(_) => Ok(state),
-       Err(e) => Err((state, Box::new(e)))
-     }
-   }),
-   (|fllibs, mut state| {
-     let mut deserializer = serde_json::Deserializer::from_str(fllibs);
-     match crate::serde::serde_load_fllibs(&mut deserializer, &mut state) {
-       Err(e) => Err((state, Box::new(e))),
-       Ok(opt) => match opt {
-         Some(e) => Err((state, Box::new(e))),
-         None => Ok(state)
+macro_rules! data_formats_entry {
+  ($fmt:literal,$ext:literal,$deserializer_from_str:expr,$serializer_new:expr) => {
+    ($fmt, $ext,
+     (|f, i, mut state| {
+       let mut deserializer = $deserializer_from_str(f);
+       match crate::serde::deserialize_cognition_state_from_state(&mut deserializer, &mut state, i) {
+         Ok(_) => Ok(state),
+         Err(e) => Err((state, Box::new(e)))
        }
-     }
-   }),
-   (|state, write| {
-     let mut serializer = serde_json::Serializer::new(write);
-     match <crate::CognitionState as ::serde::ser::Serialize>::serialize(state, &mut serializer) {
-       Ok(_) => Ok(()),
-       Err(e) => Err(Box::new(e))
-     }
-   }),
-   (|val, write| {
-     let mut serializer = serde_json::Serializer::new(write);
-     match <crate::Value as ::serde::ser::Serialize>::serialize(val, &mut serializer) {
-       Ok(_) => Ok(()),
-       Err(e) => Err(Box::new(e))
-     }
-   }),
-   (|string, state| {
-     let mut deserializer = serde_json::Deserializer::from_str(string);
-     match <crate::Value as crate::serde::CognitionDeserialize>::cognition_deserialize(&mut deserializer, state) {
-       Ok(v) => Ok(v),
-       Err(e) => Err(Box::new(e))
-     }
-   }),
-  )
+     }),
+     (|fllibs, mut state| {
+       let mut deserializer = $deserializer_from_str(fllibs);
+       match crate::serde::serde_load_fllibs(&mut deserializer, &mut state) {
+         Err(e) => Err((state, Box::new(e))),
+         Ok(opt) => match opt {
+           Some(e) => Err((state, Box::new(e))),
+           None => Ok(state)
+         }
+       }
+     }),
+     (|state, write| {
+       let mut serializer = $serializer_new(write);
+       match <crate::CognitionState as ::serde::ser::Serialize>::serialize(state, &mut serializer) {
+         Ok(_) => Ok(()),
+         Err(e) => Err(Box::new(e))
+       }
+     }),
+     (|val, write| {
+       let mut serializer = $serializer_new(write);
+       match <crate::Value as ::serde::ser::Serialize>::serialize(val, &mut serializer) {
+         Ok(_) => Ok(()),
+         Err(e) => Err(Box::new(e))
+       }
+     }),
+     (|string, state| {
+       let mut deserializer = $deserializer_from_str(string);
+       match <crate::Value as crate::serde::CognitionDeserialize>::cognition_deserialize(&mut deserializer, state) {
+         Ok(v) => Ok(v),
+         Err(e) => Err(Box::new(e))
+       }
+     }),
+    )
+  }
+}
 
-  //"JSON", "Postcard", "CBOR", "YAML", "MessagePack", "TOML", "Pickle", "RON", "BSON", "Avro", "JSON5", "URL", "S-expression", "D-Bus", "FlexBuffers", "Bencode", "DynamoDB", "CSV"
+pub type DataFormatsEntry<'a> = (
+  &'a str, &'a str,
+  crate::CogStateDeserializeFn,
+  crate::CogLibsDeserializeFn,
+  crate::CogStateSerializeFn,
+  crate::CogValueSerializeFn,
+  crate::CogValueDeserializeFn
+);
+
+pub const DATA_FORMATS: [DataFormatsEntry; 1] = [
+  data_formats_entry!{ "JSON", ".json", serde_json::Deserializer::from_str, serde_json::Serializer::new }
+  //"Postcard", "CBOR", "YAML", "MessagePack", "TOML", "Pickle", "RON", "BSON", "Avro", "JSON5", "URL", "S-expression", "D-Bus", "FlexBuffers", "Bencode", "DynamoDB", "CSV"
 ];
 
 #[macro_export]
