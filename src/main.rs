@@ -84,10 +84,10 @@ fn main() -> ExitCode {
   'inputs: loop {
     // Read code from file
     let (source, filename) = if opts.stdin {
-      let Some(Ok(s)) = stdin_iter.as_mut().unwrap().next() else { break };
+      let Some(Ok(s)) = stdin_iter.as_mut().unwrap().next() else { break 'inputs };
       (s, None)
     } else {
-      let Some(i) = fileidx_iter.as_mut().unwrap().next() else { break };
+      let Some(i) = fileidx_iter.as_mut().unwrap().next() else { break 'inputs };
       let filename = &args[opts.fileidx + i];
       let mut fs_result = fs::read_to_string(filename);
       if let Err(_) = fs_result {
@@ -101,12 +101,12 @@ fn main() -> ExitCode {
         println!("{}: could not open file for reading: {filename}: {e}", binary_name());
         return ExitCode::from(4);
       }
-      (fs_result.unwrap(), Some(filename))
+      (fs_result.unwrap(), Some(state.string_copy(filename)))
     };
 
     let mut parser = state.parser.take().unwrap();
     if let Some(s) = parser.source() { state.pool.add_string(s) }
-    if !opts.stdin { parser.reset(source, Some(state.string_copy(filename.unwrap()))) }
+    parser.reset(source, filename);
     state.parser = Some(parser);
 
     // Parse and eval loop
