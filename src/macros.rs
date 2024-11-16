@@ -71,7 +71,7 @@ macro_rules! get_from_data_formats {
       println!("Please specify a format with '--format|--save-format FORMAT' or include a file extension.");
       return Err(try_help(2))
     }, ext_slice, {
-      println!("{}: invalid file extension -- '{}'", binary_name(), ext_slice);
+      println!("{}: invalid file extension -- \"{}\"", binary_name(), ext_slice);
       println!("Run '{} --list-formats' for a list of supported formats and file extensions", binary_name());
       return Err(try_help(2))
     })
