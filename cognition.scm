@@ -9,10 +9,10 @@
   #:use-module (gnu packages)
   #:use-module (gnu packages crates-io))
 
-(define-public cognition
+(define-public cognition-macros-0.1
   (package
-   (name "cognition")
-   (version "0.2.1")
+   (name "cognition-macros")
+   (version "0.1.0")
    (source
     (origin
      (method git-fetch)
@@ -25,7 +25,36 @@
    (build-system cargo-build-system)
    (arguments
     `(#:cargo-inputs
-      (("libloading" ,rust-libloading-0.8))))
+      (("proc-macro2" ,rust-proc-macro2-1)
+       ("serde" ,rust-quote-1)
+       ("syn" ,rust-syn-2))))
+   (synopsis "Procedural macros for Cognition.")
+   (description
+    "Includes the cognition::custom attribute macro, which aids the implementation of custom types in Cognition fllibs.")
+   (home-page "https://github.com/metacrank/cognition-rust")
+   (license expat)))
+
+(define-public cognition-0.3
+  (package
+   (name "cognition")
+   (version "0.3.0")
+   (source
+    (origin
+     (method git-fetch)
+     (uri (git-reference
+           (url "https://github.com/metacrank/cognition-rust.git")
+           (commit "ae55751d45d602baf12686704a4a01bfd0a06f46")))
+     (sha256
+      (base32
+       "0yx360k2fhj8cda58x6xyv62zhi8ib229k40sc30gpp5w75cj008"))))
+   (build-system cargo-build-system)
+   (arguments
+    `(#:cargo-inputs
+      (("libloading" ,rust-libloading-0.8)
+       ("serde" ,rust-serde-1)
+       ("serde_json" ,rust-serde-json-1)
+       ("erased-serde" ,rust-erased-serde-0.4)
+       ("cognition-macros" ,cognition-macros-0.1))))
    (synopsis "An unopinionated programming language which offers full publicity of syntax and tokenization.")
    (description
     "Cognition is a fully introspective system designed so that the syntax and hierarchy structure of the
