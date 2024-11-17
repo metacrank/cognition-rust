@@ -43,7 +43,7 @@
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "06f4010fa3208c352d2298b8b2edb8adc41694c6")))
+           (commit "f82fdb9f520da7ba78584edbc6dece738c4d6477")))
      (sha256
       (base32
        "0vqrmxx684kzm8c22cdc7wkjhiaz4fvx72z8iz0dbgq8m06aq270"))))
@@ -69,4 +69,4 @@
    (home-page "https://github.com/metacrank/cognition-rust")
    (license expat)))
 
-cognition-macros-0.1
+cognition-0.3
