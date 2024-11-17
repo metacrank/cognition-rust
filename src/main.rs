@@ -9,7 +9,7 @@ use std::io::stdin;
 use cognition::*;
 use cognition::macros::*;
 
-const VERSION: &'static str = "0.2.2 alpha";
+const VERSION: &'static str = "0.3.0 alpha";
 
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
@@ -324,7 +324,7 @@ fn help() -> ExitCode {
   println!("                             FORMAT can optionally be a comma-separated pair: '-f|--format LOAD_FORMAT,FLLIBS_FORMAT'");
   println!("                             to specify a different format for an optional fllib description file (see '--fllibs')");
   println!("     --list-formats        print a list of supported load formats");
-  println!(" -F, --fllibs FILE         supplement cognition load file with fllibs (typically generated with describe-fllibs)");
+  println!(" -F, --fllibs FILE         supplement cognition load file with an fllib description file");
   println!("                             (only used in combination with '--load')");
   println!("     --suppress-fllibs     suppress automatic interpretation of fllibs with '--load'");
   println!(" -l, --log-file FILE       enable token logging to FILE");
@@ -347,7 +347,7 @@ fn version() -> ExitCode {
 
 fn list_formats() -> ExitCode {
   println!("Currently supported data formats:");
-  for (k, e, _, _, _, _, _) in DATA_FORMATS { println!("{k} \"{e}\""); }
+  for (k, e, _, _, _, _, _, _, _) in DATA_FORMATS { println!("{k} \"{e}\""); }
   ExitCode::SUCCESS
 }
 

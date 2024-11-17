@@ -107,6 +107,14 @@ macro_rules! data_formats_entry {
          Err(e) => Err(Box::new(e))
        }
      }),
+     (|fllibs, write| {
+       let mut serializer = $serializer_new(write);
+       let libs = crate::serde::ForeignLibrariesWrapper(fllibs);
+       match <crate::serde::ForeignLibrariesWrapper as ::serde::ser::Serialize>::serialize(&libs, &mut serializer) {
+         Ok(_) => Ok(()),
+         Err(e) => Err(Box::new(e))
+       }
+     }),
      (|val, write| {
        let mut serializer = $serializer_new(write);
        match <crate::Value as ::serde::ser::Serialize>::serialize(val, &mut serializer) {
@@ -121,6 +129,13 @@ macro_rules! data_formats_entry {
          Err(e) => Err(Box::new(e))
        }
      }),
+     (|mapval, write| {
+       let mut serializer = $serializer_new(write);
+       match crate::serde::serialize_cogmap(&mut serializer, mapval) {
+         Ok(_) => Ok(()),
+         Err(e) => Err(Box::new(e))
+       }
+     }),
     )
   }
 }
@@ -130,8 +145,10 @@ pub type DataFormatsEntry<'a> = (
   crate::CogStateDeserializeFn,
   crate::CogLibsDeserializeFn,
   crate::CogStateSerializeFn,
+  crate::CogLibsSerializeFn,
   crate::CogValueSerializeFn,
-  crate::CogValueDeserializeFn
+  crate::CogValueDeserializeFn,
+  crate::CogValueSerializeFn,
 );
 
 pub const DATA_FORMATS: [DataFormatsEntry; 1] = [

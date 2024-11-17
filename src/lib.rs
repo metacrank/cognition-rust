@@ -19,6 +19,7 @@ use std::any::Any;
 use std::collections::{HashSet, HashMap, BTreeMap};
 use std::default::Default;
 // use std::error::Error;
+use std::fmt::Display;
 use std::io::{Write, stdout};
 use std::sync::Arc;
 
@@ -29,12 +30,13 @@ pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionStat
 pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library);
 
 pub type DeserializeFn<T> = fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<T>>;
-pub type CognitionDeserializeResult = Result<CognitionState, (CognitionState, Box<dyn std::fmt::Display>)>;
+pub type CognitionDeserializeResult = Result<CognitionState, (CognitionState, Box<dyn Display>)>;
 pub type CogStateDeserializeFn = fn(&str, bool, CognitionState) -> CognitionDeserializeResult;
 pub type CogLibsDeserializeFn = fn(&str, CognitionState) -> CognitionDeserializeResult;
-pub type CogStateSerializeFn = fn(&CognitionState, &mut dyn Write) -> Result<(), Box<dyn std::fmt::Display>>;
-pub type CogValueSerializeFn = fn(&Value, &mut dyn Write) -> Result<(), Box<dyn std::fmt::Display>>;
-pub type CogValueDeserializeFn = fn(&str, &mut CognitionState) -> Result<Value, Box<dyn std::fmt::Display>>;
+pub type CogStateSerializeFn = fn(&CognitionState, &mut dyn Write) -> Result<(), Box<dyn Display>>;
+pub type CogLibsSerializeFn = fn(&Option<ForeignLibraries>, &mut dyn Write) -> Result<(), Box<dyn Display>>;
+pub type CogValueSerializeFn = fn(&Value, &mut dyn Write) -> Result<(), Box<dyn Display>>;
+pub type CogValueDeserializeFn = fn(&str, &mut CognitionState) -> Result<Value, Box<dyn Display>>;
 
 pub type Functions = Vec<CognitionFunction>;
 pub type Stack = Vec<Value>;

@@ -65,8 +65,8 @@ pub fn cog_get_fllibs(mut state: CognitionState, _: Option<&Value>) -> Cognition
       let mut vword_path = state.pool.get_vword(l.library.lib_path.len());
       vword_path.str_word.push_str(&l.library.lib_path);
       let mut tmp_vstack = state.pool.get_vstack(2);
-      tmp_vstack.container.stack.push(Value::Word(vword_path));
       tmp_vstack.container.stack.push(Value::Word(vword_name));
+      tmp_vstack.container.stack.push(Value::Word(vword_path));
       vstack.container.stack.push(Value::Stack(tmp_vstack));
     }
     state.fllibs = Some(libs)

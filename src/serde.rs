@@ -1081,13 +1081,19 @@ impl<'s, 'de: 's> DeserializeSeed<'de> for LibrarySeed {
       type Value = String;
 
       fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("str")
+        formatter.write_str("String or str")
       }
 
       fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
       where E: de::Error
       {
         Ok(v)
+      }
+
+      fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+      where E: de::Error
+      {
+        Ok(String::from(v))
       }
     }
     deserializer.deserialize_string(Vis)
@@ -1107,6 +1113,7 @@ where S: Serializer
       map.serialize_entry(name, &lib.library.lib_path)?;
     }
   }
+
   map.end()
 }
 
@@ -1126,14 +1133,33 @@ where D: Deserializer<'de>
     fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
     where V: MapAccess<'de>,
     {
+      let len = map.size_hint().unwrap_or(DEFAULT_STACK_SIZE);
+      let mut names = Vec::<String>::with_capacity(len);
+      let mut vals = Vec::<String>::with_capacity(len);
       while let Some(key) = map.next_key()? {
-        let value = map.next_value_seed(LibrarySeed)?;
-        let option = unsafe { self.state.load_fllib(&key, &value) };
-        self.state.pool.add_string(key);
-        self.state.pool.add_string(value);
-        if let Some(e) = option {
-          return Ok(Some(e))
-        }
+        let value = match map.next_value_seed(LibrarySeed) {
+          Ok(v) => v,
+          Err(e) => {
+            for (k, v) in names.into_iter().zip(vals.into_iter()) {
+              self.state.pool.add_string(k);
+              self.state.pool.add_string(v);
+            }
+            return Err(e)
+          }
+        };
+        let Ok(lib) = (unsafe { libloading::Library::new(&value) }) else {
+          return Ok(Some("INVALID FILENAME"))
+        };
+        if (unsafe { lib.get::<libloading::Symbol<AddWordsFn>>(b"add_words\0") }).is_err() {
+          return Ok(Some("INVALID FLLIB"))
+        };
+        names.push(key);
+        vals.push(value);
+      }
+      for (k, v) in names.into_iter().zip(vals.into_iter()) {
+        let _ = unsafe { self.state.load_fllib(&k, &v) };
+        self.state.pool.add_string(k);
+        self.state.pool.add_string(v);
       }
       Ok(None)
     }
@@ -1143,7 +1169,7 @@ where D: Deserializer<'de>
   deserializer.deserialize_map(visitor)
 }
 
-struct ForeignLibrariesWrapper<'a>(pub &'a Option<ForeignLibraries>);
+pub struct ForeignLibrariesWrapper<'a>(pub &'a Option<ForeignLibraries>);
 
 impl Serialize for ForeignLibrariesWrapper<'_> {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -1463,4 +1489,16 @@ where
   let mut state = cogstate_init();
   deserialize_cognition_state_from_state_with_fllibs(deserializer, fllib_deserializer, &mut state)?;
   Ok(state)
+}
+
+pub fn serialize_cogmap<S>(serializer: S, vmap: &Value) -> Result<S::Ok, S::Error>
+where S: Serializer
+{
+  let mut map = serializer.serialize_map(Some(vmap.value_stack_ref().len()))?;
+  for v in vmap.value_stack_ref().iter() {
+    let name = &v.value_stack_ref().first().unwrap().vword_ref().str_word;
+    let val = &v.value_stack_ref().last().unwrap().vword_ref().str_word;
+    map.serialize_entry(name, val)?;
+  }
+  map.end()
 }
