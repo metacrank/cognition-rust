@@ -18,10 +18,10 @@
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "ae55751d45d602baf12686704a4a01bfd0a06f46")))
+           (commit "5615a778c0f5b9982131d31fac60bc8ec13816be")))
      (sha256
       (base32
-       "0yx360k2fhj8cda58x6xyv62zhi8ib229k40sc30gpp5w75cj008"))))
+       "1kf49w943fbshhz6qa0rqrxrm2pxd6kjyvnli1783dcqm6jaa1w6"))))
    (build-system cargo-build-system)
    (arguments
     `(#:cargo-inputs
@@ -43,10 +43,10 @@
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "ae55751d45d602baf12686704a4a01bfd0a06f46")))
+           (commit "5615a778c0f5b9982131d31fac60bc8ec13816be")))
      (sha256
       (base32
-       "0yx360k2fhj8cda58x6xyv62zhi8ib229k40sc30gpp5w75cj008"))))
+       "1kf49w943fbshhz6qa0rqrxrm2pxd6kjyvnli1783dcqm6jaa1w6"))))
    (build-system cargo-build-system)
    (arguments
     `(#:cargo-inputs
@@ -68,4 +68,4 @@
    (home-page "https://github.com/metacrank/cognition-rust")
    (license expat)))
 
-cognition
+cognition-0.3
