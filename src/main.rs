@@ -9,7 +9,7 @@ use std::io::stdin;
 use cognition::*;
 use cognition::macros::*;
 
-const VERSION: &'static str = "0.3.0 alpha";
+const VERSION: &'static str = "0.3.1 alpha";
 
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();

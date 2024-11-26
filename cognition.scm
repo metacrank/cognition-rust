@@ -9,35 +9,35 @@
   #:use-module (gnu packages)
   #:use-module (gnu packages crates-io))
 
-;; (define-public cognition-macros-0.1
-;;   (package
-;;    (name "cognition-macros")
-;;    (version "0.1.0")
-;;    (source
-;;     (origin
-;;      (method git-fetch)
-;;      (uri (git-reference
-;;            (url "https://github.com/metacrank/cognition-rust.git")
-;;            (commit "06f4010fa3208c352d2298b8b2edb8adc41694c6")))
-;;      (sha256
-;;       (base32
-;;        "0vqrmxx684kzm8c22cdc7wkjhiaz4fvx72z8iz0dbgq8m06aq270"))))
-;;    (build-system cargo-build-system)
-;;    (arguments
-;;     `(#:cargo-inputs
-;;       (("proc-macro2" ,rust-proc-macro2-1)
-;;        ("serde" ,rust-quote-1)
-;;        ("syn" ,rust-syn-2))))
-;;    (synopsis "Procedural macros for Cognition.")
-;;    (description
-;;     "Includes the cognition::custom attribute macro, which aids the implementation of custom types in Cognition fllibs.")
-;;    (home-page "https://github.com/metacrank/cognition-rust")
-;;    (license expat)))
+(define-public cognition-macros-0.1
+  (package
+   (name "cognition-macros")
+   (version "0.1.1")
+   (source
+    (origin
+     (method git-fetch)
+     (uri (git-reference
+           (url "https://github.com/metacrank/cognition-rust.git")
+           (commit "06f4010fa3208c352d2298b8b2edb8adc41694c6")))
+     (sha256
+      (base32
+       "0vqrmxx684kzm8c22cdc7wkjhiaz4fvx72z8iz0dbgq8m06aq270"))))
+   (build-system cargo-build-system)
+   (arguments
+    `(#:cargo-inputs
+      (("proc-macro2" ,rust-proc-macro2-1)
+       ("serde" ,rust-quote-1)
+       ("syn" ,rust-syn-2))))
+   (synopsis "Procedural macros for Cognition.")
+   (description
+    "Includes the cognition::custom attribute macro, which aids the implementation of custom types in Cognition fllibs.")
+   (home-page "https://github.com/metacrank/cognition-rust")
+   (license expat)))
 
 (define-public cognition-0.3
   (package
    (name "cognition")
-   (version "0.3.0")
+   (version "0.3.1")
    (source
     (origin
      (method git-fetch)
@@ -54,7 +54,7 @@
        ("serde" ,rust-serde-1)
        ("serde_json" ,rust-serde-json-1)
        ("erased-serde" ,rust-erased-serde-0.4)
-       ;; ("cognition-macros" ,cognition-macros-0.1)
+       ("cognition-macros" ,cognition-macros-0.1)
        )))
    (synopsis "An unopinionated programming language which offers full publicity of syntax and tokenization.")
    (description
