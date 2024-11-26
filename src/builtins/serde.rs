@@ -17,8 +17,8 @@ macro_rules! serialize_value {
 pub fn serialize_value(state: &mut CognitionState, vdata: Value, vformat: Value, writer: &mut dyn Write) -> Option<(Value, Value, &'static str)> {
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
-  let func = get_from_data_formats!(
-    format_name, format, 6, f,
+  let func = get_serialize_fn!(
+    state, format_name, format, 6, f,
     { return Some((vdata, vformat, "INVALID SERDE FORMAT")) },
     { unreachable!() }, _ext,
     { unreachable!() }
@@ -44,8 +44,8 @@ pub fn cog_serialize(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   }
   let format_name = &v2.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
-  let func = get_from_data_formats!(
-    format_name, format, 6, f,
+  let func = get_serialize_fn!(
+    state, format_name, format, 6, f,
     {
       state.current().stack.push(v1);
       state.current().stack.push(v2);
@@ -137,8 +137,8 @@ pub fn cog_deserialize(mut state: CognitionState, w: Option<&Value>) -> Cognitio
   let (vdata, vformat) = get_2_words!(state, w);
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
-  let deserialize_fn = get_from_data_formats!(
-    format_name, format, 7, f,
+  let deserialize_fn = get_deserialize_fn!(
+    state, format_name, format, 7, f,
     {
       state.current().stack.push(vdata);
       state.current().stack.push(vformat);
@@ -167,8 +167,8 @@ pub fn cog_state(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   let vformat = get_word!(state, w);
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
-  let func = get_from_data_formats!(
-    format_name, format, 4, f,
+  let func = get_serialize_fn!(
+    state, format_name, format, 4, f,
     {
       state.current().stack.push(vformat);
       return state.eval_error("INVALID SERDE FORMAT", w)
@@ -209,8 +209,8 @@ macro_rules! serialize_state {
 pub fn serialize_state(state: &mut CognitionState, vformat: Value, writer: &mut dyn Write) -> Option<(Value, &'static str)> {
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
-  let func = get_from_data_formats!(
-    format_name, format, 4, f,
+  let func = get_serialize_fn!(
+    state, format_name, format, 4, f,
     { return Some((vformat, "INVALID SERDE FORMAT")) },
     { unreachable!() }, _ext,
     { unreachable!() }
@@ -279,8 +279,8 @@ pub fn cog_restate(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
 
-  let deserialize_fn = get_from_data_formats!(
-    format_name, format, 2, f,
+  let deserialize_fn = get_deserialize_fn!(
+    state, format_name, format, 2, f,
     {
       state.current().stack.push(vdata);
       state.current().stack.push(vformat);
@@ -300,8 +300,8 @@ pub fn cog_describe_fllibs(mut state: CognitionState, w: Option<&Value>) -> Cogn
   let vformat = get_word!(state, w);
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
-  let func = get_from_data_formats!(
-    format_name, format, 5, f,
+  let func = get_serialize_fn!(
+    state, format_name, format, 5, f,
     {
       state.current().stack.push(vformat);
       return state.eval_error("INVALID SERDE FORMAT", w)
@@ -348,8 +348,8 @@ pub fn cog_serialize_map(mut state: CognitionState, w: Option<&Value>) -> Cognit
   }
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
-  let func = get_from_data_formats!(
-    format_name, format, 8, f,
+  let func = get_serialize_fn!(
+    state, format_name, format, 8, f,
     {
       state.current().stack.push(vformat);
       return state.eval_error("INVALID SERDE FORMAT", w)
@@ -383,8 +383,8 @@ pub fn cog_load_fllibs(mut state: CognitionState, w: Option<&Value>) -> Cognitio
   let (vdata, vformat) = get_2_words!(state, w);
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
   let format = Some(format_name);
-  let deserialize_fn = get_from_data_formats!(
-    format_name, format, 3, f,
+  let deserialize_fn = get_deserialize_fn!(
+    state, format_name, format, 3, f,
     {
       state.current().stack.push(vdata);
       state.current().stack.push(vformat);

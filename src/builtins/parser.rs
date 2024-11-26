@@ -356,46 +356,40 @@ pub fn cog_line(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   let Some(ref parser) = state.parser else { return state.eval_error("NO PARSER", w) };
   if parser.filename.is_none() { return state.eval_error("NO FILENAME", w) }
   let line = parser.line;
-  let Some(ref math) = state.current_ref().math else { return state.eval_error("MATH BASE ZERO", w) };
-  if math.base() == 0 { return state.eval_error("MATH BASE ZERO", w) }
-  if line > isize::MAX as usize { return state.eval_error("OUT OF BOUNDS", w) }
-  let math = state.current().math.take().unwrap();
-  match math.itos(line as isize, &mut state) {
+  let Some(math) = state.get_math() else { return state.eval_error("MATH BASE ZERO", w) };
+  if math.math().base() == 0 { return state.with_math(math).eval_error("MATH BASE ZERO", w) }
+  if line > isize::MAX as usize { return state.with_math(math).eval_error("OUT OF BOUNDS", w) }
+  match math.math().itos(line as isize, &mut state) {
     Ok(s) => {
+      state.set_math(math);
       let mut v = state.pool.get_vword(s.len());
       v.str_word.push_str(&s);
       state.pool.add_string(s);
       state.push_quoted(Value::Word(v));
+      state
     },
-    Err(e) => {
-      state = state.eval_error(e, w);
-    }
+    Err(e) => state.with_math(math).eval_error(e, w)
   }
-  state.current().math = Some(math);
-  state
 }
 
 pub fn cog_column(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(ref parser) = state.parser else { return state.eval_error("NO PARSER", w) };
   if parser.filename.is_none() { return state.eval_error("NO FILENAME", w) }
-  let column = parser.line;
-  let Some(ref math) = state.current_ref().math else { return state.eval_error("MATH BASE ZERO", w) };
-  if math.base() == 0 { return state.eval_error("MATH BASE ZERO", w) }
-  if column > isize::MAX as usize { return state.eval_error("OUT OF BOUNDS", w) }
-  let math = state.current().math.take().unwrap();
-  match math.itos(column as isize, &mut state) {
+  let column = parser.column;
+  let Some(math) = state.get_math() else { return state.eval_error("MATH BASE ZERO", w) };
+  if math.math().base() == 0 { return state.with_math(math).eval_error("MATH BASE ZERO", w) }
+  if column > isize::MAX as usize { return state.with_math(math).eval_error("OUT OF BOUNDS", w) }
+  match math.math().itos(column as isize, &mut state) {
     Ok(s) => {
+      state.set_math(math);
       let mut v = state.pool.get_vword(s.len());
       v.str_word.push_str(&s);
       state.pool.add_string(s);
       state.push_quoted(Value::Word(v));
+      state
     },
-    Err(e) => {
-      state = state.eval_error(e, w);
-    }
+    Err(e) => state.with_math(math).eval_error(e, w)
   }
-  state.current().math = Some(math);
-  state
 }
 
 pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {

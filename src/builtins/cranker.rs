@@ -17,7 +17,7 @@ pub fn cog_crank(mut state: CognitionState, w: Option<&Value>) -> CognitionState
 }
 
 pub fn cog_metacrank(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let (meta, base) = get_2_ints!(state, w, isize, ACTIVE);
+  let (meta, base) = get_2_unsigned!(state, w, isize, ACTIVE);
   if meta < 0 || base < 0 || base > i32::MAX as isize { return state.eval_error("OUT OF BOUNDS", w) }
   let meta = meta as usize;
   let base = base as i32;
@@ -46,43 +46,41 @@ pub fn cog_halt(mut state: CognitionState, _: Option<&Value>) -> CognitionState 
 
 macro_rules! cog_crank_val {
   ($state:ident,$w:ident,$letpat:pat,$valexpr:expr) => {{
-    let Some(math) = $state.current().math.take() else { return $state.eval_error("MATH BASE ZERO", $w) };
     let val = if let Some(ref cranks) = $state.current().cranks {
       if let $letpat = cranks.get(0) { $valexpr } else { 0 }
     } else { 0 };
-    let s = math.itos(val as isize, &mut $state);
-    $state.current().math = Some(math);
-    match s {
+    let Some(math) = $state.get_math() else { return $state.eval_error("MATH BASE ZERO", $w) };
+    match math.math().itos(val as isize, &mut $state) {
       Ok(s) => {
+        $state.set_math(math);
         let mut vword = $state.pool.get_vword(s.len());
         vword.str_word.push_str(&s);
         $state.pool.add_string(s);
         $state.push_quoted(Value::Word(vword));
         $state
       },
-      Err(e) => $state.eval_error(e, $w)
+      Err(e) => $state.with_math(math).eval_error(e, $w)
     }
   }};
 }
 macro_rules! cog_metacrank_val {
   ($state:ident,$w:ident,$letpat:pat,$valexpr:expr) => {{
     let idx = get_unsigned!($state, $w, isize, ACTIVE) as usize;
-    let cur = $state.current();
-    let math = cur.math.take().unwrap();
-    let base = if let Some(ref cranks) = cur.cranks {
+    let base = if let Some(ref cranks) = $state.current().cranks {
       if let $letpat = cranks.get(idx) { $valexpr } else { 0 }
     } else { 0 };
-    let s = math.itos(base as isize, &mut $state);
-    $state.current().math = Some(math);
+    let math = $state.get_math().unwrap();
+    let s = math.math().itos(base as isize, &mut $state);
     match s {
       Ok(mut s) => {
+        $state.set_math(math);
         let vword_stack = $state.current().stack.last_mut().unwrap().value_stack();
         let vword = vword_stack.first_mut().unwrap().vword_mut();
         std::mem::swap(&mut s, &mut vword.str_word);
         $state.pool.add_string(s);
         $state
       },
-      Err(e) => $state.eval_error(e, $w),
+      Err(e) => $state.with_math(math).eval_error(e, $w),
     }
   }};
 }

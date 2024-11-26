@@ -84,18 +84,19 @@ impl GetCustomFromLibraries for ForeignLibraries {
   }
 }
 
-pub struct FnApply<T: ?Sized> {
+pub struct FnApply<'r, T: ?Sized> {
+  state: &'r mut CognitionState,
   deserialize_fn: DeserializeFn<T>
 }
 
-impl<'de, T: ?Sized> DeserializeSeed<'de> for FnApply<T> {
+impl<'r, 'de: 'r, T: ?Sized> DeserializeSeed<'de> for FnApply<'r, T> {
   type Value = Box<T>;
 
   fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
   where D: Deserializer<'de>,
   {
     let mut erased = <dyn erased_serde::Deserializer>::erase(deserializer);
-    (self.deserialize_fn)(&mut erased).map_err(de::Error::custom)
+    (self.deserialize_fn)(&mut erased, self.state).map_err(de::Error::custom)
   }
 }
 
@@ -125,7 +126,7 @@ where T: Sized + CognitionDeserialize<'de>
 }
 
 pub struct CustomVisitor<'r> {
-  libraries: &'r Option<ForeignLibraries>
+  state: &'r mut CognitionState
 }
 
 impl<'r, 'de: 'r> Visitor<'de> for CustomVisitor<'r> {
@@ -138,19 +139,19 @@ impl<'r, 'de: 'r> Visitor<'de> for CustomVisitor<'r> {
   fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
   where A: MapAccess<'de>,
   {
-    let map_lookup = CustomMapLookupVisitor { libraries: self.libraries };
+    let map_lookup = CustomMapLookupVisitor { libraries: self.state.fllibs.as_ref() };
     let deserialize_fn = match map.next_key_seed(map_lookup)? {
       Some(deserialize_fn) => deserialize_fn,
       None => {
         return Err(de::Error::custom(format_args!("expected dyn Custom")));
       }
     };
-    map.next_value_seed(FnApply { deserialize_fn })
+    map.next_value_seed(FnApply { state: self.state, deserialize_fn })
   }
 }
 
 pub struct CustomMapLookupVisitor<'r> {
-  pub libraries: &'r Option<ForeignLibraries>
+  pub libraries: Option<&'r ForeignLibraries>
 }
 
 impl<'r> Copy for CustomMapLookupVisitor<'r> {}
@@ -202,11 +203,10 @@ where
   ser.end()
 }
 
-pub fn deserialize_custom<'de, D>(deserializer: D, state: &CognitionState) -> Result<Box<dyn Custom>, D::Error>
+pub fn deserialize_custom<'de, D>(deserializer: D, state: &mut CognitionState) -> Result<Box<dyn Custom>, D::Error>
 where D: Deserializer<'de>,
 {
-  let libraries = &state.fllibs;
-  let visitor = CustomVisitor{ libraries };
+  let visitor = CustomVisitor{ state };
   deserializer.deserialize_map(visitor)
 }
 
@@ -440,6 +440,13 @@ impl Serialize for Math {
 
 pub trait CognitionDeserialize<'de> {
   fn cognition_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized;
+}
+
+pub trait OptionDeserialize<'de> {
+  fn option_deserialize<D>(deserializer: D, state: &mut CognitionState) -> Result<Option<Self>, D::Error>
   where
     D: Deserializer<'de>,
     Self: Sized;

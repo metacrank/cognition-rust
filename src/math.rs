@@ -434,7 +434,7 @@ impl Math {
     while let Some(c_new) = iter.next() {
       if c_new == negc {
         v.push(Digit{ digit: c, neg: true });
-        let Some(c_new) = iter.next() else { break };
+        let Some(c_new) = iter.next() else { return };
         c = c_new;
       }
       else {
@@ -444,6 +444,39 @@ impl Math {
     }
     v.push(Digit{ digit: c, neg: false });
   }
+
+  fn digits_to_string(&self, v: &Vec<Digit>, s: &mut String) {
+    let negc = self.negc.expect("negc uninitialized");
+    for d in v {
+      s.push(d.digit);
+      if d.neg {
+        s.push(negc);
+      }
+    }
+  }
+
+  pub fn neg(&self, s: &mut String, state: &mut CognitionState) {
+    let radix = self.radix.expect("radix uninitialized");
+    let delim = self.delim.expect("delim uninitialized");
+    let metaradix = self.meta_radix.expect("metaradix uninitialized");
+    let metadelim = self.meta_delim.expect("metadelim uninitialized");
+    let mut digits = state.pool.get_digits(s.len());
+    self.into_digits(s, &mut digits);
+    let mut c = 0;
+    for d in digits.iter_mut() {
+      if !(d.digit == radix) && !(d.digit == delim) &&
+        !(d.digit == metaradix) && !(d.digit == metadelim)
+      { d.neg = !d.neg; c += 2 }
+      else { c += 1 }
+    }
+    let mut new_s = state.pool.get_string(c);
+    self.digits_to_string(&digits, &mut new_s);
+    state.pool.add_digits(digits);
+    std::mem::swap(&mut new_s, s);
+    state.pool.add_string(new_s);
+  }
+
+
 
   // fn get_next_digit(&self, c1: &mut char, iter: &mut Rev<Chars>, negc: char) -> Result<(i32, bool), &'static str> {
   //   let c1_old = *c1;

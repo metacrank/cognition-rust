@@ -80,65 +80,199 @@ macro_rules! get_from_data_formats {
   }}
 }
 
+macro_rules! get_serde_fn {
+  ($state:ident,$filename:ident,$format:ident,$index:tt,$f:tt,$fail1:block,$fail2:block,$ext_slice:tt,$fail3:block) => {
+    'func: {
+      if let Some($f) = $format {
+        for element in $state.serde.serdes.iter() {
+          if *element.0 == *$f {
+            break 'func element.$index.clone()
+          }
+        }
+      }
+      get_from_data_formats!{ $filename,$format,$index,$f,$fail1,$fail2,$ext_slice,$fail3 }
+    }
+  }
+}
+macro_rules! get_serialize_fn {
+  ($state:ident,$filename:ident,$format:ident,$index:tt,$f:tt,$fail1:block,$fail2:block,$ext_slice:tt,$fail3:block) => {
+    'func: {
+      if let Some($f) = $format {
+        for element in $state.serde.serdes.iter() {
+          if *element.0 == *$f {
+            break 'func element.$index.clone()
+          }
+        }
+        for element in $state.serde.serializers.iter() {
+          if *element.0 == *$f {
+            break 'func element.$index.clone()
+          }
+        }
+      }
+      get_from_data_formats!{ $filename,$format,$index,$f,$fail1,$fail2,$ext_slice,$fail3 }
+    }
+  }
+}
+macro_rules! get_deserialize_fn {
+  ($state:ident,$filename:ident,$format:ident,$index:tt,$f:tt,$fail1:block,$fail2:block,$ext_slice:tt,$fail3:block) => {
+    'func: {
+      if let Some($f) = $format {
+        for element in $state.serde.serdes.iter() {
+          if *element.0 == *$f {
+            break 'func element.$index.clone()
+          }
+        }
+        for element in $state.serde.deserializers.iter() {
+          if *element.0 == *$f {
+            break 'func element.$index.clone()
+          }
+        }
+      }
+      get_from_data_formats!{ $filename,$format,$index,$f,$fail1,$fail2,$ext_slice,$fail3 }
+    }
+  }
+}
+
+
 macro_rules! data_formats_entry {
+  ($deserializer_from_str:expr,2) => {{
+    (|f, i, mut state| {
+      let mut deserializer = $deserializer_from_str(f);
+      match crate::serde::deserialize_cognition_state_from_state(&mut deserializer, &mut state, i) {
+        Ok(_) => Ok(state),
+        Err(e) => Err((state, Box::new(e)))
+      }
+    })
+  }};
+  ($deserializer_from_str:expr,3) => {{
+    (|fllibs, mut state| {
+      let mut deserializer = $deserializer_from_str(fllibs);
+      match crate::serde::serde_load_fllibs(&mut deserializer, &mut state) {
+        Err(e) => Err((state, Box::new(e))),
+        Ok(opt) => match opt {
+          Some(e) => Err((state, Box::new(e))),
+          None => Ok(state)
+        }
+      }
+    })
+  }};
+  ($serializer_new:expr,4) => {{
+    (|state, write| {
+      let mut serializer = $serializer_new(write);
+      match <crate::CognitionState as ::serde::ser::Serialize>::serialize(state, &mut serializer) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(Box::new(e))
+      }
+    })
+  }};
+  ($serializer_new:expr,5) => {{
+    (|fllibs, write| {
+      let mut serializer = $serializer_new(write);
+      let libs = crate::serde::ForeignLibrariesWrapper(fllibs);
+      match <crate::serde::ForeignLibrariesWrapper as ::serde::ser::Serialize>::serialize(&libs, &mut serializer) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(Box::new(e))
+      }
+    })
+  }};
+  ($serializer_new:expr,6) => {{
+    (|val, write| {
+      let mut serializer = $serializer_new(write);
+      match <crate::Value as ::serde::ser::Serialize>::serialize(val, &mut serializer) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(Box::new(e))
+      }
+    })
+  }};
+  ($deserializer_from_str:expr,7) => {{
+    (|string, state| {
+      let mut deserializer = $deserializer_from_str(string);
+      match <crate::Value as crate::serde::CognitionDeserialize>::cognition_deserialize(&mut deserializer, state) {
+        Ok(v) => Ok(v),
+        Err(e) => Err(Box::new(e))
+      }
+    })
+  }};
+  ($serializer_new:expr,8) => {{
+    (|mapval, write| {
+      let mut serializer = $serializer_new(write);
+      match crate::serde::serialize_cogmap(&mut serializer, mapval) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(Box::new(e))
+      }
+    })
+  }};
   ($fmt:literal,$ext:literal,$deserializer_from_str:expr,$serializer_new:expr) => {
     ($fmt, $ext,
-     (|f, i, mut state| {
-       let mut deserializer = $deserializer_from_str(f);
-       match crate::serde::deserialize_cognition_state_from_state(&mut deserializer, &mut state, i) {
-         Ok(_) => Ok(state),
-         Err(e) => Err((state, Box::new(e)))
-       }
-     }),
-     (|fllibs, mut state| {
-       let mut deserializer = $deserializer_from_str(fllibs);
-       match crate::serde::serde_load_fllibs(&mut deserializer, &mut state) {
-         Err(e) => Err((state, Box::new(e))),
-         Ok(opt) => match opt {
-           Some(e) => Err((state, Box::new(e))),
-           None => Ok(state)
-         }
-       }
-     }),
-     (|state, write| {
-       let mut serializer = $serializer_new(write);
-       match <crate::CognitionState as ::serde::ser::Serialize>::serialize(state, &mut serializer) {
-         Ok(_) => Ok(()),
-         Err(e) => Err(Box::new(e))
-       }
-     }),
-     (|fllibs, write| {
-       let mut serializer = $serializer_new(write);
-       let libs = crate::serde::ForeignLibrariesWrapper(fllibs);
-       match <crate::serde::ForeignLibrariesWrapper as ::serde::ser::Serialize>::serialize(&libs, &mut serializer) {
-         Ok(_) => Ok(()),
-         Err(e) => Err(Box::new(e))
-       }
-     }),
-     (|val, write| {
-       let mut serializer = $serializer_new(write);
-       match <crate::Value as ::serde::ser::Serialize>::serialize(val, &mut serializer) {
-         Ok(_) => Ok(()),
-         Err(e) => Err(Box::new(e))
-       }
-     }),
-     (|string, state| {
-       let mut deserializer = $deserializer_from_str(string);
-       match <crate::Value as crate::serde::CognitionDeserialize>::cognition_deserialize(&mut deserializer, state) {
-         Ok(v) => Ok(v),
-         Err(e) => Err(Box::new(e))
-       }
-     }),
-     (|mapval, write| {
-       let mut serializer = $serializer_new(write);
-       match crate::serde::serialize_cogmap(&mut serializer, mapval) {
-         Ok(_) => Ok(()),
-         Err(e) => Err(Box::new(e))
-       }
-     }),
+     data_formats_entry!{ $deserializer_from_str, 2 },
+     data_formats_entry!{ $deserializer_from_str, 3 },
+     data_formats_entry!{ $serializer_new, 4 },
+     data_formats_entry!{ $serializer_new, 5 },
+     data_formats_entry!{ $serializer_new, 6 },
+     data_formats_entry!{ $deserializer_from_str, 7 },
+     data_formats_entry!{ $serializer_new, 8 }
     )
   }
 }
+
+macro_rules! serde_descriptor {
+  ($fmt:literal,$deserializer_from_str:expr,$serializer_new:expr) => {
+    ($fmt, (),
+     data_formats_entry!{ $deserializer_from_str, 2 },
+     data_formats_entry!{ $deserializer_from_str, 3 },
+     data_formats_entry!{ $serializer_new, 4 },
+     data_formats_entry!{ $serializer_new, 5 },
+     data_formats_entry!{ $serializer_new, 6 },
+     data_formats_entry!{ $deserializer_from_str, 7 },
+     data_formats_entry!{ $serializer_new, 8 }
+    )
+  }
+}
+macro_rules! serializer_descriptor {
+  ($fmt:literal,$serializer_new:expr) => {
+    ($fmt, (), (), (),
+     data_formats_entry!{ $serializer_new, 4 },
+     data_formats_entry!{ $serializer_new, 5 },
+     data_formats_entry!{ $serializer_new, 6 }, (),
+     data_formats_entry!{ $serializer_new, 8 }
+    )
+  }
+}
+macro_rules! deserializer_descriptor {
+  ($fmt:literal,$deserializer_from_str:expr) => {
+    ($fmt, (),
+     data_formats_entry!{ $deserializer_from_str, 2 },
+     data_formats_entry!{ $deserializer_from_str, 3 }, (), (), (),
+     data_formats_entry!{ $deserializer_from_str, 7 }, ()
+    )
+  }
+}
+
+pub type SerdeDescriptor = (
+  &'static str, (),
+  crate::CogStateDeserializeFn,
+  crate::CogLibsDeserializeFn,
+  crate::CogStateSerializeFn,
+  crate::CogLibsSerializeFn,
+  crate::CogValueSerializeFn,
+  crate::CogValueDeserializeFn,
+  crate::CogValueSerializeFn
+);
+
+pub type SerializerDescriptor = (
+  &'static str, (), (), (),
+  crate::CogStateSerializeFn,
+  crate::CogLibsSerializeFn,
+  crate::CogValueSerializeFn, (),
+  crate::CogValueSerializeFn
+);
+
+pub type DeserializerDescriptor = (
+  &'static str, (),
+  crate::CogStateDeserializeFn,
+  crate::CogLibsDeserializeFn, (), (), (),
+  crate::CogValueDeserializeFn, ()
+);
 
 pub type DataFormatsEntry<'a> = (
   &'a str, &'a str,
@@ -148,7 +282,7 @@ pub type DataFormatsEntry<'a> = (
   crate::CogLibsSerializeFn,
   crate::CogValueSerializeFn,
   crate::CogValueDeserializeFn,
-  crate::CogValueSerializeFn,
+  crate::CogValueSerializeFn
 );
 
 pub const DATA_FORMATS: [DataFormatsEntry; 1] = [
@@ -159,20 +293,32 @@ pub const DATA_FORMATS: [DataFormatsEntry; 1] = [
 #[macro_export]
 macro_rules! void_deserialize_fn {
   () => {
-    (|deserializer| Ok(
+    (|deserializer, _state| Ok(
      Box::new(erased_serde::deserialize::<crate::Void>(deserializer)?),
     )) as crate::DeserializeFn<dyn crate::Custom>
   }
 }
 
+#[macro_export]
+macro_rules! option_deserialize_fn {
+  ($t:ty) => {
+    (|deserializer, state| Ok(
+      match <$t as crate::serde::OptionDeserialize>::option_deserialize(deserializer, state)? {
+        Some(c) => Box::new(c),
+        None => Box::new(crate::Void{})
+      }
+    ))
+  }
+}
+
 pub const BUILTIN_CUSTOM_DESERIALIZERS: [(&str, crate::DeserializeFn<dyn crate::Custom>); 7] = [
   ("cognition::Void", void_deserialize_fn!{}),
-  ("cognition::builtins::io::ReadWriteCustom", void_deserialize_fn!{}),
-  ("cognition::builtins::io::FileCustom", void_deserialize_fn!{}),
-  ("cognition::builtins::io::ReadCustom", void_deserialize_fn!{}),
-  ("cognition::builtins::io::WriteCustom", void_deserialize_fn!{}),
-  ("cognition::builtins::io::BufReadCustom", void_deserialize_fn!{}),
-  ("cognition::builtins::io::BufWriteCustom", void_deserialize_fn!{})
+  ("cognition::builtins::io::ReadWriteCustom", option_deserialize_fn!{crate::builtins::io::ReadWriteCustom}),
+  ("cognition::builtins::io::FileCustom", option_deserialize_fn!{crate::builtins::io::FileCustom}),
+  ("cognition::builtins::io::ReadCustom", option_deserialize_fn!{crate::builtins::io::ReadCustom}),
+  ("cognition::builtins::io::WriteCustom", option_deserialize_fn!{crate::builtins::io::WriteCustom}),
+  ("cognition::builtins::io::BufReadCustom", option_deserialize_fn!{crate::builtins::io::BufReadCustom}),
+  ("cognition::builtins::io::BufWriteCustom", option_deserialize_fn!{crate::builtins::io::BufWriteCustom})
 ];
 
 #[macro_export]
@@ -497,14 +643,17 @@ macro_rules! get_char_option {
 
 #[macro_export]
 macro_rules! get_word {
-  ($state:ident,$w:ident) => {{
+  ($state:ident,$w:ident,ACTIVE) => {
     let cur = $state.current();
     let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     if v.value_stack_ref().len() != 1 { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
     let word_v = &v.value_stack_ref()[0];
     if !word_v.is_word() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
-    cur.stack.pop().unwrap()
-  }};
+  };
+  ($state:ident,$w:ident) => {{
+    get_word!($state,$w,ACTIVE);
+    $state.current().stack.pop().unwrap()
+  }}
 }
 
 #[macro_export]
@@ -532,49 +681,60 @@ macro_rules! get_2_words {
 #[macro_export]
 macro_rules! get_unsigned {
   ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
-    let cur = $state.current();
-    let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    let Some(v) = $state.current().stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let stack = v.value_stack_ref();
     if stack.len() != 1 {
+      $state.current().stack.push(v);
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     let word_val = &stack[0];
     let $crate::Value::Word(vword) = word_val else {
+      $state.current().stack.push(v);
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     };
-    let Some(ref math) = cur.math else {
+    let Some(math) = $state.get_math() else {
+      $state.current().stack.push(v);
       return $state.eval_error("MATH BASE ZERO", $w)
     };
-    if math.base() == 0 {
+    if math.math().base() == 0 {
+      $state.set_math(math);
+      $state.current().stack.push(v);
       return $state.eval_error("MATH BASE ZERO", $w)
     }
-    let i = match math.stoi(&vword.str_word) {
+    let i = match math.math().stoi(&vword.str_word) {
       Ok(i) => if i > <$type>::MAX as isize || i < 0 {
+        $state.set_math(math);
+        $state.current().stack.push(v);
         return $state.eval_error($err, $w)
       } else { i as $type },
-      Err(e) => return $state.eval_error(e, $w),
+      Err(e) => {
+        $state.set_math(math);
+        $state.current().stack.push(v);
+        return $state.eval_error(e, $w)
+      }
     };
+    $state.set_math(math);
+    $state.current().stack.push(v);
     i
   }};
   ($state:ident,$w:ident,$type:ty,ACTIVE) => {
-    get_int!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
+    get_unsigned!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
   };
   ($state:ident,$w:ident,$type:ty) => {{
-    let i = get_int!($state, $w, $type, ACTIVE);
+    let i = get_unsigned!($state, $w, $type, ACTIVE);
     let v = $state.current().stack.pop().unwrap();
     $state.pool.add_val(v);
     i
   }};
   ($state:ident,$w:ident) => {
-    get_int!($state, $w, i32)
+    get_unsigned!($state, $w, i32)
   };
 }
 
 #[macro_export]
 macro_rules! get_int {
   ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
-    let cur = $state.current();
-    let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    let Some(v) = $state.current().stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let stack = v.value_stack_ref();
     if stack.len() != 1 {
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
@@ -583,18 +743,29 @@ macro_rules! get_int {
     let $crate::Value::Word(vword) = word_val else {
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     };
-    let Some(ref math) = cur.math else {
+    let Some(math) = $state.get_math() else {
+      $state.current().stack.push(v);
       return $state.eval_error("MATH BASE ZERO", $w)
     };
-    if math.base() == 0 {
+    if math.math().base() == 0 {
+      $state.set_math(math);
+      $state.current().stack.push(v);
       return $state.eval_error("MATH BASE ZERO", $w)
     }
-    let i = match math.stoi(&vword.str_word) {
+    let i = match math.math().stoi(&vword.str_word) {
       Ok(i) => if i > <$type>::MAX as isize || i < <$type>::MIN as isize {
+        $state.set_math(math);
+        $state.current().stack.push(v);
         return $state.eval_error($err, $w)
       } else { i as $type },
-      Err(e) => return $state.eval_error(e, $w),
+      Err(e) => {
+        $state.set_math(math);
+        $state.current().stack.push(v);
+        return $state.eval_error(e, $w)
+      }
     };
+    $state.set_math(math);
+    $state.current().stack.push(v);
     i
   }};
   ($state:ident,$w:ident,$type:ty,ACTIVE) => {
@@ -614,60 +785,76 @@ macro_rules! get_int {
 #[macro_export]
 macro_rules! get_2_ints {
   ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
-    let cur = $state.current();
-    let Some(v2) = cur.stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
-    let Some(v1) = cur.stack.pop() else {
-      cur.stack.push(v2);
+    let stack = &mut $state.current().stack;
+    let Some(v2) = stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    let Some(v1) = stack.pop() else {
+      stack.push(v2);
       return $state.eval_error("TOO FEW ARGUMENTS", $w);
     };
     let stack1 = v1.value_stack_ref();
     if stack1.len() != 1 {
-      cur.stack.push(v1); cur.stack.push(v2);
+      stack.push(v1);
+      stack.push(v2);
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     let word_val1 = &stack1[0];
     let $crate::Value::Word(vword1) = word_val1 else {
-      cur.stack.push(v1); cur.stack.push(v2);
+      stack.push(v1);
+      stack.push(v2);
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     };
     let stack2 = v2.value_stack_ref();
     if stack2.len() != 1 {
-      cur.stack.push(v1); cur.stack.push(v2);
+      stack.push(v1);
+      stack.push(v2);
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     let word_val2 = &stack2[0];
     let $crate::Value::Word(vword2) = word_val2 else {
-      cur.stack.push(v1); cur.stack.push(v2);
+      stack.push(v1);
+      stack.push(v2);
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     };
-    let Some(ref math) = cur.math else {
-      cur.stack.push(v1); cur.stack.push(v2);
+    let Some(math) = $state.get_math() else {
+      $state.current().stack.push(v1);
+      $state.current().stack.push(v2);
       return $state.eval_error("MATH BASE ZERO", $w)
     };
-    if math.base() == 0 {
-      cur.stack.push(v1); cur.stack.push(v2);
+    if math.math().base() == 0 {
+      $state.set_math(math);
+      $state.current().stack.push(v1);
+      $state.current().stack.push(v2);
       return $state.eval_error("MATH BASE ZERO", $w)
     }
-    let i1 = match math.stoi(&vword1.str_word) {
-      Ok(i) => if i > <$type>::MAX as isize || i < 0 {
-        cur.stack.push(v1); cur.stack.push(v2);
+    let i1 = match math.math().stoi(&vword1.str_word) {
+      Ok(i) => if i > <$type>::MAX as isize || i < <$type>::MIN as isize {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
         return $state.eval_error($err, $w)
       } else { i as $type },
       Err(e) => {
-        cur.stack.push(v1); cur.stack.push(v2);
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
         return $state.eval_error(e, $w)
       },
     };
-    let i2 = match math.stoi(&vword2.str_word) {
-      Ok(i) => if i > <$type>::MAX as isize || i < 0 {
-        cur.stack.push(v1); cur.stack.push(v2);
+    let i2 = match math.math().stoi(&vword2.str_word) {
+      Ok(i) => if i > <$type>::MAX as isize || i < <$type>::MIN as isize {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
         return $state.eval_error($err, $w)
       } else { i as $type },
       Err(e) => {
-        cur.stack.push(v1); cur.stack.push(v2);
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
         return $state.eval_error(e, $w)
       },
     };
+    $state.set_math(math);
     $state.current().stack.push(v1);
     $state.current().stack.push(v2);
     (i1, i2)
@@ -685,5 +872,98 @@ macro_rules! get_2_ints {
   }};
   ($state:ident,$w:ident) => {
     get_2_ints!($state, $w, i32)
+  };
+}
+
+#[macro_export]
+macro_rules! get_2_unsigned {
+  ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
+    let stack = &mut $state.current().stack;
+    let Some(v2) = stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    let Some(v1) = stack.pop() else {
+      stack.push(v2);
+      return $state.eval_error("TOO FEW ARGUMENTS", $w);
+    };
+    let stack1 = v1.value_stack_ref();
+    if stack1.len() != 1 {
+      stack.push(v1);
+      stack.push(v2);
+      return $state.eval_error("BAD ARGUMENT TYPE", $w)
+    }
+    let word_val1 = &stack1[0];
+    let $crate::Value::Word(vword1) = word_val1 else {
+      stack.push(v1);
+      stack.push(v2);
+      return $state.eval_error("BAD ARGUMENT TYPE", $w)
+    };
+    let stack2 = v2.value_stack_ref();
+    if stack2.len() != 1 {
+      stack.push(v1);
+      stack.push(v2);
+      return $state.eval_error("BAD ARGUMENT TYPE", $w)
+    }
+    let word_val2 = &stack2[0];
+    let $crate::Value::Word(vword2) = word_val2 else {
+      stack.push(v1);
+      stack.push(v2);
+      return $state.eval_error("BAD ARGUMENT TYPE", $w)
+    };
+    let Some(math) = $state.get_math() else {
+      $state.current().stack.push(v1);
+      $state.current().stack.push(v2);
+      return $state.eval_error("MATH BASE ZERO", $w)
+    };
+    if math.math().base() == 0 {
+      $state.set_math(math);
+      $state.current().stack.push(v1);
+      $state.current().stack.push(v2);
+      return $state.eval_error("MATH BASE ZERO", $w)
+    }
+    let i1 = match math.math().stoi(&vword1.str_word) {
+      Ok(i) => if i > <$type>::MAX as isize || i < 0 {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
+        return $state.eval_error($err, $w)
+      } else { i as $type },
+      Err(e) => {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
+        return $state.eval_error(e, $w)
+      },
+    };
+    let i2 = match math.math().stoi(&vword2.str_word) {
+      Ok(i) => if i > <$type>::MAX as isize || i < 0 {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
+        return $state.eval_error($err, $w)
+      } else { i as $type },
+      Err(e) => {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
+        return $state.eval_error(e, $w)
+      },
+    };
+    $state.set_math(math);
+    $state.current().stack.push(v1);
+    $state.current().stack.push(v2);
+    (i1, i2)
+  }};
+  ($state:ident,$w:ident,$type:ty,ACTIVE) => {
+    get_2_unsigned!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
+  };
+  ($state:ident,$w:ident,$type:ty) => {{
+    let (i1, i2) = get_2_unsigned!($state, $w, $type, ACTIVE);
+    let v2 = $state.current().stack.pop().unwrap();
+    let v1 = $state.current().stack.pop().unwrap();
+    $state.pool.add_val(v1);
+    $state.pool.add_val(v2);
+    (i1, i2)
+  }};
+  ($state:ident,$w:ident) => {
+    get_2_unsigned!($state, $w, i32)
   };
 }

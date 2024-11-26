@@ -101,6 +101,7 @@ pub fn cog_digits(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   if cur.math.is_none() {
     cur.math = Some(state.pool.get_math(0))
   }
+  if cur.math.as_ref().unwrap().base() != 0 { return state.push_cur(cur_v).eval_error("MATH BASE NONZERO", w) }
   cur.math.as_mut().unwrap().set_digits(s);
   let v = cur.stack.pop().unwrap();
   state.pool.add_val(v);
@@ -221,154 +222,112 @@ pub fn cog_get_digits(mut state: CognitionState, _: Option<&Value>) -> Cognition
   state
 }
 
-pub fn cog_equals(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
-  let v2 = stack.pop().unwrap();
-  let v1 = stack.last_mut().unwrap();
-  if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
-    return state.eval_error("TOO FEW ARGUMENTS", w)
-  }
-  let str1 = v1.value_stack().first_mut().unwrap();
-  let str2 = v2.value_stack_ref().first().unwrap();
-  if !str1.is_word() || !str2.is_word() {
-    return state.eval_error("TOO FEW ARGUMENTS", w)
-  }
-  let vword1 = str1.vword_mut();
-  if vword1.str_word == str2.vword_ref().str_word {
-    if vword1.str_word.len() == 0 {
-      vword1.str_word.push('t');
-    }
-  } else {
-    vword1.str_word.clear();
-  }
-  state.pool.add_val(v2);
-  state
-}
-
-pub fn cog_and(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
-  let v2 = stack.pop().unwrap();
-  let v1 = stack.last_mut().unwrap();
-  if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
-    return state.eval_error("TOO FEW ARGUMENTS", w)
-  }
-  let str1 = v1.value_stack().first_mut().unwrap();
-  let str2 = v2.value_stack_ref().first().unwrap();
-  if !str1.is_word() || !str2.is_word() {
-    return state.eval_error("TOO FEW ARGUMENTS", w)
-  }
-  let vword1 = str1.vword_mut();
-  if vword1.str_word.len() != 0 && str2.vword_ref().str_word.len() != 0 {
-    if vword1.str_word.len() == 0 {
-      vword1.str_word.push('t');
-    }
-  } else {
-    vword1.str_word.clear();
-  }
-  state.pool.add_val(v2);
-  state
-}
-
-pub fn cog_or(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
-  let v2 = stack.pop().unwrap();
-  let v1 = stack.last_mut().unwrap();
-  if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
-    return state.eval_error("TOO FEW ARGUMENTS", w)
-  }
-  let str1 = v1.value_stack().first_mut().unwrap();
-  let str2 = v2.value_stack_ref().first().unwrap();
-  if !str1.is_word() || !str2.is_word() {
-    return state.eval_error("TOO FEW ARGUMENTS", w)
-  }
-  let vword1 = str1.vword_mut();
-  if vword1.str_word.len() != 0 || str2.vword_ref().str_word.len() != 0 {
-    if vword1.str_word.len() == 0 {
-      vword1.str_word.push('t');
-    }
-  } else {
-    vword1.str_word.clear();
-  }
-  state.pool.add_val(v2);
-  state
-}
-
-pub fn cog_plus(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let cur = state.current();
-  let Some(v2) = cur.stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let Some(v1) = cur.stack.pop() else {
-    cur.stack.push(v2);
-    return state.eval_error("TOO FEW ARGUMENTS", w)
-  };
-  if cur.math.is_none() {
-    cur.stack.push(v1);
-    cur.stack.push(v2);
-    return state.eval_error("MATH BASE ZERO", w)
-  }
-  if cur.math.as_ref().unwrap().base() == 0 {
-    cur.stack.push(v1);
-    cur.stack.push(v2);
-    return state.eval_error("MATH BASE ZERO", w)
-  }
-  if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
-    cur.stack.push(v1);
-    cur.stack.push(v2);
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  }
-  let word_v1 = &v1.value_stack_ref()[0];
-  let word_v2 = &v2.value_stack_ref()[0];
-  if !word_v1.is_word() || !word_v2.is_word() {
-    cur.stack.push(v1);
-    cur.stack.push(v2);
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  }
-  let s1 = &word_v1.vword_ref().str_word;
-  let s2 = &word_v1.vword_ref().str_word;
-  if s1.len() > i32::MAX as usize || s2.len() > i32::MAX as usize {
-    cur.stack.push(v1);
-    cur.stack.push(v2);
-    return state.eval_error("OUT OF BOUNDS", w)
-  }
-
-  let n1 = match cur.math.as_ref().unwrap().stoi(s1) {
-    Ok(i) => i,
-    Err(e) => {
-      cur.stack.push(v1);
-      cur.stack.push(v2);
-      return state.eval_error(e, w)
-    }
-  };
-  let n2 = match cur.math.as_ref().unwrap().stoi(s2) {
-    Ok(i) => i,
-    Err(e) => {
-      cur.stack.push(v1);
-      cur.stack.push(v2);
-      return state.eval_error(e, w)
-    }
-  };
-  let math = cur.math.take().unwrap();
-  match math.itos(n1 + n2, &mut state) {
-    Ok(s) => {
-      state.current().math = Some(math);
-      let mut vw = state.pool.get_vword(s.len());
-      vw.str_word.push_str(&s);
-      state.pool.add_string(s);
-      state.pool.add_val(v1);
+macro_rules! binary_logic_operation {
+  ($name:tt,$a:tt,$b:tt,$op:expr) => {
+    pub fn $name(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+      let stack = &mut state.current().stack;
+      if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+      let v2 = stack.pop().unwrap();
+      let v1 = stack.last_mut().unwrap();
+      if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
+        return state.eval_error("TOO FEW ARGUMENTS", w)
+      }
+      let str1 = v1.value_stack().first_mut().unwrap();
+      let str2 = v2.value_stack_ref().first().unwrap();
+      if !str1.is_word() || !str2.is_word() {
+        return state.eval_error("TOO FEW ARGUMENTS", w)
+      }
+      let vword1 = str1.vword_mut();
+      let $a = &vword1.str_word;
+      let $b = &str2.vword_ref().str_word;
+      if $op {
+        if vword1.str_word.len() == 0 {
+          vword1.str_word.push('t');
+        }
+      } else {
+        vword1.str_word.clear();
+      }
       state.pool.add_val(v2);
+      state
+    }
+  }
+}
+
+binary_logic_operation!{ cog_equals, a, b, a == b }
+binary_logic_operation!{ cog_nequals, a, b, a != b }
+binary_logic_operation!{ cog_and, a, b, a.len() != 0 && b.len() != 0 }
+binary_logic_operation!{ cog_or, a, b, a.len() != 0 || b.len() != 0 }
+
+pub fn cog_not(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let mut v = get_word!(state, w);
+  let vw = v.value_stack().first_mut().unwrap();
+  let str_word = &mut vw.vword_mut().str_word;
+  if str_word.len() != 0 {
+    str_word.clear()
+  } else {
+    str_word.push('t');
+  }
+  state.current().stack.push(v);
+  state
+}
+
+macro_rules! interim_binary_operation {
+  ($name:tt,$a:tt,$b:tt,$operation:expr) => {
+    pub fn $name(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+      let ($a, $b) = get_2_ints!(state, w, isize);
+      let math = state.get_math().unwrap();
+      match math.math().itos(($operation) as isize, &mut state) {
+        Ok(s) => {
+          state.set_math(math);
+          let mut vw = state.pool.get_vword(s.len());
+          vw.str_word.push_str(&s);
+          state.pool.add_string(s);
+          state.push_quoted(Value::Word(vw));
+          state
+        },
+        Err(e) => state.with_math(math).eval_error(e, w)
+      }
+    }
+  }
+}
+
+// real integer operations
+interim_binary_operation!{ cog_plus, a, b, a+b }
+interim_binary_operation!{ cog_minus, a, b, a-b }
+interim_binary_operation!{ cog_mul, a, b, a*b }
+interim_binary_operation!{ cog_div, a, b, a/b }
+interim_binary_operation!{ cog_pow, a, b, a.pow(b.try_into().unwrap()) }
+
+pub fn cog_neg(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  get_word!(state, w, ACTIVE);
+  let Some(math) = state.get_math() else { return state.eval_error("MATH BASE ZERO", w) };
+  if math.math().base() == 0 { return state.with_math(math).eval_error("MATH BASE ZERO", w) }
+  let mut v = state.current().stack.pop().unwrap();
+  let vstr = &mut v.value_stack().first_mut().unwrap().vword_mut().str_word;
+  math.math().neg(vstr, &mut state);
+  state.set_math(math);
+  state.current().stack.push(v);
+  state
+}
+
+macro_rules! interim_comparison_operation {
+  ($name:tt,$a:tt,$b:tt,$operation:expr) => {
+    pub fn $name(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+      let ($a, $b) = get_2_ints!(state, w, isize);
+      let mut vw = state.pool.get_vword(1);
+      if $operation { vw.str_word.push('t') }
       state.push_quoted(Value::Word(vw));
       state
-    },
-    Err(e) => {
-      state.current().math = Some(math);
-      state.current().stack.push(v1);
-      state.current().stack.push(v2);
-      state.eval_error(e, w)
     }
   }
 }
+
+interim_comparison_operation!{ cog_lthan, a, b, a < b }
+interim_comparison_operation!{ cog_leq, a, b, a <= b }
+interim_comparison_operation!{ cog_eq, a, b, a == b }
+interim_comparison_operation!{ cog_geq, a, b, a >= b }
+interim_comparison_operation!{ cog_gthan, a, b, a > b }
+interim_comparison_operation!{ cog_neq, a, b, a != b }
 
 pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "base", cog_base);
@@ -386,7 +345,20 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "get-meta-delim", cog_get_meta_delim);
   add_builtin!(state, "get-digits", cog_get_digits);
   add_builtin!(state, "=", cog_equals);
+  add_builtin!(state, "!=", cog_nequals);
   add_builtin!(state, "and", cog_and);
   add_builtin!(state, "or", cog_or);
-  //add_builtin!(state, "+", cog_plus);
+  add_builtin!(state, "not", cog_not);
+  add_builtin!(state, "neg", cog_neg);
+  add_builtin!(state, "+", cog_plus);
+  add_builtin!(state, "-", cog_minus);
+  add_builtin!(state, "*", cog_mul);
+  add_builtin!(state, "/", cog_div);
+  add_builtin!(state, "pow", cog_pow);
+  add_builtin!(state, "<", cog_lthan);
+  add_builtin!(state, "<=", cog_leq);
+  add_builtin!(state, "==", cog_eq);
+  add_builtin!(state, ">=", cog_geq);
+  add_builtin!(state, ">", cog_gthan);
+  add_builtin!(state, "!==", cog_neq);
 }

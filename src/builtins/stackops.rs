@@ -35,22 +35,20 @@ pub fn cog_dup(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
 }
 
 pub fn cog_ssize(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let mut cur_v = state.pop_cur();
-  let cur = cur_v.metastack_container();
-  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  if cur.math.as_ref().unwrap().base() == 0 { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  let length = cur.stack.len();
-  if length > isize::MAX as usize { return state.push_cur(cur_v).eval_error("OUT OF BOUNDS", w) }
-  match cur.math.as_ref().unwrap().itos(length as isize, &mut state) {
+  let length = state.current().stack.len();
+  let Some(math) = state.get_math() else { return state.eval_error("MATH BASE ZERO", w) };
+  if math.math().base() == 0 { return state.with_math(math).eval_error("MATH BASE ZERO", w) }
+  if length > isize::MAX as usize { return state.with_math(math).eval_error("OUT OF BOUNDS", w) }
+  match math.math().itos(length as isize, &mut state) {
     Ok(s) => {
       let mut v = state.pool.get_vword(s.len());
       v.str_word.push_str(&s);
       state.pool.add_string(s);
-      state = state.push_cur(cur_v);
+      state.set_math(math);
       state.push_quoted(Value::Word(v));
       state
     },
-    Err(e) => { return state.push_cur(cur_v).eval_error(e, w) }
+    Err(e) => { return state.with_math(math).eval_error(e, w) }
   }
 }
 

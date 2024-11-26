@@ -1,6 +1,9 @@
 use crate::*;
+use crate::serde::OptionDeserialize;
 use std::io::{self, Read, BufRead, Seek};
 use std::fs::File;
+use ::serde::ser::{Serialize, Serializer};
+use ::serde::de::{Deserialize, Deserializer};
 
 macro_rules! trait_any {
   () => {
@@ -30,6 +33,35 @@ impl<T: Any + io::Read> ReadAny for T { impl_any!(); }
 pub trait ReadWriteAny: io::Read + io::Write + Any { trait_any!(); }
 impl<T: Any + io::Read + io::Write> ReadWriteAny for T { impl_any!(); }
 
+macro_rules! impl_sv {
+  ($ty:tt;$($f:tt,$v:tt);*) => {
+    impl $ty {
+      pub fn is_unknown(&self) -> bool { *self == Self::Unknown }
+      $( pub fn $f(&self) -> bool { *self == Self::$v } )*
+    }
+  };
+}
+
+#[derive(Serialize, Deserialize, PartialEq)]
+enum ReadWriteCustomSV { Unknown, Empty }
+#[derive(Serialize, Deserialize, PartialEq)]
+enum FileCustomSV { Unknown }
+#[derive(Serialize, Deserialize, PartialEq)]
+enum ReadCustomSV { Unknown, Stdin }
+#[derive(Serialize, Deserialize, PartialEq)]
+enum WriteCustomSV { Unknown, Stdout, Stderr }
+#[derive(Serialize, Deserialize, PartialEq)]
+enum BufReadCustomSV { Unknown }
+#[derive(Serialize, Deserialize, PartialEq)]
+enum BufWriteCustomSV { Unknown }
+
+impl_sv!{ ReadWriteCustomSV; is_empty, Empty }
+impl_sv!{ FileCustomSV; }
+impl_sv!{ ReadCustomSV; is_stdin, Stdin }
+impl_sv!{ WriteCustomSV; is_stdout, Stdout; is_stderr, Stderr }
+impl_sv!{ BufReadCustomSV; }
+impl_sv!{ BufWriteCustomSV; }
+
 // Always unwrap Options
 pub struct ReadWriteCustom { pub stream: Option<Box<dyn ReadWriteAny>> }
 pub struct FileCustom  { pub file: Option<File> }
@@ -38,7 +70,133 @@ pub struct WriteCustom { pub writer: Option<Box<dyn WriteAny>> }
 pub struct BufReadCustom  { pub bufreader: Option<io::BufReader<Box<dyn ReadAny>>> }
 pub struct BufWriteCustom { pub bufwriter: Option<io::BufWriter<Box<dyn WriteAny>>> }
 
-#[cognition_macros::custom(serde_as_void)]
+impl Serialize for ReadWriteCustom {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer {
+    let read_write_any = ReadWriteAny::as_any(&**self.stream.as_ref().unwrap());
+    if read_write_any.downcast_ref::<io::Empty>().is_some() {
+      ReadWriteCustomSV::serialize(&ReadWriteCustomSV::Empty, serializer)
+    } else {
+      ReadWriteCustomSV::serialize(&ReadWriteCustomSV::Unknown, serializer)
+    }
+  }
+}
+impl<'de> OptionDeserialize<'de> for ReadWriteCustom {
+  fn option_deserialize<D>(deserializer: D, _: &mut CognitionState) -> Result<Option<Self>, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    match ReadWriteCustomSV::deserialize(deserializer)? {
+      ReadWriteCustomSV::Unknown => Ok(None),
+      ReadWriteCustomSV::Empty => Ok(Some(ReadWriteCustom{ stream: Some(Box::new(io::empty())) }))
+    }
+  }
+}
+
+impl Serialize for FileCustom {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer {
+    FileCustomSV::serialize(&FileCustomSV::Unknown, serializer)
+  }
+}
+impl<'de> OptionDeserialize<'de> for FileCustom {
+  fn option_deserialize<D>(deserializer: D, _: &mut CognitionState) -> Result<Option<Self>, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    ReadWriteCustomSV::deserialize(deserializer)?;
+    Ok(None)
+  }
+}
+
+impl Serialize for ReadCustom {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer {
+    let read_any = ReadAny::as_any(&**self.reader.as_ref().unwrap());
+    if read_any.downcast_ref::<io::Stdin>().is_some() {
+      ReadCustomSV::serialize(&ReadCustomSV::Stdin, serializer)
+    } else {
+      ReadCustomSV::serialize(&ReadCustomSV::Unknown, serializer)
+    }
+  }
+}
+impl<'de> OptionDeserialize<'de> for ReadCustom {
+  fn option_deserialize<D>(deserializer: D, _: &mut CognitionState) -> Result<Option<Self>, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    match ReadCustomSV::deserialize(deserializer)? {
+      ReadCustomSV::Unknown => Ok(None),
+      ReadCustomSV::Stdin => Ok(Some(ReadCustom{ reader: Some(Box::new(io::stdin())) }))
+    }
+  }
+}
+
+impl Serialize for WriteCustom {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer {
+    let write_any = WriteAny::as_any(&**self.writer.as_ref().unwrap());
+    if write_any.downcast_ref::<io::Stdout>().is_some() {
+      WriteCustomSV::serialize(&WriteCustomSV::Stdout, serializer)
+    } else if write_any.downcast_ref::<io::Stderr>().is_some() {
+      WriteCustomSV::serialize(&WriteCustomSV::Stderr, serializer)
+    } else {
+      WriteCustomSV::serialize(&WriteCustomSV::Unknown, serializer)
+    }
+  }
+}
+impl<'de> OptionDeserialize<'de> for WriteCustom {
+  fn option_deserialize<D>(deserializer: D, _: &mut CognitionState) -> Result<Option<Self>, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    match WriteCustomSV::deserialize(deserializer)? {
+      WriteCustomSV::Unknown => Ok(None),
+      WriteCustomSV::Stdout => Ok(Some(WriteCustom{ writer: Some(Box::new(io::stdout())) })),
+      WriteCustomSV::Stderr => Ok(Some(WriteCustom{ writer: Some(Box::new(io::stderr())) }))
+    }
+  }
+}
+
+impl Serialize for BufReadCustom {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer {
+    BufReadCustomSV::serialize(&BufReadCustomSV::Unknown, serializer)
+  }
+}
+impl<'de> OptionDeserialize<'de> for BufReadCustom {
+  fn option_deserialize<D>(deserializer: D, _: &mut CognitionState) -> Result<Option<Self>, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    BufReadCustomSV::deserialize(deserializer)?;
+    Ok(None)
+  }
+}
+
+impl Serialize for BufWriteCustom {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where S: Serializer {
+    BufWriteCustomSV::serialize(&BufWriteCustomSV::Unknown, serializer)
+  }
+}
+impl<'de> OptionDeserialize<'de> for BufWriteCustom {
+  fn option_deserialize<D>(deserializer: D, _: &mut CognitionState) -> Result<Option<Self>, D::Error>
+  where
+    D: Deserializer<'de>,
+    Self: Sized,
+  {
+    BufWriteCustomSV::deserialize(deserializer)?;
+    Ok(None)
+  }
+}
+
+#[cognition_macros::custom(option_serde)]
 impl Custom for ReadWriteCustom {
   fn printfunc(&self, f: &mut dyn io::Write) {
     let read_write_any = ReadWriteAny::as_any(&**self.stream.as_ref().unwrap());
@@ -60,7 +218,7 @@ impl Custom for ReadWriteCustom {
     Box::new(Void{})
   }
 }
-#[cognition_macros::custom(serde_as_void)]
+#[cognition_macros::custom(option_serde)]
 impl Custom for FileCustom {
   fn printfunc(&self, f: &mut dyn io::Write) {
     fwrite_check!(f, b"(file)");
@@ -72,7 +230,7 @@ impl Custom for FileCustom {
     }
   }
 }
-#[cognition_macros::custom(serde_as_void)]
+#[cognition_macros::custom(option_serde)]
 impl Custom for ReadCustom {
   fn printfunc(&self, f: &mut dyn io::Write) {
     let read_any = (**self.reader.as_ref().unwrap()).as_any();
@@ -96,7 +254,7 @@ impl Custom for ReadCustom {
     Box::new(Void{})
   }
 }
-#[cognition_macros::custom(serde_as_void)]
+#[cognition_macros::custom(option_serde)]
 impl Custom for WriteCustom {
   fn printfunc(&self, f: &mut dyn io::Write) {
     let read_any = (**self.writer.as_ref().unwrap()).as_any();
@@ -124,7 +282,7 @@ impl Custom for WriteCustom {
     Box::new(Void{})
   }
 }
-#[cognition_macros::custom(serde_as_void)]
+#[cognition_macros::custom(option_serde)]
 impl Custom for BufReadCustom {
   fn printfunc(&self, f: &mut dyn io::Write) {
     fwrite_check!(f, b"(bufreader)");
@@ -143,7 +301,7 @@ impl Custom for BufReadCustom {
     Box::new(Void{})
   }
 }
-#[cognition_macros::custom(serde_as_void)]
+#[cognition_macros::custom(option_serde)]
 impl Custom for BufWriteCustom {
   fn printfunc(&self, f: &mut dyn io::Write) {
     fwrite_check!(f, b"(bufwriter)");
@@ -1058,17 +1216,18 @@ macro_rules! streampos {
   ($state:ident,$w:ident,$stream:expr,$v:ident) => {
     match $stream.stream_position() {
       Ok(i) => {
-        let Some(math) = $state.current().math.take() else {
+        let Some(math) = $state.get_math() else {
           $state.current().stack.push($v);
           return $state.eval_error("MATH BASE ZERO", $w)
         };
         if i as usize > isize::MAX as usize {
+          $state.set_math(math);
           $state.current().stack.push($v);
           return $state.eval_error("OUT OF BOUNDS", $w)
         }
-        match math.itos(i as isize, &mut $state) {
+        match math.math().itos(i as isize, &mut $state) {
           Ok(s) => {
-            $state.current().math = Some(math);
+            $state.set_math(math);
             let mut vword = $state.pool.get_vword(s.len());
             vword.str_word.push_str(&s);
             $state.pool.add_string(s);
@@ -1076,7 +1235,7 @@ macro_rules! streampos {
             $state.push_quoted(Value::Word(vword))
           },
           Err(e) => {
-            $state.current().math = Some(math);
+            $state.set_math(math);
             $state.current().stack.push($v);
             return $state.eval_error(e, $w)
           }

@@ -25,11 +25,16 @@ fn main() -> ExitCode {
   if opts.usage { return usage(); }
   if opts.version { return version(); }
   if opts.list_formats { return list_formats(); }
-  if opts.fileidx == 0 && opts.sources != 0 && !opts.stdin {
+
+  let sources = opts.sources as usize;
+  let no_input = opts.fileidx == 0 && opts.sources != 0 && !opts.stdin;
+  let too_few_filenames = opts.fileidx + sources > argc;
+
+  if no_input || too_few_filenames {
     println!("{}: missing filename", binary_name());
     return try_help(1)
   }
-  let sources = opts.sources as usize;
+
   let mut logfile = match log(opts.logfile.as_ref()) {
     Ok(f) => f,
     Err(e) => return e
@@ -279,7 +284,7 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
 
       _ => if parse_other(args, argc, &mut i, &mut config)? { break }
     }
-    i += 1;
+    i += 1
   }
 
   if config.load.is_none() && (config.format.is_some() || config.fllibs.is_some() || config.suppress_fllibs) {

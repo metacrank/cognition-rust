@@ -6,11 +6,15 @@ use syn::{parse_macro_input, parse_str, parse_quote, Error, ItemImpl, LitStr, To
 mod kw {
   syn::custom_keyword!(name);
   syn::custom_keyword!(serde_as_void);
+  syn::custom_keyword!(cognition_serde);
+  syn::custom_keyword!(option_serde);
 }
 
 struct CustomArgs {
   pub name: Option<LitStr>,
   pub serde_as_void: bool,
+  pub cognition_serde: bool,
+  pub option_serde: bool
 }
 
 macro_rules! parse_name {
@@ -22,7 +26,6 @@ macro_rules! parse_name {
     $args.name = Some(name);
   }
 }
-
 macro_rules! parse_serde_as_void {
   ($input:ident,$args:ident) => {
     $input.parse::<kw::serde_as_void>()?;
@@ -30,20 +33,191 @@ macro_rules! parse_serde_as_void {
     $args.serde_as_void = true;
   }
 }
+macro_rules! parse_cognition_serde {
+  ($input:ident,$args:ident) => {
+    $input.parse::<kw::cognition_serde>()?;
+    $input.parse::<Option<Token![,]>>()?;
+    $args.cognition_serde = true;
+  }
+}
+macro_rules! parse_option_serde {
+  ($input:ident,$args:ident) => {
+    $input.parse::<kw::option_serde>()?;
+    $input.parse::<Option<Token![,]>>()?;
+    $args.option_serde = true;
+  }
+}
 
 impl Parse for CustomArgs {
   fn parse(input: ParseStream) -> Result<Self> {
-    let mut args = CustomArgs{ name: None, serde_as_void: false };
+    let mut args = CustomArgs{ name: None, serde_as_void: false, cognition_serde: false, option_serde: false };
     if !input.is_empty() {
       if input.peek(kw::name) {
         parse_name!(input, args);
         if input.peek(kw::serde_as_void) {
           parse_serde_as_void!(input, args);
+          if input.peek(kw::cognition_serde) {
+            parse_cognition_serde!(input, args);
+            if input.peek(kw::option_serde) {
+              parse_option_serde!(input, args);
+            }
+          } else if input.peek(kw::option_serde) {
+            parse_option_serde!(input, args);
+            if input.peek(kw::cognition_serde) {
+              parse_cognition_serde!(input, args);
+            }
+          }
+        } else if input.peek(kw::cognition_serde) {
+          parse_cognition_serde!(input, args);
+          if input.peek(kw::serde_as_void) {
+            parse_serde_as_void!(input, args);
+            if input.peek(kw::option_serde) {
+              parse_option_serde!(input, args);
+            }
+          } else if input.peek(kw::option_serde) {
+            parse_option_serde!(input, args);
+            if input.peek(kw::serde_as_void) {
+              parse_serde_as_void!(input, args);
+            }
+          }
+        } else if input.peek(kw::option_serde) {
+          parse_option_serde!(input, args);
+          if input.peek(kw::serde_as_void) {
+            parse_serde_as_void!(input, args);
+            if input.peek(kw::cognition_serde) {
+              parse_cognition_serde!(input, args);
+            }
+          } else if input.peek(kw::cognition_serde) {
+            parse_cognition_serde!(input, args);
+            if input.peek(kw::serde_as_void) {
+              parse_serde_as_void!(input, args);
+            }
+          }
         }
       } else if input.peek(kw::serde_as_void) {
         parse_serde_as_void!(input, args);
         if input.peek(kw::name) {
+          if input.peek(kw::cognition_serde) {
+            parse_cognition_serde!(input, args);
+            if input.peek(kw::option_serde) {
+              parse_option_serde!(input, args);
+            }
+          } else if input.peek(kw::option_serde) {
+            parse_option_serde!(input, args);
+            if input.peek(kw::cognition_serde) {
+              parse_cognition_serde!(input, args);
+            }
+          }
+        } else if input.peek(kw::cognition_serde) {
+          parse_cognition_serde!(input, args);
+          if input.peek(kw::name) {
+            parse_name!(input, args);
+            if input.peek(kw::option_serde) {
+              parse_option_serde!(input, args);
+            }
+          } else if input.peek(kw::option_serde) {
+            parse_option_serde!(input, args);
+            if input.peek(kw::name) {
+              parse_name!(input, args);
+            }
+          }
+        } else if input.peek(kw::option_serde) {
+          parse_option_serde!(input, args);
+          if input.peek(kw::name) {
+            parse_name!(input, args);
+            if input.peek(kw::cognition_serde) {
+              parse_cognition_serde!(input, args);
+            }
+          } else if input.peek(kw::cognition_serde) {
+            parse_cognition_serde!(input, args);
+            if input.peek(kw::name) {
+              parse_name!(input, args);
+            }
+          }
+        }
+      } else if input.peek(kw::cognition_serde) {
+        parse_cognition_serde!(input, args);
+        if input.peek(kw::name) {
           parse_name!(input, args);
+          if input.peek(kw::serde_as_void) {
+            parse_serde_as_void!(input, args);
+            if input.peek(kw::option_serde) {
+              parse_option_serde!(input, args);
+            }
+          } else if input.peek(kw::option_serde) {
+            parse_option_serde!(input, args);
+            if input.peek(kw::serde_as_void) {
+              parse_serde_as_void!(input, args);
+            }
+          }
+        } else if input.peek(kw::serde_as_void) {
+          parse_serde_as_void!(input, args);
+          if input.peek(kw::name) {
+            parse_name!(input, args);
+            if input.peek(kw::option_serde) {
+              parse_option_serde!(input, args);
+            }
+          } else if input.peek(kw::option_serde) {
+            parse_option_serde!(input, args);
+            if input.peek(kw::name) {
+              parse_name!(input, args);
+            }
+          }
+        } else if input.peek(kw::option_serde) {
+          parse_option_serde!(input, args);
+          if input.peek(kw::name) {
+            parse_name!(input, args);
+            if input.peek(kw::serde_as_void) {
+              parse_serde_as_void!(input, args);
+            }
+          } else if input.peek(kw::serde_as_void) {
+            parse_serde_as_void!(input, args);
+            if input.peek(kw::name) {
+              parse_name!(input, args);
+            }
+          }
+        }
+      } else if input.peek(kw::option_serde) {
+        parse_option_serde!(input, args);
+        if input.peek(kw::name) {
+          parse_name!(input, args);
+          if input.peek(kw::serde_as_void) {
+            parse_serde_as_void!(input, args);
+            if input.peek(kw::cognition_serde) {
+              parse_cognition_serde!(input, args);
+            }
+          } else if input.peek(kw::cognition_serde) {
+            parse_cognition_serde!(input, args);
+            if input.peek(kw::serde_as_void) {
+              parse_serde_as_void!(input, args);
+            }
+          }
+        } else if input.peek(kw::serde_as_void) {
+          parse_serde_as_void!(input, args);
+          if input.peek(kw::name) {
+            parse_name!(input, args);
+            if input.peek(kw::cognition_serde) {
+              parse_cognition_serde!(input, args);
+            }
+          } else if input.peek(kw::cognition_serde) {
+            parse_cognition_serde!(input, args);
+            if input.peek(kw::name) {
+              parse_name!(input, args);
+            }
+          }
+        } else if input.peek(kw::cognition_serde) {
+          parse_cognition_serde!(input, args);
+          if input.peek(kw::name) {
+            parse_name!(input, args);
+            if input.peek(kw::serde_as_void) {
+              parse_serde_as_void!(input, args);
+            }
+          } else if input.peek(kw::serde_as_void) {
+            parse_serde_as_void!(input, args);
+            if input.peek(kw::name) {
+              parse_name!(input, args);
+            }
+          }
         }
       } else {
         return Err(input.error("invalid argument to custom proc macro"))
@@ -56,7 +230,6 @@ impl Parse for CustomArgs {
 #[proc_macro_attribute]
 pub fn custom(args: TokenStream, input: TokenStream) -> TokenStream {
   let args: CustomArgs = parse_macro_input!(args as CustomArgs);
-  //let args = CustomArgs{ name: None, serde_as_void: false };
   let mut input = parse_macro_input!(input as ItemImpl);
 
   let (name, custom_type) = match &args.name {
@@ -87,8 +260,37 @@ pub fn custom(args: TokenStream, input: TokenStream) -> TokenStream {
           concat!(module_path!(), "::", #name)
         }
         fn deserialize_fn() -> DeserializeFn<dyn Custom> {
-          (|deserializer| Ok(
+          (|deserializer, _state| Ok(
             Box::new(erased_serde::deserialize::<Void>(deserializer)?),
+          )) as DeserializeFn<dyn Custom>
+        }
+      }
+    }
+  } else if args.cognition_serde {
+    quote! {
+      impl CustomTypeData for #custom_type {
+        fn custom_type_name() -> &'static str {
+          concat!(module_path!(), "::", #name)
+        }
+        fn deserialize_fn() -> DeserializeFn<dyn Custom> {
+          (|deserializer, state| Ok(
+            Box::new(<#custom_type as CognitionDeserialize>::cognition_deserialize(deserializer, state)?),
+          )) as DeserializeFn<dyn Custom>
+        }
+      }
+    }
+  } else if args.option_serde {
+    quote! {
+      impl CustomTypeData for #custom_type {
+        fn custom_type_name() -> &'static str {
+          concat!(module_path!(), "::", #name)
+        }
+        fn deserialize_fn() -> DeserializeFn<dyn Custom> {
+          (|deserializer, state| Ok(
+            match <#custom_type as OptionDeserialize>::option_deserialize(deserializer, state)? {
+              Some(c) => Box::new(c),
+              None => Box::new(Void{})
+            }
           )) as DeserializeFn<dyn Custom>
         }
       }
@@ -100,7 +302,7 @@ pub fn custom(args: TokenStream, input: TokenStream) -> TokenStream {
           concat!(module_path!(), "::", #name)
         }
         fn deserialize_fn() -> DeserializeFn<dyn Custom> {
-          (|deserializer| Ok(
+          (|deserializer, _state| Ok(
             Box::new(erased_serde::deserialize::<#custom_type>(deserializer)?),
           )) as DeserializeFn<dyn Custom>
         }

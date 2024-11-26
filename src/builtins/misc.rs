@@ -1,6 +1,7 @@
 use crate::*;
 use std::{thread, time};
 
+pub fn cog_panic(_: CognitionState, _: Option<&Value>) -> CognitionState { panic!() }
 pub fn cog_nop(state: CognitionState, _: Option<&Value>) -> CognitionState { state }
 
 pub fn cog_exit(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
@@ -229,45 +230,44 @@ pub fn cog_var(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
 }
 
 pub fn cog_getp(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let Some(math) = state.current().math.take() else { return state.eval_error("MATH BASE ZERO", w) };
-  if math.base() == 0 {
-    state.current().math = Some(math);
-    return state.eval_error("MATH BASE ZERO", w)
-  }
   let array = state.pool.get_capacity();
-  if math.base() == 1 && array.iter().any(|x| *x != 0) {
-    state.current().math = Some(math);
-    return state.eval_error("INVALID NUMBER STRING", w)
+  let mut vword = state.pool.get_vword(0);
+
+  let Some(math) = state.get_math() else {
+    state.pool.add_vword(vword);
+    return state.eval_error("MATH BASE ZERO", w)
+  };
+  if math.math().base() == 0 {
+    state.pool.add_vword(vword);
+    return state.with_math(math).eval_error("MATH BASE ZERO", w)
   }
-  let mut vword = state.pool.get_vword(64);
   for i in array {
-    let s = match math.itos(i, &mut state) {
+    let s = match math.math().itos(i, &mut state) {
       Ok(s) => s,
       Err(e) => {
-        state.current().math = Some(math);
-        return state.eval_error(e, w)
+        state.pool.add_vword(vword);
+        return state.with_math(math).eval_error(e, w)
       }
     };
     vword.str_word.push_str(&s);
     state.pool.add_string(s);
-    vword.str_word.push(math.get_delim().expect("Math delim was None"));
+    vword.str_word.push(math.math().get_delim().expect("Math delim was None"));
   }
   vword.str_word.pop();
-  state.current().math = Some(math);
+  state.set_math(math);
   state.push_quoted(Value::Word(vword));
   state
 }
 
 pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let v = get_word!(state, w);
-  let Some(math) = state.current().math.take() else {
+  let Some(math) = state.get_math() else {
     state.current().stack.push(v);
     return state.eval_error("MATH BASE ZERO", w)
   };
-  if math.base() == 0 {
-    state.current().math = Some(math);
+  if math.math().base() == 0 {
     state.current().stack.push(v);
-    return state.eval_error("MATH BASE ZERO", w)
+    return state.with_math(math).eval_error("MATH BASE ZERO", w)
   }
   let mut array: [isize;32] = [0;32];
   let mut idx_beg = 0;
@@ -275,11 +275,11 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   let string = &v.value_stack_ref().first().unwrap().vword_ref().str_word;
   for (i, c) in string.char_indices() {
     if array_idx >= 32 { break }
-    if c == math.get_delim().unwrap() {
-      match math.stoi(&string[idx_beg..i]) {
+    if c == math.math().get_delim().unwrap() {
+      match math.math().stoi(&string[idx_beg..i]) {
         Ok(int) => array[array_idx] = int,
         Err(e) => {
-          state.current().math = Some(math);
+          state.set_math(math);
           state.current().stack.push(v);
           return state.eval_error(e, w)
         }
@@ -289,21 +289,22 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
     }
   }
   if array_idx < 32 {
-    match math.stoi(&string[idx_beg..]) {
+    match math.math().stoi(&string[idx_beg..]) {
       Ok(int) => array[array_idx] = int,
       Err(e) => {
-        state.current().math = Some(math);
+        state.set_math(math);
         state.current().stack.push(v);
         return state.eval_error(e, w)
       }
     }
   }
-  state.current().math = Some(math);
+  state.pool.add_val(v);
   state.pool.set_capacity(array);
-  state
+  state.with_math(math)
 }
 
 pub fn add_builtins(state: &mut CognitionState) {
+  add_builtin!(state, "panic", cog_panic);
   add_builtin!(state, "nothing");
   add_builtin!(state, "nop", cog_nop);
   add_builtin!(state, "ghost", GHOST);

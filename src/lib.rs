@@ -29,7 +29,7 @@ pub use erased_serde;
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library);
 
-pub type DeserializeFn<T> = fn(&mut dyn erased_serde::Deserializer) -> erased_serde::Result<Box<T>>;
+pub type DeserializeFn<T> = fn(&mut dyn erased_serde::Deserializer, &mut CognitionState) -> erased_serde::Result<Box<T>>;
 pub type CognitionDeserializeResult = Result<CognitionState, (CognitionState, Box<dyn Display>)>;
 pub type CogStateDeserializeFn = fn(&str, bool, CognitionState) -> CognitionDeserializeResult;
 pub type CogLibsDeserializeFn = fn(&str, CognitionState) -> CognitionDeserializeResult;
@@ -60,6 +60,45 @@ pub struct ForeignLibrary {
   pub registry: BTreeMap<String, DeserializeFn<dyn Custom>>,
   pub functions: Vec<CognitionFunction>,
   pub library: Library,
+}
+
+pub struct MathBorrower {
+  family: Family,
+  cur: Option<Value>
+}
+
+impl MathBorrower {
+  fn math(&self) -> &Math {
+    if let Some(ref cur) = self.cur {
+      return &cur.vstack_ref().container.math.as_ref().unwrap()
+    }
+    &self.family.last().unwrap().vstack_ref().container.math.as_ref().unwrap()
+  }
+  fn replenish(mut self, state: &mut CognitionState) {
+    if let Some(cur) = self.cur {
+      state.stack.push(cur)
+    }
+    while let Some(f) = self.family.pop() {
+      state.family.push(f)
+    }
+    state.pool.add_family(self.family);
+  }
+}
+
+pub struct Serde {
+  serdes: Vec<SerdeDescriptor>,
+  serializers: Vec<SerializerDescriptor>,
+  deserializers: Vec<DeserializerDescriptor>
+}
+
+impl Serde {
+  pub fn new() -> Self {
+    Self {
+      serdes: Vec::new(),
+      serializers: Vec::new(),
+      deserializers: Vec::new()
+    }
+  }
 }
 
 pub trait Pretty {
@@ -558,6 +597,7 @@ pub struct CognitionState {
   pub args: Stack,
   pub fllibs: Option<ForeignLibraries>,
   pub builtins: Functions,
+  pub serde: Serde,
   pub pool: Pool,
 }
 
@@ -675,6 +715,7 @@ impl CognitionState {
       args: Stack::new(),
       fllibs: None,
       builtins: Vec::with_capacity(BUILTINS_SIZE),
+      serde: Serde::new(),
       pool: Pool::new()
     }
   }
@@ -899,6 +940,34 @@ impl CognitionState {
   pub fn push_cur(mut self, v: Value) -> Self {
     self.stack.push(v); self
   }
+
+  pub fn get_math(&mut self) -> Option<MathBorrower> {
+    let mut borrower = MathBorrower {
+      family: self.pool.get_family(),
+      cur: None
+    };
+    while let Some(f) = self.family.pop() {
+      borrower.family.push(f);
+      if borrower.family.last().unwrap().vstack_ref().container.math.is_some() {
+        return Some(borrower)
+      }
+    }
+    if self.current_ref().math.is_some() {
+      borrower.cur = Some(self.pop_cur());
+      return Some(borrower)
+    }
+    while let Some(f) = borrower.family.pop() {
+      self.family.push(f)
+    }
+    None
+  }
+
+  pub fn with_math(mut self, m: MathBorrower) -> Self {
+    m.replenish(&mut self);
+    self
+  }
+
+  pub fn set_math(&mut self, m: MathBorrower) { m.replenish(self) }
 
   pub fn def(&mut self, v: Value, name: String) {
     if self.current_ref().word_table.is_none() {

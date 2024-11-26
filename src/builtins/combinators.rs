@@ -156,13 +156,13 @@ pub fn cog_if(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
     stack.push(v_truth);
     stack.push(v1);
     stack.push(v2);
-    return state.eval_error("BAD ARGUMENTS TYPE", w)
+    return state.eval_error("BAD ARGUMENT TYPE", w)
   }
   let Value::Word(vword_truth) = v_truth.value_stack_ref().first().unwrap() else {
     stack.push(v_truth);
     stack.push(v1);
     stack.push(v2);
-    return state.eval_error("BAD ARGUMENTS TYPE", w)
+    return state.eval_error("BAD ARGUMENT TYPE", w)
   };
   let truth = vword_truth.str_word.len() > 0;
   state.pool.add_val(v_truth);
@@ -226,7 +226,7 @@ pub fn cog_vat(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
 
 pub fn cog_substack(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   if state.current_ref().stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let (i, j) = get_2_ints!(state, w, isize, ACTIVE);
+  let (i, j) = get_2_unsigned!(state, w, isize, ACTIVE);
   if i < 0 || j < 0 { return state.eval_error("OUT OF BOUNDS", w) }
   let i = i as usize;
   let j = j as usize;
@@ -298,22 +298,22 @@ pub fn cog_uncompose(mut state: CognitionState, w: Option<&Value>) -> CognitionS
 
 pub fn cog_size(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   if state.current_ref().stack.len() == 0 { return state.eval_error("TOO FEW ARGUMENTS", w) }
-  let mut cur_v = state.pop_cur();
-  let cur = cur_v.metastack_container();
-  if cur.math.is_none() { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  if cur.math.as_ref().unwrap().base() == 0 { return state.push_cur(cur_v).eval_error("MATH BASE ZERO", w) }
-  let length = cur.stack.last().unwrap().value_stack_ref().len();
-  if length > isize::MAX as usize { return state.push_cur(cur_v).eval_error("OUT OF BOUNDS", w) }
-  match cur.math.as_ref().unwrap().itos(length as isize, &mut state) {
+  let length = state.current_ref().stack.last().unwrap().value_stack_ref().len();
+  let Some(mathborrower) = state.get_math() else { return state.eval_error("MATH BASE ZERO", w) };
+  if mathborrower.math().base() == 0 { return state.with_math(mathborrower).eval_error("MATH BASE ZERO", w) }
+  if length > isize::MAX as usize { return state.with_math(mathborrower).eval_error("OUT OF BOUNDS", w) }
+  match mathborrower.math().itos(length as isize, &mut state) {
     Ok(s) => {
+      state.set_math(mathborrower);
       let mut v = state.pool.get_vword(s.len());
       v.str_word.push_str(&s);
       state.pool.add_string(s);
-      state = state.push_cur(cur_v);
       state.push_quoted(Value::Word(v));
       state
     },
-    Err(e) => { return state.push_cur(cur_v).eval_error(e, w) }
+    Err(e) => {
+      return state.with_math(mathborrower).eval_error(e, w)
+    }
   }
 }
 
