@@ -299,10 +299,14 @@ interim_binary_operation!{ cog_div, a, b, a/b }
 interim_binary_operation!{ cog_pow, a, b, a.pow(b.try_into().unwrap()) }
 
 pub fn cog_neg(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  get_word!(state, w, ACTIVE);
-  let Some(math) = state.get_math() else { return state.eval_error("MATH BASE ZERO", w) };
-  if math.math().base() == 0 { return state.with_math(math).eval_error("MATH BASE ZERO", w) }
-  let mut v = state.current().stack.pop().unwrap();
+  let mut v = get_word!(state, w);
+  let Some(math) = state.get_math() else {
+    state.current().stack.push(v);
+    return state.eval_error("MATH BASE ZERO", w) };
+  if math.math().base() == 0 {
+    state.current().stack.push(v);
+    return state.with_math(math).eval_error("MATH BASE ZERO", w)
+  }
   let vstr = &mut v.value_stack().first_mut().unwrap().vword_mut().str_word;
   math.math().neg(vstr, &mut state);
   state.set_math(math);

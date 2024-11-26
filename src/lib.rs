@@ -68,7 +68,7 @@ pub struct MathBorrower {
 }
 
 impl MathBorrower {
-  fn math(&self) -> &Math {
+  pub fn math(&self) -> &Math {
     if let Some(ref cur) = self.cur {
       return &cur.vstack_ref().container.math.as_ref().unwrap()
     }
