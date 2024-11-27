@@ -55,7 +55,10 @@
        ("serde_json" ,rust-serde-json-1)
        ("erased-serde" ,rust-erased-serde-0.4)
        ("cognition-macros" ,cognition-macros-0.1)
-       )))
+       )
+      #:phases
+      (modify-phases %standard-phases
+                     (delete 'package))))
    (synopsis "An unopinionated programming language which offers full publicity of syntax and tokenization.")
    (description
     "Cognition is a fully introspective system designed so that the syntax and hierarchy structure of the
