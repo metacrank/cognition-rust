@@ -594,6 +594,34 @@ macro_rules! add_word {
 }
 
 #[macro_export]
+macro_rules! impl_serde_as_null {
+  ($type:ty,$default:expr) => {
+    impl ::serde::ser::Serialize for $type {
+      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+      where S: ::serde::ser::Serializer
+      { serializer.serialize_none() }
+    }
+    impl<'de> ::serde::de::Deserialize<'de> for $type {
+      fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+      where D: ::serde::de::Deserializer<'de>,
+      {
+        struct Visitor;
+        impl<'de> ::serde::de::Visitor<'de> for Visitor {
+          type Value = $type;
+          fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("null")
+          }
+          fn visit_none<E: ::serde::de::Error>(self) -> Result<Self::Value, E> {
+            Ok($default)
+          }
+        }
+        deserializer.deserialize_option(Visitor)
+      }
+    }
+  }
+}
+
+#[macro_export]
 macro_rules! ensure_quoted {
   ($state:ident,$stack:expr) => {
     for val in $stack.iter_mut() {

@@ -486,6 +486,11 @@ impl Value {
   pub fn is_control(&self) -> bool { is_value_type!(self, Value::Control(_)) }
 }
 
+pub struct ParserLoc {
+  pub filename: Option<String>,
+  pub pos: Option<(usize, usize)>
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Parser {
   source: Option<String>,
@@ -498,9 +503,13 @@ pub struct Parser {
 
 impl Parser {
   pub fn new(source: Option<String>, filename: Option<String>) -> Parser {
+    Self::with_loc(source, ParserLoc{ filename, pos: None })
+  }
+  pub fn with_loc(source: Option<String>, loc: ParserLoc) -> Parser {
     if source.is_none() { return Parser{ source: None, filename: None, i: 0, c: None, line: 1, column: 0 } }
     let c = match source.as_ref().unwrap().get(..) { Some(st) => st.chars().next(), None => None };
-    Parser{ source, filename, i: 0, c, line: 1, column: 0 }
+    let (line, column) = if let Some(pos) = loc.pos { (pos.0, pos.1) } else { (1, 0) };
+    Parser{ source, filename: loc.filename, i: 0, c, line, column }
   }
   pub fn next(&mut self) {
     if self.c.is_none() || self.source.is_none() { return }

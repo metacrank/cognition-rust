@@ -395,31 +395,31 @@ pub fn cog_column(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
 pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(mut v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let stack = v.value_stack_ref();
-  if stack.len() == 0 || stack.len() > 2 {
-    state.pool.add_val(v);
-    return state;
+  if !(stack.len() == 1 || stack.len() == 2 || stack.len() == 4) {
+    state.current().stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
   }
   if stack.iter().any(|x| !x.is_word()) {
     state.current().stack.push(v);
-    return state.eval_error("BAD ARGUMENT TYPE", w);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  let val = match &mut v {
-    Value::Stack(vstack) => {
-      let mut new_vstack = state.pool.get_vstack(vstack.container.stack.len());
-      std::mem::swap(&mut new_vstack.container.stack, &mut vstack.container.stack);
-      let wd = state.pool.get_word_def(v);
-      state.family.push(wd);
-      Value::Stack(new_vstack)
-    },
-    Value::Macro(_) => v,
-    _ => bad_value_err!(),
-  };
+  let parser_loc = if stack.len() == 4 {
+    let filename = &stack.get(1).unwrap().vword_ref().str_word;
+    ParserLoc{ filename: Some(state.string_copy(filename)), pos: None }
+  } else if stack.len() == 2 {
+    let filename = &stack.get(1).unwrap().vword_ref().str_word;
+    ParserLoc{ filename: Some(state.string_copy(filename)), pos: None }
+  } else { ParserLoc{ filename: None, pos: None } };
+  let val = if let Value::Stack(vstack) = &mut v {
+    let mut new_vstack = state.pool.get_vstack(vstack.container.stack.len());
+    std::mem::swap(&mut new_vstack.container.stack, &mut vstack.container.stack);
+    let wd = state.pool.get_word_def(v);
+    state.family.push(wd);
+    Value::Stack(new_vstack)
+  } else { v };
   let v = val.value_stack_ref().first().unwrap();
-  let filename = if let Some(v) = val.value_stack_ref().get(1) {
-    Some(state.string_copy(&v.vword_ref().str_word))
-  } else { None };
   let oldparser = state.parser.take();
-  state.parser = Some(Parser::new(Some(state.string_copy(&v.vword_ref().str_word)), filename));
+  state.parser = Some(Parser::with_loc(Some(state.string_copy(&v.vword_ref().str_word)), parser_loc));
   loop {
     let w = state.parser_get_next();
     match w {

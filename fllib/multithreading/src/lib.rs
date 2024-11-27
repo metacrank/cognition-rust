@@ -7,35 +7,13 @@ struct CogStateWrapper { cogstate: CognitionState }
 unsafe impl Send for CogStateWrapper {}
 
 pub struct ThreadCustom { handle: Option<thread::JoinHandle<CogStateWrapper>> }
-
-impl Serialize for ThreadCustom {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where S: ::serde::ser::Serializer
-  { serializer.serialize_none() }
-}
-impl<'de> Deserialize<'de> for ThreadCustom {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where D: ::serde::de::Deserializer<'de>,
-  {
-    struct ThreadCustomVisitor;
-    impl<'de> ::serde::de::Visitor<'de> for ThreadCustomVisitor {
-      type Value = ThreadCustom;
-      fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("null")
-      }
-      fn visit_none<E: ::serde::de::Error>(self) -> Result<Self::Value, E> {
-        Ok(ThreadCustom{ handle: None })
-      }
-    }
-    deserializer.deserialize_option(ThreadCustomVisitor)
-  }
-}
+impl_serde_as_null!{ ThreadCustom, ThreadCustom{ handle: None } }
 
 #[custom]
 impl Custom for ThreadCustom {
   fn printfunc(&self, f: &mut dyn Write) {
     if self.handle.is_none() {
-      fwrite_check!(f, b"(void thread)");
+      fwrite_check!(f, b"(null thread)");
     } else {
       fwrite_check!(f, b"(thread)");
     }
@@ -56,7 +34,7 @@ pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
   ensure_quoted!(state, v.vstack_mut().container.stack);
-  let mut metastack = state.pool.get_stack(1);
+  let mut metastack = state.pool.get_stack(DEFAULT_STACK_SIZE);
   metastack.push(v);
   let mut cogstate = CognitionState::new(metastack);
   state.args.reverse();

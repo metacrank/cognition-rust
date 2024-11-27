@@ -408,6 +408,49 @@ pub fn cog_load_fllibs(mut state: CognitionState, w: Option<&Value>) -> Cognitio
   }
 }
 
+pub fn cog_list_formats(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let serdes_len = state.serde.serdes.len();
+  let serializers_len = state.serde.serializers.len();
+  let deserializers_len = state.serde.deserializers.len();
+  let mut vstack = state.pool.get_vstack(serdes_len);
+  for i in 0..serdes_len {
+    let fmt = &state.serde.serdes[i].0;
+    let mut vword = state.pool.get_vword(fmt.len());
+    vword.str_word.push_str(fmt);
+    vstack.container.stack.push(Value::Word(vword));
+  }
+  state.current().stack.push(Value::Stack(vstack));
+  let mut vstack = state.pool.get_vstack(serializers_len);
+  for i in 0..serializers_len {
+    let fmt = &state.serde.serializers[i].0;
+    let mut vword = state.pool.get_vword(fmt.len());
+    vword.str_word.push_str(fmt);
+    vstack.container.stack.push(Value::Word(vword));
+  }
+  state.current().stack.push(Value::Stack(vstack));
+  let mut vstack = state.pool.get_vstack(deserializers_len);
+  for i in 0..deserializers_len {
+    let fmt = &state.serde.deserializers[i].0;
+    let mut vword = state.pool.get_vword(fmt.len());
+    vword.str_word.push_str(fmt);
+    vstack.container.stack.push(Value::Word(vword));
+  }
+  state.current().stack.push(Value::Stack(vstack));
+  state
+}
+
+pub fn cog_remove_format(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let v = get_word!(state, w);
+  let format = &v.value_stack_ref().first().unwrap().vword_ref().str_word;
+
+  state.serde.serdes.retain(|x| *x.0 != *format);
+  state.serde.serializers.retain(|x| *x.0 != *format);
+  state.serde.deserializers.retain(|x| *x.0 != *format);
+
+  state.pool.add_val(v);
+  state
+}
+
 pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "serialize", cog_serialize);
   add_builtin!(state, "fserialize", cog_fserialize);
@@ -419,4 +462,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "describe-fllibs", cog_describe_fllibs);
   add_builtin!(state, "serialize-map", cog_serialize_map);
   add_builtin!(state, "load-fllibs", cog_load_fllibs);
+  add_builtin!(state, "list-formats", cog_list_formats);
+  add_builtin!(state, "remove-format", cog_remove_format);
 }

@@ -35,6 +35,15 @@ pub fn cog_fllib(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   state
 }
 
+pub fn cog_unload(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let v = get_word!(state, w);
+  let name = &v.value_stack_ref().first().unwrap().vword_ref().str_word;
+
+  if let Some(libraries) = &mut state.fllibs { libraries.remove(name); }
+  state.pool.add_val(v);
+  state
+}
+
 pub fn cog_fllib_filename(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
@@ -156,6 +165,7 @@ pub fn cog_library(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
 pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "fllib?", cog_fllib_questionmark);
   add_builtin!(state, "fllib", cog_fllib);
+  add_builtin!(state, "unload", cog_unload);
   add_builtin!(state, "fllib-filename", cog_fllib_filename);
   add_builtin!(state, "get-fllibs", cog_get_fllibs);
   add_builtin!(state, "name", cog_name);
