@@ -876,6 +876,8 @@ impl_cognition_deserialize_for_deserialize! {
   //Pool
 }
 
+impl_cognition_deserialize_option!{ Value, "Option<Value>" }
+impl_cognition_deserialize_option!{ Option<Value>, "Option<Option<Value>>" }
 impl_cognition_deserialize_option!{ Library, "Option<Library>" }
 impl_cognition_deserialize_option!{ Stack, "Option<Stack>" }
 impl_cognition_deserialize_option!{ WordTable, "Option<WordTable>" }

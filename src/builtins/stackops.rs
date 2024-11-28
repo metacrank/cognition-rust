@@ -12,7 +12,7 @@ pub fn cog_clear(mut state: CognitionState, _: Option<&Value>) -> CognitionState
 pub fn cog_drop(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   match state.current().stack.pop() {
     Some(v1) => { state.pool.add_val(v1); state },
-    None     => { state.eval_error("TOO FEW ARGUMEtTS", w) },
+    None     => { state.eval_error("TOO FEW ARGUMENTS", w) },
   }
 }
 

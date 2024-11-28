@@ -54,7 +54,7 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 1 crank compose VMACRO cast def
 2crank ing 1 crank
 2crank ing 1 crank #'crank file2: ['file1 load...']' emulates the behaviour of 'crank -s 2 file1 file2'
-2crank ing 0 crank load
+2crank ing 0 crank exec
 2crank ing 1 crank
 2crank ing 2 crank word? unglue
 2crank ing 1 crank stack quote
@@ -108,6 +108,6 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 1 crank #      'sets': ( s )
 2crank ing 1 crank #         '#': ( geti getd gets crankbase '' d '' i '\n' s ( drop halt crank s d i ) halt 1 1 metacrank )
 2crank ing 1 crank #'coglib-dir': ( [ 'COGLIB_DIR' ] var )
-2crank ing 1 crank #      'load': ( word? [ ] ( [ 'BAD ARGUMENT TYPE' ] ethrow ) if
+2crank ing 1 crank #      'exec': ( word? [ ] ( [ 'BAD ARGUMENT TYPE' ] ethrow ) if
 2crank ing 1 crank #                esize swap [ 0 ] vat fread ( swap ) dip swap esize =
 2crank ing 1 crank #                ( prepose evalstr ) ( edrop coglib-dir [ '/' ] concat swap concat fread prepose evalstr ) if )

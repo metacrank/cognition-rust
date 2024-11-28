@@ -9,9 +9,13 @@ pub mod math;
 pub mod builtins;
 pub mod serde;
 
-use crate::pool::Pool;
-use crate::macros::*;
-use crate::math::Math;
+pub use crate::macros::*;
+pub use crate::math::*;
+pub use crate::pool::*;
+
+pub use crate::serde::*;
+pub use ::serde::{Serialize, Deserialize, Serializer, Deserializer};
+pub use erased_serde;
 
 pub use cognition_macros::*;
 
@@ -22,9 +26,6 @@ use std::default::Default;
 use std::fmt::Display;
 use std::io::{Write, stdout};
 use std::sync::Arc;
-
-pub use ::serde::{Serialize, Deserialize};
-pub use erased_serde;
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library);
@@ -85,6 +86,7 @@ impl MathBorrower {
   }
 }
 
+#[derive(Clone)]
 pub struct Serde {
   serdes: Vec<SerdeDescriptor>,
   serializers: Vec<SerializerDescriptor>,
@@ -128,6 +130,10 @@ pub trait Custom: Any + erased_serde::Serialize {
   fn printfunc(&self, f: &mut dyn Write);
   // implemented as Box::new(self.clone()) in classes that implement Clone
   fn copyfunc(&self, state: &mut CognitionState) -> Box<dyn Custom>;
+
+  // optional, only called when dropping a value, so it's useful for
+  // defining specific pool-aware freeing instructions for a custom type
+  fn custom_pool(&mut self, pool: &mut Pool) -> CustomPoolPackage;
 
   // usually not implemented by users; use the cognition::custom proc macro
   fn as_any(&self) -> &dyn Any;
@@ -603,7 +609,7 @@ pub struct CognitionState {
   pub parser: Option<Parser>,
   pub exited: bool,
   pub exit_code: Option<String>,
-  pub args: Stack,
+  pub args: Stack, //
   pub fllibs: Option<ForeignLibraries>,
   pub builtins: Functions,
   pub serde: Serde,
@@ -928,6 +934,16 @@ impl CognitionState {
       }),
       Value::Control(vcontrol) => Value::Control(vcontrol.clone()),
     }
+  }
+
+  pub fn foreign_library_copy(&mut self, lib: &ForeignLibrary) -> ForeignLibrary {
+    let mut registry = BTreeMap::new();
+    for (k, v) in lib.registry.iter() {
+      registry.insert(self.string_copy(k), v.clone());
+    }
+    let mut functions = Vec::with_capacity(lib.functions.len());
+    for f in lib.functions.iter() { functions.push(f.clone()); }
+    ForeignLibrary{ registry, functions, library: lib.library.clone() }
   }
 
   pub fn default_faliases(&mut self) -> Option<Faliases> {

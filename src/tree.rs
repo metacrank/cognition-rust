@@ -3,6 +3,21 @@ use core::cmp;
 use core::cmp::Ordering;
 use core::fmt::Display;
 
+pub trait AbsorbTree<K:Ord+Copy+Display,D> {
+  fn absorb_tree(&mut self, tree: Option<&mut Tree<K,D>>);
+}
+
+impl<K:Ord+Copy+Display,D> AbsorbTree<K,D> for Option<Tree<K,D>> {
+  fn absorb_tree(&mut self, tree: Option<&mut Tree<K,D>>) {
+    if let Some(tree) = tree {
+      if self.is_none() {
+        *self = Some(Tree::new())
+      }
+      self.as_mut().unwrap().absorb(tree)
+    }
+  }
+}
+
 pub struct Tree<K:Ord+Copy+Display,D> {
   pub root: Option<Box<Node<K,D>>>
 }
@@ -73,6 +88,10 @@ impl<K:Ord+Copy+Display,D> Tree<K,D> {
     if let Some(root) = self.root.take() {
       self.root = Node::gc(root, free, p);
     }
+  }
+
+  pub fn absorb(&mut self, _tree: &mut Self) {
+
   }
 }
 

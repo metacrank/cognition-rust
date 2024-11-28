@@ -35,11 +35,62 @@ impl Nodes {
       word_table: Vec::new(),
     }
   }
+
+  fn absorb(&mut self, n: &mut Self) {
+    self.value.append(&mut n.value);
+    self.verr_loc.append(&mut n.verr_loc);
+    self.stack.append(&mut n.stack);
+    self.string.append(&mut n.string);
+    self.functions.append(&mut n.functions);
+    self.cranks.append(&mut n.cranks);
+    self.math.append(&mut n.math);
+    self.digits.append(&mut n.digits);
+    self.ints.append(&mut n.ints);
+    self.faliases.append(&mut n.faliases);
+    self.word_table.append(&mut n.word_table);
+  }
 }
 
 pub enum CustomPool {
-  Tree(ITree<Box<dyn Custom>>),
-  Vec(Vec<Box<dyn Custom>>)
+  Tree(VTree),
+  Vec(Stack)
+}
+
+impl CustomPool {
+  pub fn absorb(&mut self, p: &mut CustomPool) {
+    match (self, p) {
+      (Self::Tree(t), Self::Tree(pt)) => t.absorb(pt),
+      (Self::Vec(v), Self::Vec(pv)) => v.append(pv),
+      _ => {}
+    }
+  }
+}
+
+pub enum CustomPoolPackage {
+  Tree(String, VTree, usize),
+  Vec(String, Vec<Value>),
+  None
+}
+
+impl CustomPoolPackage {
+  pub fn from(pool: &mut Pool, k: &str, i: Option<usize>) -> Self {
+    if let Some((k, v)) = pool.custom_pools.remove_entry(k) {
+      return match (v, i) {
+        (CustomPool::Tree(t), Some(i)) => Self::Tree(k, t, i),
+        (CustomPool::Vec(v), None) => Self::Vec(k, v),
+        (v, _) => {
+          pool.custom_pools.insert(k, v);
+          Self::None
+        }
+      }
+    }
+    let mut key = pool.get_string(k.len());
+    key.push_str(k);
+    match i {
+      Some(i) => Self::Tree(key, VTree::new(), i),
+      None => Self::Vec(key, Vec::new())
+    }
+  }
 }
 
 pub struct Pool {
@@ -219,6 +270,51 @@ impl Pool {
     }
   }
 
+  fn absorb_vec_option<D: Sized>(v1: &mut Option<Vec<D>>, v2: &mut Option<Vec<D>>) {
+    if let Some(vec) = v2 {
+      if v1.is_none() {
+        *v1 = Some(Vec::with_capacity(vec.len()))
+      }
+      v1.as_mut().unwrap().append(vec);
+    }
+  }
+
+  pub fn absorb(&mut self, p: &mut Pool) {
+    self.vwords.absorb_tree(p.vwords.as_mut());
+    self.vstacks.absorb_tree(p.vstacks.as_mut());
+    self.vmacros.absorb_tree(p.vmacros.as_mut());
+    self.verrors.absorb_tree(p.verrors.as_mut());
+    self.verror_locs.absorb_tree(p.verror_locs.as_mut());
+    Self::absorb_vec_option(&mut self.vfllibs, &mut p.vfllibs);
+    self.stacks.absorb_tree(p.stacks.as_mut());
+    self.strings.absorb_tree(p.strings.as_mut());
+    self.functionss.absorb_tree(p.functionss.as_mut());
+    self.crankss.absorb_tree(p.crankss.as_mut());
+    self.maths.absorb_tree(p.maths.as_mut());
+    self.digitss.absorb_tree(p.digitss.as_mut());
+    self.intss.absorb_tree(p.intss.as_mut());
+    self.faliasess.absorb_tree(p.faliasess.as_mut());
+    self.word_tables.absorb_tree(p.word_tables.as_mut());
+    Self::absorb_vec_option(&mut self.word_defs, &mut p.word_defs);
+    Self::absorb_vec_option(&mut self.families, &mut p.families);
+
+    Self::absorb_vec_option(&mut self.un_ops, &mut p.un_ops);
+    Self::absorb_vec_option(&mut self.bin_ops, &mut p.bin_ops);
+    Self::absorb_vec_option(&mut self.str_ops, &mut p.str_ops);
+    Self::absorb_vec_option(&mut self.custom_ops, &mut p.custom_ops);
+
+    self.nodes.absorb(&mut p.nodes);
+
+    for (k, mut v) in p.custom_pools.drain() {
+      if let Some(pool) = self.custom_pools.get_mut(&k) {
+        pool.absorb(&mut v);
+        self.add_string(k);
+      } else {
+        self.custom_pools.insert(k, v);
+      }
+    }
+  }
+
   pub fn print(&self) {
     if let Some(ref vwords) = self.vwords {
       let size = vwords.size();
@@ -388,16 +484,33 @@ impl Pool {
     if self.nodes.word_table.len() > 0 {
       println!("{} word_table nodes", self.nodes.word_table.len());
     }
+  }
 
-    if self.custom_pools.len() > 0 {
-      print!("{} custom pools: ", self.custom_pools.len());
-      let mut keys = self.custom_pools.keys();
-      print!("{}", keys.next().unwrap());
-      for key in keys {
-        print!(", {}", key);
+  pub fn print_custom_pools(&self) {
+    for (key, pool) in self.custom_pools.iter() {
+      match pool {
+        CustomPool::Tree(tree) => {
+          let size = tree.size();
+          if size > 0 {
+            print!("{} {}: ", size, key);
+            tree.print();
+            println!("");
+          }
+        },
+        CustomPool::Vec(v) => {
+          if v.len() > 0 { println!("{} {}", v.len(), key) }
+        }
       }
-      println!("");
     }
+  }
+
+  pub fn has_customs(&self) -> bool {
+    self.custom_pools.values().any(|p| {
+      match p {
+        CustomPool::Tree(t) => t.size() > 0,
+        CustomPool::Vec(v) => v.len() > 0
+      }
+    })
   }
 
   pub fn get_capacity(&self) -> [isize;32] {
@@ -493,6 +606,7 @@ impl Pool {
       Value::Macro(vmacro)   => self.add_vmacro(vmacro),
       Value::Error(verror)   => self.add_verror(verror),
       Value::FLLib(vfllib)   => self.add_vfllib(vfllib),
+      Value::Custom(vcustom) => self.add_vcustom(vcustom),
       _ => {}
     }
   }
@@ -513,6 +627,19 @@ impl Pool {
   }
   pub fn add_vfllib(&mut self, vfllib: Box<VFLLib>) {
     pool_push_val!(Value::FLLib(vfllib), self, self.vfllibs);
+  }
+  pub fn add_vcustom(&mut self, mut vcustom: VCustom) {
+    match vcustom.custom.custom_pool(self) {
+      CustomPoolPackage::Tree(k, mut t, i) => {
+        t.insert(i, Value::Custom(vcustom), Self::get_value_node, Self::get_stack_for_pool, self);
+        self.custom_pools.insert(k, CustomPool::Tree(t));
+      },
+      CustomPoolPackage::Vec(k, mut v) => {
+        v.push(Value::Custom(vcustom));
+        self.custom_pools.insert(k, CustomPool::Vec(v));
+      },
+      CustomPoolPackage::None => {}
+    }
   }
 
   pub fn add_stack(&mut self, s: Stack) {
@@ -665,6 +792,24 @@ impl Pool {
       vfllib.fllib = f;
     });
     Box::new(VFLLib::with_fn(f))
+  }
+  pub fn get_vcustom(&mut self, k: &str, i: Option<usize>) -> Option<VCustom> {
+    if let Some((k, v)) = self.custom_pools.remove_entry(k) {
+      match (v, i) {
+        (CustomPool::Tree(mut t), Some(i)) => {
+          let val = t.remove_at_least(i, Self::add_value_node, Self::add_stack, self);
+          self.custom_pools.insert(k, CustomPool::Tree(t));
+          if let Some(Value::Custom(vcustom)) = val { return Some(vcustom) }
+        },
+        (CustomPool::Vec(mut v), None) => {
+          let val = v.pop();
+          self.custom_pools.insert(k, CustomPool::Vec(v));
+          if let Some(Value::Custom(vcustom)) = val { return Some(vcustom) }
+        },
+        (v, _) => { self.custom_pools.insert(k, v); }
+      }
+    }
+    None
   }
 
   pub fn get_stack(&mut self, capacity: usize) -> Stack {

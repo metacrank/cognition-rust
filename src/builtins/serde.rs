@@ -5,9 +5,9 @@ use std::fs::File;
 
 macro_rules! serialize_value {
   ($state:ident,$w:ident,$v1:ident,$v2:ident,$v3:ident,$writer:expr) => {
-    if let Some((v2, v3, erst)) = serialize_value(&mut $state, $v2, $v3, $writer) {
-      $state.current().stack.push($v1);
-      $state.current().stack.push(v2);
+    if let Some((v1, v3, erst)) = serialize_value(&mut $state, $v1, $v3, $writer) {
+      $state.current().stack.push(v1);
+      $state.current().stack.push($v2);
       $state.current().stack.push(v3);
       return $state.eval_error(erst, $w)
     }
@@ -25,7 +25,7 @@ pub fn serialize_value(state: &mut CognitionState, vdata: Value, vformat: Value,
   );
   match func(&vdata.value_stack_ref().first().unwrap(), writer) {
     Ok(_) => {
-      state.pool.add_val(vdata);
+      state.current().stack.push(vdata);
       state.pool.add_val(vformat);
       None
     },
@@ -71,8 +71,8 @@ pub fn cog_serialize(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   let mut vword = state.pool.get_vword(0);
   let string = std::mem::replace(&mut vword.str_word, string);
   state.pool.add_string(string);
-  state.pool.add_val(v1);
   state.pool.add_val(v2);
+  state.current().stack.push(v1);
   state.push_quoted(Value::Word(vword));
   state
 }
@@ -81,8 +81,8 @@ pub fn cog_fserialize(mut state: CognitionState, w: Option<&Value>) -> Cognition
   if state.current().stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) }
   let v3 = get_word!(state, w);
   let stack = &mut state.current().stack;
-  let v2 = stack.pop().unwrap();
-  let mut v1 = stack.pop().unwrap();
+  let mut v2 = stack.pop().unwrap();
+  let v1 = stack.pop().unwrap();
 
   if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
     stack.push(v1);
@@ -90,7 +90,7 @@ pub fn cog_fserialize(mut state: CognitionState, w: Option<&Value>) -> Cognition
     stack.push(v3);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  let vwriter = v1.value_stack().first_mut().unwrap();
+  let vwriter = v2.value_stack().first_mut().unwrap();
   match vwriter {
     Value::Custom(vcustom) => {
       let custom = &mut vcustom.custom;
@@ -108,7 +108,7 @@ pub fn cog_fserialize(mut state: CognitionState, w: Option<&Value>) -> Cognition
         stack.push(v3);
         return state.eval_error("BAD ARGUMENT TYPE", w)
       }
-      state.current().stack.push(v1);
+      state.current().stack.push(v2);
     },
     Value::Word(vword) => {
       if let Ok(mut file) = File::create_new(&vword.str_word) {
@@ -121,7 +121,7 @@ pub fn cog_fserialize(mut state: CognitionState, w: Option<&Value>) -> Cognition
         stack.push(v3);
         return state.eval_error("INVALID FILENAME", w)
       };
-      state.pool.add_val(v1);
+      state.current().stack.push(v2);
     },
     _ => return {
       stack.push(v1);
@@ -296,6 +296,36 @@ pub fn cog_restate(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   state.eval_error("DESERIALIZATION FAILED", w)
 }
 
+pub fn cog_load(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let (vdata, vformat) = get_2_words!(state, w);
+  let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
+  let format = Some(format_name);
+  let deserialize_fn = get_deserialize_fn!(
+    state, format_name, format, 3, f,
+    {
+      state.current().stack.push(vdata);
+      state.current().stack.push(vformat);
+      return state.eval_error("INVALID SERDE FORMAT", w)
+    },
+    { unreachable!() }, _ext,
+    { unreachable!() }
+  );
+  let data = &vdata.value_stack_ref().first().unwrap().vword_ref().str_word;
+  match deserialize_fn(data, state) {
+    Ok(state) => state,
+    Err(mut e) => {
+      e.0.current().stack.push(vdata);
+      e.0.current().stack.push(vformat);
+      match format!("{}", e.1).as_str() {
+        "INVALID FILENAME" => e.0.eval_error("INVALID FILENAME", w),
+        "INVALID FLLIB" => e.0.eval_error("INVALID FLLIB", w),
+        _ => e.0.eval_error("DESERIALIZATION FAILED", w)
+      }
+    }
+  }
+}
+
 pub fn cog_describe_fllibs(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let vformat = get_word!(state, w);
   let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
@@ -378,36 +408,6 @@ pub fn cog_serialize_map(mut state: CognitionState, w: Option<&Value>) -> Cognit
   state
 }
 
-pub fn cog_load_fllibs(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  if state.current().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
-  let (vdata, vformat) = get_2_words!(state, w);
-  let format_name = &vformat.value_stack_ref().first().unwrap().vword_ref().str_word;
-  let format = Some(format_name);
-  let deserialize_fn = get_deserialize_fn!(
-    state, format_name, format, 3, f,
-    {
-      state.current().stack.push(vdata);
-      state.current().stack.push(vformat);
-      return state.eval_error("INVALID SERDE FORMAT", w)
-    },
-    { unreachable!() }, _ext,
-    { unreachable!() }
-  );
-  let data = &vdata.value_stack_ref().first().unwrap().vword_ref().str_word;
-  match deserialize_fn(data, state) {
-    Ok(state) => state,
-    Err(mut e) => {
-      e.0.current().stack.push(vdata);
-      e.0.current().stack.push(vformat);
-      match format!("{}", e.1).as_str() {
-        "INVALID FILENAME" => e.0.eval_error("INVALID FILENAME", w),
-        "INVALID FLLIB" => e.0.eval_error("INVALID FLLIB", w),
-        _ => e.0.eval_error("DESERIALIZATION FAILED", w)
-      }
-    }
-  }
-}
-
 pub fn cog_list_formats(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let serdes_len = state.serde.serdes.len();
   let serializers_len = state.serde.serializers.len();
@@ -458,10 +458,10 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "state", cog_state);
   add_builtin!(state, "fstate", cog_fstate);
   add_builtin!(state, "restate", cog_restate);
-  // describe-fllibs could be replaced with ( get-fllibs serialize-map )
+  add_builtin!(state, "load", cog_load);
+  // describe-fllibs could be replaced with ( fllibs swap serialize-map )
   add_builtin!(state, "describe-fllibs", cog_describe_fllibs);
   add_builtin!(state, "serialize-map", cog_serialize_map);
-  add_builtin!(state, "load-fllibs", cog_load_fllibs);
   add_builtin!(state, "list-formats", cog_list_formats);
   add_builtin!(state, "remove-format", cog_remove_format);
 }

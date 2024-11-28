@@ -65,7 +65,7 @@ pub fn cog_fllib_filename(mut state: CognitionState, w: Option<&Value>) -> Cogni
   state
 }
 
-pub fn cog_get_fllibs(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+pub fn cog_fllibs(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let mut vstack = state.pool.get_vstack(DEFAULT_STACK_SIZE);
   if let Some(libs) = state.fllibs.take() {
     for (k, l) in libs.iter() {
@@ -167,8 +167,8 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "fllib", cog_fllib);
   add_builtin!(state, "unload", cog_unload);
   add_builtin!(state, "fllib-filename", cog_fllib_filename);
-  add_builtin!(state, "get-fllibs", cog_get_fllibs);
+  add_builtin!(state, "fllibs", cog_fllibs);
   add_builtin!(state, "name", cog_name);
-  add_builtin!(state, "set-name", cog_set_name);
+  add_builtin!(state, "name", cog_name);
   add_builtin!(state, "library", cog_library);
 }

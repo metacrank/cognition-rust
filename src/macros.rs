@@ -429,17 +429,44 @@ macro_rules! register_custom {
 }
 
 #[macro_export]
+macro_rules! custom_pool_name {
+  ($custom:literal) => {
+    concat!(module_path!(), "::", $custom);
+  }
+}
+
+#[macro_export]
 macro_rules! add_custom_pool {
   ($state:ident,$name:literal,TREE) => {
-    let pool = $crate::pool::CustomPool::Tree($crate::tree::Tree<usize, Box<dyn Custom>>::new());
+    let pool = $crate::pool::CustomPool::Tree($crate::pool::VTree::new());
     add_custom_pool!($state, $name, pool);
   };
   ($state:ident,$name:literal,VEC) => {
-    let pool = $crate::pool::CustomPool::Vec(Vec::<Box<dyn Custom>>::new());
+    let pool = $crate::pool::CustomPool::Vec($crate::Stack::new());
     add_custom_pool!($state, $name, pool);
   };
   ($state:ident,$name:literal,$pool:ident) => {
     $state.pool.custom_pools.insert(format!("{}::{}", module_path!(), $name), $pool);
+  }
+}
+
+#[macro_export]
+macro_rules! get_from_custom_pool {
+  ($pool:ident,$name:literal,$i:expr,$var:pat,$var_type:ty,$block:block,$default_block:block) => {{
+    let pool_name = custom_pool_name!($name);
+    get_from_custom_pool!($pool,$i,$var,$var_type, pool_name, $block,$default_block)
+  }};
+  ($pool:ident,$i:expr,$var:pat,$var_type:ty,$pool_name:expr,$block:block,$default_block:block) => {
+    'ret: {
+      if let Some(mut vcustom) = $pool.get_vcustom($pool_name, $i) {
+        if let Some($var) = vcustom.custom.as_any_mut().downcast_mut::<$var_type>() {
+          $block;
+          break 'ret vcustom
+        }
+        $pool.add_vcustom(vcustom);
+      }
+      $default_block
+    }
   }
 }
 
@@ -672,8 +699,7 @@ macro_rules! get_char_option {
 #[macro_export]
 macro_rules! get_word {
   ($state:ident,$w:ident,ACTIVE) => {
-    let cur = $state.current();
-    let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    let Some(v) = $state.current().stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     if v.value_stack_ref().len() != 1 { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
     let word_v = &v.value_stack_ref()[0];
     if !word_v.is_word() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
@@ -687,22 +713,35 @@ macro_rules! get_word {
 #[macro_export]
 macro_rules! get_2_words {
   ($state:ident,$w:ident) => {{
-    let cur = $state.current();
-    if cur.stack.len() < 2 { return $state.eval_error("TOO FEW ARGUMENTS", $w) }
-    let v2 = cur.stack.pop().unwrap();
-    let v1 = cur.stack.last().unwrap();
+    let stack = &mut $state.current().stack;
+    if stack.len() < 2 { return $state.eval_error("TOO FEW ARGUMENTS", $w) }
+    let v2 = stack.pop().unwrap();
+    let v1 = stack.last().unwrap();
     if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
-      cur.stack.push(v2);
+      stack.push(v2);
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     let word2_v = &v2.value_stack_ref()[0];
     let word1_v = &v1.value_stack_ref()[0];
     if !word2_v.is_word() || !word1_v.is_word() {
-      cur.stack.push(v2);
+      stack.push(v2);
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
-    (cur.stack.pop().unwrap(), v2)
-  }};
+    (stack.pop().unwrap(), v2)
+  }}
+}
+
+#[macro_export]
+macro_rules! get_custom {
+  ($state:ident,$w:ident,ACTIVE) => {
+    let Some(v) = $state.current_ref().stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    if v.value_stack_ref().len() != 1 { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    if !v.value_stack_ref().first().unwrap().is_custom() { return $state.eval_error("BAD ARGUMENT TYPE", $w) };
+  };
+  ($state:ident,$w:ident) => {{
+    get_custom!($state,$w,ACTIVE);
+    $state.current().stack.pop().unwrap()
+  }}
 }
 
 // note: do not use usize (use isize instead)

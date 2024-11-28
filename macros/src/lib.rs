@@ -1,7 +1,8 @@
 use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::parse::{Parse, ParseStream, Result};
-use syn::{parse_macro_input, parse_str, parse_quote, Error, ItemImpl, LitStr, Token, Type, TypePath};
+use syn::{parse_macro_input, parse_str, parse_quote, Error, ImplItem, ItemImpl, LitStr, Token, Type, TypePath};
 
 mod kw {
   syn::custom_keyword!(name);
@@ -252,6 +253,21 @@ pub fn custom(args: TokenStream, input: TokenStream) -> TokenStream {
       concat!(module_path!(), "::", #name)
     }
   });
+
+  let cond = |item: &ImplItem| 'ret: {
+    if let ImplItem::Fn(f) = item {
+      if f.sig.ident == Ident::new("custom_pool", Span::call_site()) {
+        break 'ret false
+      }
+    }
+    true
+  };
+
+  if input.items.iter().all(cond) {
+    input.items.push(parse_quote! {
+      fn custom_pool(&mut self, _: &mut Pool) -> CustomPoolPackage { CustomPoolPackage::None }
+    })
+  }
 
   let mut expanded = if args.serde_as_void {
     quote! {

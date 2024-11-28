@@ -7,9 +7,8 @@ use std::fs::{self, File};
 use std::io::stdin;
 
 use cognition::*;
-use cognition::macros::*;
 
-const VERSION: &'static str = "0.3.1 alpha";
+const VERSION: &'static str = "0.3.2 alpha";
 
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
@@ -125,6 +124,11 @@ fn main() -> ExitCode {
   if let Some(ref save_fn) = save_fn {
     return cogsave(&state, opts.save.as_ref().unwrap(), *save_fn)
   }
+
+  // Ensure foreign libraries stay loaded when
+  // dropping custom objects in cognition state
+  let fllibs = state.fllibs.take();
+  drop(state);
 
   ExitCode::SUCCESS
 }
@@ -547,6 +551,12 @@ fn print_end(state: &CognitionState) {
   println!("Pool:");
   state.pool.print();
   println!("");
+
+  if state.pool.has_customs() {
+    println!("Custom Pools:");
+    state.pool.print_custom_pools();
+    println!("");
+  }
 
   if let Some(ref code) = state.exit_code {
     print!("Exit code: '");
