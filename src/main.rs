@@ -8,7 +8,7 @@ use std::io::stdin;
 
 use cognition::*;
 
-const VERSION: &'static str = "0.3.2 alpha";
+const VERSION: &'static str = "0.3.3 alpha";
 
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
@@ -120,7 +120,8 @@ fn main() -> ExitCode {
     }
   }
 
-  if !opts.quiet { print_end(&state); }
+  let end = opts.end.unwrap_or_else(|| End::with(true));
+  if !opts.quiet { print_end(&state, end); }
   if let Some(ref save_fn) = save_fn {
     return cogsave(&state, opts.save.as_ref().unwrap(), *save_fn)
   }
@@ -136,6 +137,7 @@ fn main() -> ExitCode {
 struct Config {
   help: bool,
   coglib: Option<String>,
+  end: Option<End>,
   format: Option<String>,
   list_formats: bool,
   fllibs: Option<String>,
@@ -149,7 +151,7 @@ struct Config {
   version: bool,
   stdin: bool,
   usage: bool,
-  fileidx: usize,
+  fileidx: usize
 }
 
 impl Config {
@@ -157,6 +159,7 @@ impl Config {
     Self {
       help: false,
       coglib: None,
+      end: None,
       format: None,
       list_formats: false,
       fllibs: None,
@@ -175,6 +178,36 @@ impl Config {
   }
 }
 
+struct End {
+  stack: bool,
+  estack: bool,
+  faliases: bool,
+  parser: bool,
+  cranks: bool,
+  math: bool,
+  fllibs: bool,
+  pool: bool,
+  customs: bool,
+  exit: bool
+}
+
+impl End {
+  pub fn with(b: bool) -> Self {
+    Self {
+      stack: b,
+      estack: b,
+      faliases: b,
+      parser: b,
+      cranks: b,
+      math: b,
+      fllibs: b,
+      pool: b,
+      customs: b,
+      exit: b
+    }
+  }
+}
+
 fn parse_sources(args: &Vec<String>, argc: usize, i: usize, sources: i32) -> Result<(usize, i32), ExitCode> {
   if sources >= 0 { return Err(usage_help(1)) }
   else if i + 1 == argc { return Err(usage_help(3)) }
@@ -188,6 +221,31 @@ fn parse_sources(args: &Vec<String>, argc: usize, i: usize, sources: i32) -> Res
       Err(try_help(3))
     }
   }
+}
+
+fn parse_end(args: &Vec<String>, argc: usize, i: usize, end: bool) -> Result<(usize, Option<End>), ExitCode> {
+  if end { return Err(usage_help(1)) }
+  else if i + 1 == argc { return Err(usage_help(3)) }
+  let mut new_end = End::with(false);
+  for c in args[i + 1].chars() {
+    match c {
+      's' => new_end.stack = true,
+      'e' => new_end.estack = true,
+      'f' => new_end.faliases = true,
+      'p' => new_end.parser = true,
+      'c' => new_end.cranks = true,
+      'm' => new_end.math = true,
+      'F' => new_end.fllibs = true,
+      'P' => new_end.pool = true,
+      'C' => new_end.customs = true,
+      'E' => new_end.exit = true,
+      a => {
+        println!("{}: end: invalid option -- '{}'", binary_name(), a);
+        return Err(try_help(2))
+      }
+    }
+  }
+  Ok((i + 1, Some(new_end)))
 }
 
 macro_rules! define_config_parsers {
@@ -224,6 +282,7 @@ fn parse_short(short: &str, args: &Vec<String>, argc: usize, iptr: &mut usize, c
     'l' => (i, config.logfile) = set_str(i, &config.logfile)?,
     'L' => (i, config.load)    = set_str(i, &config.load)?,
     'S' => (i, config.save)    = set_str(i, &config.save)?,
+    'e' => (i, config.end)     = parse_end(args, argc, i, config.end.is_some())?,
     's' => (i, config.sources) = parse_sources(args, argc, i, config.sources)?,
     _ => char_iter = short.chars().rev()
   }
@@ -284,6 +343,7 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
       "--load"            => (i, config.load)        = set_str(i, &config.load)?,
       "--save"            => (i, config.save)        = set_str(i, &config.save)?,
       "--save-format"     => (i, config.save_format) = set_str(i, &config.save_format)?,
+      "--end"             => (i, config.end)         = parse_end(args, argc, i, config.end.is_some())?,
       "--sources"         => (i, config.sources)     = parse_sources(args, argc, i, config.sources)?,
 
       _ => if parse_other(args, argc, &mut i, &mut config)? { break }
@@ -304,7 +364,7 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
 
 fn binary_name() -> String { if let Some(n) = env::args().next() { n } else { "crank".to_string() } }
 
-const OPTIONS: &str = "[-hquv] [-l FILE] [-L FILE [-f FORMAT] [-F FILE] [--suppress-fllibs] -S FILE [--save-format FORMAT] | --list-formats]";
+const OPTIONS: &str = "[-hquv] [-e [sefpcmFPCE]] [-l FILE] [-L FILE [-f FORMAT] [-F FILE] [--suppress-fllibs] -S FILE [--save-format FORMAT] | --list-formats]";
 
 fn usage() -> ExitCode {
   println!("Usage: {} {OPTIONS} [-s N] [file...] [arg...]", binary_name());
@@ -329,6 +389,7 @@ fn help() -> ExitCode {
   println!("Options:");
   println!(" -h, --help                print this help message");
   println!(" -c, --coglib-dir DIR      use DIR as a secondary source directory");
+  println!(" -e, --end [sefpcmFPCE]    select information to display at program end");
   println!(" -f, --format FORMAT       use FORMAT as the load format (see '--load')");
   println!("                             FORMAT can optionally be a comma-separated pair: '-f|--format LOAD_FORMAT,FLLIBS_FORMAT'");
   println!("                             to specify a different format for an optional fllib description file (see '--fllibs')");
@@ -451,118 +512,133 @@ fn cogsave(state: &CognitionState, savefile: &String, serialize_fn: CogStateSeri
   }
 }
 
-fn print_end(state: &CognitionState) {
-  println!("");
-  println!("Stack at end:");
+fn print_end(state: &CognitionState, e: End) {
   let cur = state.current_ref();
-  for v in cur.stack.iter() { v.print("\n"); }
-  println!("");
-  println!("Error stack:");
-  if let Some(errors) = &cur.err_stack {
-    for verror in errors.iter() { verror.print("\n"); }
+
+  if e.stack {
+    println!("\nStack at end:");
+    for v in cur.stack.iter() { v.print("\n"); }
   }
-  if let Some(faliases) = &cur.faliases {
-    print!("\nFaliases:");
-    for alias in faliases.iter() {
-      print!(" '");
-      alias.print_pretty();
-      print!("'");
+  if e.estack {
+    println!("\nError stack:");
+    if let Some(errors) = &cur.err_stack {
+      for verror in errors.iter() { verror.print("\n"); }
     }
   }
-  println!("");
-  print!("delims: '");
-  if let Some(delims) = &cur.delims { delims.print_pretty(); }
-  if cur.dflag { println!("' (whitelist)"); }
-  else         { println!("' (blacklist)"); }
-  print!("ignored: '");
-  if let Some(ignored) = &cur.ignored { ignored.print_pretty(); }
-  if cur.iflag { println!("' (whitelist)"); }
-  else         { println!("' (blacklist)"); }
-  print!("singlets: '");
-  if let Some(singlets) = &cur.singlets { singlets.print_pretty(); }
-  if cur.sflag { println!("' (whitelist)\n"); }
-  else         { println!("' (blacklist)\n"); }
+  if e.faliases {
+    if let Some(faliases) = &cur.faliases {
+      print!("\nFaliases:");
+      for alias in faliases.iter() {
+        print!(" '");
+        alias.print_pretty();
+        print!("'");
+      }
+    }
+  }
+  if e.parser {
+    println!("");
+    print!("delims: '");
+    if let Some(delims) = &cur.delims { delims.print_pretty(); }
+    if cur.dflag { println!("' (whitelist)"); }
+    else         { println!("' (blacklist)"); }
+    print!("ignored: '");
+    if let Some(ignored) = &cur.ignored { ignored.print_pretty(); }
+    if cur.iflag { println!("' (whitelist)"); }
+    else         { println!("' (blacklist)"); }
+    print!("singlets: '");
+    if let Some(singlets) = &cur.singlets { singlets.print_pretty(); }
+    if cur.sflag { println!("' (whitelist)"); }
+    else         { println!("' (blacklist)"); }
+  }
 
-  if let Some(cranks) = &cur.cranks {
-    if cranks.len() == 0 {
-      println!("crank 0");
+  if e.cranks {
+    if let Some(cranks) = &cur.cranks {
+      println!("");
+      if cranks.len() == 0 {
+        println!("crank 0");
+      } else {
+        print!("cranks:");
+        for (i, crank) in cranks.iter().enumerate() {
+          print!(" {i}:({},{})", crank.modulo, crank.base);
+        }
+        println!("");
+      }
     } else {
-      print!("cranks:");
-      for (i, crank) in cranks.iter().enumerate() {
-        print!(" {i}:({},{})", crank.modulo, crank.base);
+      println!("uninitialized crank");
+    }
+  }
+
+  if e.math {
+    if let Some(ref math) = cur.math {
+      println!("");
+      println!("Math:");
+      println!("base: {}", math.base());
+      print!("digits: ");
+      for d in math.get_digits() {
+        print!("{d}");
       }
       println!("");
-    }
-  } else {
-    println!("uninitialized crank");
-  }
-  println!("");
-
-  if let Some(ref math) = cur.math {
-    println!("Math:");
-    println!("base: {}", math.base());
-    print!("digits: ");
-    for d in math.get_digits() {
-      print!("{d}");
-    }
-    println!("");
-    print!("negc: ");
-    match math.get_negc() {
-      Some(c) => println!("'{}\u{00A0}'", c),
-      None => println!("(none)"),
-    }
-    print!("radix: ");
-    match math.get_radix() {
-      Some(c) => println!("'{c}'"),
-      None => println!("(none)"),
-    }
-    print!("delim: ");
-    match math.get_delim() {
-      Some(c) => println!("'{c}'"),
-      None => println!("(none)"),
-    }
-    print!("meta-radix: ");
-    match math.get_meta_radix() {
-      Some(c) => println!("'{c}'"),
-      None => println!("(none)"),
-    }
-    print!("meta-delim: ");
-    match math.get_meta_delim() {
-      Some(c) => println!("'{c}'"),
-      None => println!("(none)"),
-    }
-    println!("");
-  } else {
-    println!("uninitialized math\n");
-  }
-
-  if let Some(ref fllibs) = state.fllibs {
-    if fllibs.len() > 0 {
-      print!("fllibs: ");
-      let mut names = fllibs.keys();
-      print!("'{}'", names.next().unwrap());
-      for name in names {
-        print!(", '{}'", name);
+      print!("negc: ");
+      match math.get_negc() {
+        Some(c) => println!("'{}\u{00A0}'", c),
+        None => println!("(none)"),
       }
-      println!("\n");
+      print!("radix: ");
+      match math.get_radix() {
+        Some(c) => println!("'{c}'"),
+        None => println!("(none)"),
+      }
+      print!("delim: ");
+      match math.get_delim() {
+        Some(c) => println!("'{c}'"),
+        None => println!("(none)"),
+      }
+      print!("meta-radix: ");
+      match math.get_meta_radix() {
+        Some(c) => println!("'{c}'"),
+        None => println!("(none)"),
+      }
+      print!("meta-delim: ");
+      match math.get_meta_delim() {
+        Some(c) => println!("'{c}'"),
+        None => println!("(none)"),
+      }
+    } else {
+      println!("uninitialized math");
     }
   }
 
-  println!("Pool:");
-  state.pool.print();
-  println!("");
-
-  if state.pool.has_customs() {
-    println!("Custom Pools:");
-    state.pool.print_custom_pools();
-    println!("");
+  if e.fllibs {
+    if let Some(ref fllibs) = state.fllibs {
+      if fllibs.len() > 0 {
+        println!("\nFLLibs:");
+        for (name, lib) in fllibs.iter() {
+          println!("'{}': {}", name, lib.library.lib_path);
+        }
+      }
+    }
   }
 
-  if let Some(ref code) = state.exit_code {
-    print!("Exit code: '");
-    code.print_pretty();
-    println!("'");
-  } else {
-    println!("Exit code: (none)");
+  if e.pool {
+    println!("\nPool:");
+    state.pool.print();
+  }
+
+  if e.customs {
+    if state.pool.has_customs() {
+      println!("\nCustom Pools:");
+      state.pool.print_custom_pools();
+    }
+  }
+
+  if e.exit {
+    println!("");
+    if let Some(ref code) = state.exit_code {
+      print!("Exit code: '");
+      code.print_pretty();
+      println!("'");
+    } else {
+      println!("Exit code: (none)");
+    }
   }
 }

@@ -130,6 +130,57 @@ pub fn cog_put(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   state
 }
 
+pub fn cog_get(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
+  let stack = &mut state.current().stack;
+  let i_val = stack.pop().unwrap();
+  let mut v1 = stack.pop().unwrap();
+  if i >= v1.value_stack_ref().len() {
+    stack.push(v1);
+    stack.push(i_val);
+    return state.eval_error("OUT OF BOUNDS", w)
+  }
+  let v = v1.value_stack().remove(i);
+  stack.push(v1);
+  state.pool.add_val(i_val);
+  state.push_quoted(v);
+  state
+}
+
+pub fn cog_remove(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let (i, j) = get_2_unsigned!(state, w, isize, ACTIVE);
+  let i = i as usize;
+  let j = j as usize;
+  let stack = &mut state.current().stack;
+  let j_val = stack.pop().unwrap();
+  let i_val = stack.pop().unwrap();
+  let mut v1 = stack.pop().unwrap();
+  let length = v1.value_stack_ref().len();
+  if i > length || j > length {
+    stack.push(v1);
+    stack.push(i_val);
+    stack.push(j_val);
+    return state.eval_error("OUT OF BOUNDS", w)
+  }
+  state.pool.add_val(i_val);
+  state.pool.add_val(j_val);
+  if i >= j {
+    state.current().stack.push(v1);
+    let vstack = state.pool.get_vstack(0);
+    state.current().stack.push(Value::Stack(vstack));
+    return state
+  }
+  let mut vstack = state.pool.get_vstack(j - i);
+  for v in v1.value_stack().drain(i..j) {
+    vstack.container.stack.push(v);
+  }
+  state.current().stack.push(v1);
+  state.current().stack.push(Value::Stack(vstack));
+  state
+}
+
 pub fn cog_invert(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(v) = state.current().stack.last_mut() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   v.value_stack().reverse();
@@ -256,43 +307,24 @@ pub fn cog_substack(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   state
 }
 
-pub fn cog_del(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
-  let stack = &mut state.current().stack;
-  let i_val = stack.pop().unwrap();
-  let mut v1 = stack.pop().unwrap();
-  if i >= v1.value_stack_ref().len() {
-    stack.push(v1);
-    stack.push(i_val);
-    return state.eval_error("OUT OF BOUNDS", w)
+// Empty stack is pushed after elements which
+// retains the properties of the original stack
+pub fn cog_uncompose(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(mut v1) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let v1stack = v1.value_stack();
+  while let Some(v) = v1stack.pop() {
+    state.push_quoted(v)
   }
-  state.pool.add_val(i_val);
-  state.pool.add_val(v1.value_stack().remove(i));
   state.current().stack.push(v1);
   state
 }
 
-// On return, the top value of the stack retains
-// the container attributes of the original value
-pub fn cog_uncompose(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  let Some(mut v1) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let is_macro = v1.is_macro();
-  let v1stack = v1.value_stack();
-  if let Some(val) = v1stack.pop() {
-    v1stack.reverse();
-    while let Some(v) = v1stack.pop() {
-      state.push_quoted(v)
-    }
-    if is_macro {
-      state.pool.add_val(v1);
-      state.push_quoted(val);
-      return state
-    }
-    v1stack.push(val);
-  }
-  state.current().stack.push(v1);
+pub fn cog_decompose(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let Some(Value::Stack(mut vstack)) = state.current().stack.pop() else {
+    return state.eval_error("TOO FEW ARGUMENTS", w)
+  };
+  state.ensure_quoted(&mut vstack.container.stack);
+  state.current().stack.push(Value::Stack(vstack));
   state
 }
 
@@ -343,14 +375,16 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "compose", cog_compose);
   add_builtin!(state, "prepose", cog_prepose);
   add_builtin!(state, "put", cog_put);
+  add_builtin!(state, "get", cog_get);
+  add_builtin!(state, "remove", cog_remove);
   add_builtin!(state, "invert", cog_invert);
   add_builtin!(state, "if", cog_if, EVAL);
   add_builtin!(state, "dip", cog_dip);
   add_builtin!(state, "split", cog_split);
   add_builtin!(state, "vat", cog_vat);
   add_builtin!(state, "substack", cog_substack);
-  add_builtin!(state, "del", cog_del);
   add_builtin!(state, "uncompose", cog_uncompose);
+  add_builtin!(state, "decompose", cog_decompose);
   add_builtin!(state, "size", cog_size);
   add_builtin!(state, "type", cog_type);
 }

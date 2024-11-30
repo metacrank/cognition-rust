@@ -53,7 +53,7 @@ pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  ensure_quoted!(state, v.vstack_mut().container.stack);
+  state.ensure_quoted(&mut v.vstack_mut().container.stack);
   let wrapper = CogStateWrapper(new_cogstate(&mut state, v));
   let handle = thread::spawn(move || {
     let copy = wrapper;

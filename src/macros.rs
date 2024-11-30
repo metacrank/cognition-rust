@@ -649,134 +649,144 @@ macro_rules! impl_serde_as_null {
 }
 
 #[macro_export]
-macro_rules! ensure_quoted {
-  ($state:ident,$stack:expr) => {
-    for val in $stack.iter_mut() {
-      if !(val.is_stack() || val.is_macro()) {
-        let new_val = $state.pool.get_vstack(1);
-        let old_val = std::mem::replace(val, Value::Stack(new_val));
-        val.vstack_mut().container.stack.push(old_val);
-      }
-    }
+macro_rules! get_char {
+  ($state:ident,$c:pat,$w:ident,$fail:block) => {
+    let cur = $state.current();
+    let Some(v) = cur.stack.last() else { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    if v.value_stack_ref().len() != 1 { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    let word_v = &v.value_stack_ref()[0];
+    if !word_v.is_word() { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    let s = &word_v.vword_ref().str_word;
+    let mut iter = s.chars();
+    let Some($c) = iter.next() else { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) };
+    if iter.next().is_some() { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    let v = cur.stack.pop().unwrap();
+    $state.pool.add_val(v);
+  };
+  ($state:ident,$c:pat,$w:ident) => {
+    get_char!($state, $c, $w, {});
   }
 }
 
 #[macro_export]
-macro_rules! get_char {
-  ($state:ident,$c:pat,$w:ident) => {
-    let cur = $state.current();
-    let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
-    if v.value_stack_ref().len() != 1 { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
-    let word_v = &v.value_stack_ref()[0];
-    if !word_v.is_word() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
-    let s = &word_v.vword_ref().str_word;
-    let mut iter = s.chars();
-    let Some($c) = iter.next() else { return $state.eval_error("BAD ARGUMENT TYPE", $w) };
-    if iter.next().is_some() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
-    let v = cur.stack.pop().unwrap();
-    $state.pool.add_val(v);
-  };
-}
-
-#[macro_export]
 macro_rules! get_char_option {
-  ($state:ident,$c:pat,$w:ident) => {
+  ($state:ident,$c:pat,$w:ident,$fail:block) => {
     let cur = $state.current();
-    let Some(v) = cur.stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
-    if v.value_stack_ref().len() != 1 { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    let Some(v) = cur.stack.last() else { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    if v.value_stack_ref().len() != 1 { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
     let word_v = &v.value_stack_ref()[0];
-    if !word_v.is_word() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    if !word_v.is_word() { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
     let s = &word_v.vword_ref().str_word;
     let mut iter = s.chars();
     let tmp = iter.next();
     let $c = tmp;
-    if tmp.is_some() && iter.next().is_some() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    if tmp.is_some() && iter.next().is_some() { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
     let v = cur.stack.pop().unwrap();
     $state.pool.add_val(v);
   };
+  ($state:ident,$c:pat,$w:ident) => {
+    get_char_option!($state, $c, $w, {});
+  }
 }
 
 #[macro_export]
 macro_rules! get_word {
-  ($state:ident,$w:ident,ACTIVE) => {
-    let Some(v) = $state.current().stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
-    if v.value_stack_ref().len() != 1 { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+  ($state:ident,$w:ident,$fail:block,ACTIVE) => {
+    let Some(v) = $state.current().stack.last() else { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    if v.value_stack_ref().len() != 1 { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
     let word_v = &v.value_stack_ref()[0];
-    if !word_v.is_word() { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    if !word_v.is_word() { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
   };
-  ($state:ident,$w:ident) => {{
-    get_word!($state,$w,ACTIVE);
+  ($state:ident,$w:ident,$fail:block) => {{
+    get_word!($state,$w,$fail,ACTIVE);
     $state.current().stack.pop().unwrap()
-  }}
+  }};
+  ($state:ident,$w:ident$(,$t:tt)?) => {
+    get_word!($state, $w, {} $(,$t)? )
+  }
 }
 
 #[macro_export]
 macro_rules! get_2_words {
-  ($state:ident,$w:ident) => {{
+  ($state:ident,$w:ident,$fail:block) => {{
     let stack = &mut $state.current().stack;
-    if stack.len() < 2 { return $state.eval_error("TOO FEW ARGUMENTS", $w) }
+    if stack.len() < 2 { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) }
     let v2 = stack.pop().unwrap();
     let v1 = stack.last().unwrap();
     if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
       stack.push(v2);
+      $fail;
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     let word2_v = &v2.value_stack_ref()[0];
     let word1_v = &v1.value_stack_ref()[0];
     if !word2_v.is_word() || !word1_v.is_word() {
       stack.push(v2);
+      $fail;
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     (stack.pop().unwrap(), v2)
-  }}
+  }};
+  ($state:ident,$w:ident) => {
+    get_2_words!($state, $w, {})
+  }
 }
 
 #[macro_export]
 macro_rules! get_custom {
-  ($state:ident,$w:ident,ACTIVE) => {
-    let Some(v) = $state.current_ref().stack.last() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
-    if v.value_stack_ref().len() != 1 { return $state.eval_error("BAD ARGUMENT TYPE", $w) }
-    if !v.value_stack_ref().first().unwrap().is_custom() { return $state.eval_error("BAD ARGUMENT TYPE", $w) };
+  ($state:ident,$w:ident,$fail:block,ACTIVE) => {
+    let Some(v) = $state.current_ref().stack.last() else { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    if v.value_stack_ref().len() != 1 { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
+    if !v.value_stack_ref().first().unwrap().is_custom() { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) };
   };
-  ($state:ident,$w:ident) => {{
-    get_custom!($state,$w,ACTIVE);
+  ($state:ident,$w:ident,$fail:block) => {{
+    get_custom!($state,$w,$fail,ACTIVE);
     $state.current().stack.pop().unwrap()
-  }}
+  }};
+  ($state:ident,$w:ident$(,$t:tt)?) => {
+    get_custom!($state, $w, {} $(,$t)?)
+  }
 }
 
 // note: do not use usize (use isize instead)
 #[macro_export]
 macro_rules! get_unsigned {
-  ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
-    let Some(v) = $state.current().stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+  ($state:ident,$w:ident,$fail:block,$type:ty,ACTIVE,$err:literal) => {{
+    let Some(v) = $state.current().stack.pop() else { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let stack = v.value_stack_ref();
     if stack.len() != 1 {
       $state.current().stack.push(v);
+      $fail;
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     let word_val = &stack[0];
     let $crate::Value::Word(vword) = word_val else {
       $state.current().stack.push(v);
+      $fail;
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     };
     let Some(math) = $state.get_math() else {
       $state.current().stack.push(v);
+      $fail;
       return $state.eval_error("MATH BASE ZERO", $w)
     };
     if math.math().base() == 0 {
       $state.set_math(math);
       $state.current().stack.push(v);
+      $fail;
       return $state.eval_error("MATH BASE ZERO", $w)
     }
     let i = match math.math().stoi(&vword.str_word) {
       Ok(i) => if i > <$type>::MAX as isize || i < 0 {
         $state.set_math(math);
         $state.current().stack.push(v);
+        $fail;
         return $state.eval_error($err, $w)
       } else { i as $type },
       Err(e) => {
         $state.set_math(math);
         $state.current().stack.push(v);
+        $fail;
         return $state.eval_error(e, $w)
       }
     };
@@ -784,50 +794,53 @@ macro_rules! get_unsigned {
     $state.current().stack.push(v);
     i
   }};
-  ($state:ident,$w:ident,$type:ty,ACTIVE) => {
-    get_unsigned!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
+  ($state:ident,$w:ident,$fail:block,$type:ty,ACTIVE) => {
+    get_unsigned!($state, $w, $fail, $type, ACTIVE, "OUT OF BOUNDS")
   };
-  ($state:ident,$w:ident,$type:ty) => {{
-    let i = get_unsigned!($state, $w, $type, ACTIVE);
+  ($state:ident,$w:ident,$fail:block,$type:ty) => {{
+    let i = get_unsigned!($state, $w, $fail, $type, ACTIVE);
     let v = $state.current().stack.pop().unwrap();
     $state.pool.add_val(v);
     i
   }};
-  ($state:ident,$w:ident) => {
+  ($state:ident,$w:ident,$fail:block) => {
     get_unsigned!($state, $w, i32)
   };
+  ($state:ident,$w:ident$(,$t:tt)*) => {
+    get_unsigned!($state, $w, {} $(,$t)*)
+  }
 }
 
 #[macro_export]
 macro_rules! get_int {
-  ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
-    let Some(v) = $state.current().stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+  ($state:ident,$w:ident,$fail:block,$type:ty,ACTIVE,$err:literal) => {{
+    let Some(v) = $state.current().stack.pop() else { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let stack = v.value_stack_ref();
-    if stack.len() != 1 {
-      return $state.eval_error("BAD ARGUMENT TYPE", $w)
-    }
+    if stack.len() != 1 { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) }
     let word_val = &stack[0];
-    let $crate::Value::Word(vword) = word_val else {
-      return $state.eval_error("BAD ARGUMENT TYPE", $w)
-    };
+    let $crate::Value::Word(vword) = word_val else { $fail; return $state.eval_error("BAD ARGUMENT TYPE", $w) };
     let Some(math) = $state.get_math() else {
       $state.current().stack.push(v);
+      $fail;
       return $state.eval_error("MATH BASE ZERO", $w)
     };
     if math.math().base() == 0 {
       $state.set_math(math);
       $state.current().stack.push(v);
+      $fail;
       return $state.eval_error("MATH BASE ZERO", $w)
     }
     let i = match math.math().stoi(&vword.str_word) {
       Ok(i) => if i > <$type>::MAX as isize || i < <$type>::MIN as isize {
         $state.set_math(math);
         $state.current().stack.push(v);
+        $fail;
         return $state.eval_error($err, $w)
       } else { i as $type },
       Err(e) => {
         $state.set_math(math);
         $state.current().stack.push(v);
+        $fail;
         return $state.eval_error(e, $w)
       }
     };
@@ -835,155 +848,72 @@ macro_rules! get_int {
     $state.current().stack.push(v);
     i
   }};
-  ($state:ident,$w:ident,$type:ty,ACTIVE) => {
-    get_int!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
+  ($state:ident,$w:ident,$fail:block,$type:ty,ACTIVE) => {
+    get_int!($state, $w, $fail, $type, ACTIVE, "OUT OF BOUNDS")
   };
-  ($state:ident,$w:ident,$type:ty) => {{
-    let i = get_int!($state, $w, $type, ACTIVE);
+  ($state:ident,$w:ident,$fail:block,$type:ty) => {{
+    let i = get_int!($state, $w, $fail, $type, ACTIVE);
     let v = $state.current().stack.pop().unwrap();
     $state.pool.add_val(v);
     i
   }};
-  ($state:ident,$w:ident) => {
-    get_int!($state, $w, i32)
+  ($state:ident,$w:ident,$fail:block) => {
+    get_int!($state, $w, $fail, i32)
   };
-}
-
-#[macro_export]
-macro_rules! get_2_ints {
-  ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
-    let stack = &mut $state.current().stack;
-    let Some(v2) = stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
-    let Some(v1) = stack.pop() else {
-      stack.push(v2);
-      return $state.eval_error("TOO FEW ARGUMENTS", $w);
-    };
-    let stack1 = v1.value_stack_ref();
-    if stack1.len() != 1 {
-      stack.push(v1);
-      stack.push(v2);
-      return $state.eval_error("BAD ARGUMENT TYPE", $w)
-    }
-    let word_val1 = &stack1[0];
-    let $crate::Value::Word(vword1) = word_val1 else {
-      stack.push(v1);
-      stack.push(v2);
-      return $state.eval_error("BAD ARGUMENT TYPE", $w)
-    };
-    let stack2 = v2.value_stack_ref();
-    if stack2.len() != 1 {
-      stack.push(v1);
-      stack.push(v2);
-      return $state.eval_error("BAD ARGUMENT TYPE", $w)
-    }
-    let word_val2 = &stack2[0];
-    let $crate::Value::Word(vword2) = word_val2 else {
-      stack.push(v1);
-      stack.push(v2);
-      return $state.eval_error("BAD ARGUMENT TYPE", $w)
-    };
-    let Some(math) = $state.get_math() else {
-      $state.current().stack.push(v1);
-      $state.current().stack.push(v2);
-      return $state.eval_error("MATH BASE ZERO", $w)
-    };
-    if math.math().base() == 0 {
-      $state.set_math(math);
-      $state.current().stack.push(v1);
-      $state.current().stack.push(v2);
-      return $state.eval_error("MATH BASE ZERO", $w)
-    }
-    let i1 = match math.math().stoi(&vword1.str_word) {
-      Ok(i) => if i > <$type>::MAX as isize || i < <$type>::MIN as isize {
-        $state.set_math(math);
-        $state.current().stack.push(v1);
-        $state.current().stack.push(v2);
-        return $state.eval_error($err, $w)
-      } else { i as $type },
-      Err(e) => {
-        $state.set_math(math);
-        $state.current().stack.push(v1);
-        $state.current().stack.push(v2);
-        return $state.eval_error(e, $w)
-      },
-    };
-    let i2 = match math.math().stoi(&vword2.str_word) {
-      Ok(i) => if i > <$type>::MAX as isize || i < <$type>::MIN as isize {
-        $state.set_math(math);
-        $state.current().stack.push(v1);
-        $state.current().stack.push(v2);
-        return $state.eval_error($err, $w)
-      } else { i as $type },
-      Err(e) => {
-        $state.set_math(math);
-        $state.current().stack.push(v1);
-        $state.current().stack.push(v2);
-        return $state.eval_error(e, $w)
-      },
-    };
-    $state.set_math(math);
-    $state.current().stack.push(v1);
-    $state.current().stack.push(v2);
-    (i1, i2)
-  }};
-  ($state:ident,$w:ident,$type:ty,ACTIVE) => {
-    get_2_ints!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
-  };
-  ($state:ident,$w:ident,$type:ty) => {{
-    let (i1, i2) = get_2_ints!($state, $w, $type, ACTIVE);
-    let v2 = $state.current().stack.pop().unwrap();
-    let v1 = $state.current().stack.pop().unwrap();
-    $state.pool.add_val(v1);
-    $state.pool.add_val(v2);
-    (i1, i2)
-  }};
-  ($state:ident,$w:ident) => {
-    get_2_ints!($state, $w, i32)
-  };
+  ($state:ident,$w:ident$(,$t:tt)*) => {
+    get_int!($state, $w, {} $(,$t)*)
+  }
 }
 
 #[macro_export]
 macro_rules! get_2_unsigned {
-  ($state:ident,$w:ident,$type:ty,ACTIVE,$err:literal) => {{
+  ($state:ident,$w:ident,$fail:block,$type:ty,ACTIVE,$err:literal) => {{
     let stack = &mut $state.current().stack;
-    let Some(v2) = stack.pop() else { return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    let Some(v2) = stack.pop() else { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) };
     let Some(v1) = stack.pop() else {
       stack.push(v2);
+      $fail;
       return $state.eval_error("TOO FEW ARGUMENTS", $w);
     };
     let stack1 = v1.value_stack_ref();
     if stack1.len() != 1 {
       stack.push(v1);
       stack.push(v2);
+      $fail;
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     let word_val1 = &stack1[0];
     let $crate::Value::Word(vword1) = word_val1 else {
       stack.push(v1);
       stack.push(v2);
+      $fail;
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     };
     let stack2 = v2.value_stack_ref();
     if stack2.len() != 1 {
       stack.push(v1);
       stack.push(v2);
+      $fail;
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     }
     let word_val2 = &stack2[0];
     let $crate::Value::Word(vword2) = word_val2 else {
       stack.push(v1);
       stack.push(v2);
+      $fail;
       return $state.eval_error("BAD ARGUMENT TYPE", $w)
     };
     let Some(math) = $state.get_math() else {
       $state.current().stack.push(v1);
       $state.current().stack.push(v2);
+      $fail;
       return $state.eval_error("MATH BASE ZERO", $w)
     };
     if math.math().base() == 0 {
       $state.set_math(math);
       $state.current().stack.push(v1);
       $state.current().stack.push(v2);
+      $fail;
       return $state.eval_error("MATH BASE ZERO", $w)
     }
     let i1 = match math.math().stoi(&vword1.str_word) {
@@ -997,6 +927,7 @@ macro_rules! get_2_unsigned {
         $state.set_math(math);
         $state.current().stack.push(v1);
         $state.current().stack.push(v2);
+        $fail;
         return $state.eval_error(e, $w)
       },
     };
@@ -1005,12 +936,14 @@ macro_rules! get_2_unsigned {
         $state.set_math(math);
         $state.current().stack.push(v1);
         $state.current().stack.push(v2);
+        $fail;
         return $state.eval_error($err, $w)
       } else { i as $type },
       Err(e) => {
         $state.set_math(math);
         $state.current().stack.push(v1);
         $state.current().stack.push(v2);
+        $fail;
         return $state.eval_error(e, $w)
       },
     };
@@ -1019,18 +952,128 @@ macro_rules! get_2_unsigned {
     $state.current().stack.push(v2);
     (i1, i2)
   }};
-  ($state:ident,$w:ident,$type:ty,ACTIVE) => {
-    get_2_unsigned!($state, $w, $type, ACTIVE, "OUT OF BOUNDS")
+  ($state:ident,$w:ident,$fail:block,$type:ty,ACTIVE) => {
+    get_2_unsigned!($state, $w, $fail, $type, ACTIVE, "OUT OF BOUNDS")
   };
-  ($state:ident,$w:ident,$type:ty) => {{
-    let (i1, i2) = get_2_unsigned!($state, $w, $type, ACTIVE);
+  ($state:ident,$w:ident,$fail:block,$type:ty) => {{
+    let (i1, i2) = get_2_unsigned!($state, $w, $fail, $type, ACTIVE);
     let v2 = $state.current().stack.pop().unwrap();
     let v1 = $state.current().stack.pop().unwrap();
     $state.pool.add_val(v1);
     $state.pool.add_val(v2);
     (i1, i2)
   }};
-  ($state:ident,$w:ident) => {
-    get_2_unsigned!($state, $w, i32)
+  ($state:ident,$w:ident,$fail:block) => {
+    get_2_unsigned!($state, $w, $fail, i32)
   };
+  ($state:ident,$w:ident$(,$t:tt)*) => {
+    get_2_unsigned!($state, $w, {} $(,$t)*)
+  }
+}
+
+#[macro_export]
+macro_rules! get_2_ints {
+  ($state:ident,$w:ident,$fail:block,$type:ty,ACTIVE,$err:literal) => {{
+    let stack = &mut $state.current().stack;
+    let Some(v2) = stack.pop() else { $fail; return $state.eval_error("TOO FEW ARGUMENTS", $w) };
+    let Some(v1) = stack.pop() else {
+      stack.push(v2);
+      $fail;
+      return $state.eval_error("TOO FEW ARGUMENTS", $w);
+    };
+    let stack1 = v1.value_stack_ref();
+    if stack1.len() != 1 {
+      stack.push(v1);
+      stack.push(v2);
+      $fail;
+      return $state.eval_error("BAD ARGUMENT TYPE", $w)
+    }
+    let word_val1 = &stack1[0];
+    let $crate::Value::Word(vword1) = word_val1 else {
+      stack.push(v1);
+      stack.push(v2);
+      $fail;
+      return $state.eval_error("BAD ARGUMENT TYPE", $w)
+    };
+    let stack2 = v2.value_stack_ref();
+    if stack2.len() != 1 {
+      stack.push(v1);
+      stack.push(v2);
+      $fail;
+      return $state.eval_error("BAD ARGUMENT TYPE", $w)
+    }
+    let word_val2 = &stack2[0];
+    let $crate::Value::Word(vword2) = word_val2 else {
+      stack.push(v1);
+      stack.push(v2);
+      $fail;
+      return $state.eval_error("BAD ARGUMENT TYPE", $w)
+    };
+    let Some(math) = $state.get_math() else {
+      $state.current().stack.push(v1);
+      $state.current().stack.push(v2);
+      $fail;
+      return $state.eval_error("MATH BASE ZERO", $w)
+    };
+    if math.math().base() == 0 {
+      $state.set_math(math);
+      $state.current().stack.push(v1);
+      $state.current().stack.push(v2);
+      $fail;
+      return $state.eval_error("MATH BASE ZERO", $w)
+    }
+    let i1 = match math.math().stoi(&vword1.str_word) {
+      Ok(i) => if i > <$type>::MAX as isize || i < <$type>::MIN as isize {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
+        $fail;
+        return $state.eval_error($err, $w)
+      } else { i as $type },
+      Err(e) => {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
+        $fail;
+        return $state.eval_error(e, $w)
+      },
+    };
+    let i2 = match math.math().stoi(&vword2.str_word) {
+      Ok(i) => if i > <$type>::MAX as isize || i < <$type>::MIN as isize {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
+        $fail;
+        return $state.eval_error($err, $w)
+      } else { i as $type },
+      Err(e) => {
+        $state.set_math(math);
+        $state.current().stack.push(v1);
+        $state.current().stack.push(v2);
+        $fail;
+        return $state.eval_error(e, $w)
+      },
+    };
+    $state.set_math(math);
+    $state.current().stack.push(v1);
+    $state.current().stack.push(v2);
+    (i1, i2)
+  }};
+  ($state:ident,$w:ident,$fail:block,$type:ty,ACTIVE) => {
+    get_2_ints!($state, $w, $fail, $type, ACTIVE, "OUT OF BOUNDS")
+  };
+  ($state:ident,$w:ident,$fail:block,$type:ty) => {{
+    let (i1, i2) = get_2_ints!($state, $w, $fail, $type, ACTIVE);
+    let v2 = $state.current().stack.pop().unwrap();
+    let v1 = $state.current().stack.pop().unwrap();
+    $state.pool.add_val(v1);
+    $state.pool.add_val(v2);
+    (i1, i2)
+  }};
+  ($state:ident,$w:ident,$fail:block) => {
+    get_2_ints!($state, $w, $fail, i32)
+  };
+  ($state:ident,$w:ident$(,$t:tt)*) => {
+    get_2_ints!($state, $w, {} $(,$t)*)
+  }
 }

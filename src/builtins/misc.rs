@@ -210,6 +210,15 @@ pub fn cog_same_questionmark(mut state: CognitionState, w: Option<&Value>) -> Co
   state
 }
 
+pub fn cog_ctype(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let v = get_custom!(state, w);
+  let ctype = v.vcustom_ref().custom.custom_type_name();
+  let mut vword = state.pool.get_vword(ctype.len());
+  vword.str_word.push_str(ctype);
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
 pub fn cog_var(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut vw = get_word!(state, w);
   let vword = vw.value_stack_ref().first().unwrap().vword_ref();
@@ -322,6 +331,7 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "custom?", cog_custom_questionmark);
   add_builtin!(state, "control?", cog_control_questionmark);
   add_builtin!(state, "same?", cog_same_questionmark);
+  add_builtin!(state, "ctype", cog_ctype);
   add_builtin!(state, "var", cog_var);
   add_builtin!(state, "getp", cog_getp);
   add_builtin!(state, "setp", cog_setp);

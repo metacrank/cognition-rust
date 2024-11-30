@@ -1024,6 +1024,16 @@ impl CognitionState {
     self.current().stack.push(Value::Stack(wrapper));
   }
 
+  pub fn ensure_quoted(&mut self, s: &mut Stack) {
+    for val in s.iter_mut() {
+      if !(val.is_stack() || val.is_macro()) {
+        let new_val = self.pool.get_vstack(1);
+        let old_val = std::mem::replace(val, Value::Stack(new_val));
+        val.vstack_mut().container.stack.push(old_val);
+      }
+    }
+  }
+
   pub fn is_high_tide(&self) -> bool {
     if let Some(ref cranks) = self.current_ref().cranks {
       if let Some(crank) = cranks.first() {

@@ -169,6 +169,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "fllib-filename", cog_fllib_filename);
   add_builtin!(state, "fllibs", cog_fllibs);
   add_builtin!(state, "name", cog_name);
-  add_builtin!(state, "name", cog_name);
+  add_builtin!(state, "set-name", cog_set_name);
   add_builtin!(state, "library", cog_library);
 }

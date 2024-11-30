@@ -7,7 +7,7 @@ pub fn cog_cd(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  ensure_quoted!(state, v.vstack_mut().container.stack);
+  state.ensure_quoted(&mut v.vstack_mut().container.stack);
   state.stack.push(v);
   state
 }
@@ -22,7 +22,7 @@ pub fn cog_ccd(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
   state.pool.add_val(stack_v);
-  ensure_quoted!(state, v.vstack_mut().container.stack);
+  state.ensure_quoted(&mut v.vstack_mut().container.stack);
   state.stack.push(v);
   state
 }
@@ -47,7 +47,7 @@ pub fn cog_uncdf(mut state: CognitionState, _: Option<&Value>) -> CognitionState
       state.pool.add_stack(tmpstack);
     } else {
       let mut new_stack = state.pool.get_vstack(DEFAULT_STACK_SIZE);
-    state.contain_copy_attributes(&child.vstack_ref().container, &mut new_stack.container);
+      state.contain_copy_attributes(&child.vstack_ref().container, &mut new_stack.container);
       state.stack.push(Value::Stack(new_stack));
     }
   }
@@ -56,11 +56,12 @@ pub fn cog_uncdf(mut state: CognitionState, _: Option<&Value>) -> CognitionState
 }
 
 pub fn cog_qstack(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
-  let child = state.pop_cur();
+  let mut child = state.pop_cur();
+  let stack = &mut child.vstack_mut().container.stack;
   let mut new_stack = state.pool.get_vstack(DEFAULT_STACK_SIZE);
-  state.contain_copy_attributes(&child.vstack_ref().container, &mut new_stack.container);
-  state.stack.push(Value::Stack(new_stack));
-  state.current().stack.push(child);
+  std::mem::swap(&mut new_stack.container.stack, stack);
+  stack.push(Value::Stack(new_stack));
+  state.stack.push(child);
   state
 }
 
@@ -94,12 +95,36 @@ pub fn cog_chroot(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  ensure_quoted!(state, v.vstack_mut().container.stack);
+  state.ensure_quoted(&mut v.vstack_mut().container.stack);
   let tmpstack = state.stack;
   state.chroots.push(tmpstack);
   let tmpstack = state.pool.get_stack(DEFAULT_STACK_SIZE);
   state.stack = tmpstack;
   state.stack.push(v);
+  state
+}
+
+pub fn cog_root_questionmark(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let vword = if state.stack.len() > 1 {
+    state.pool.get_vword(0)
+  } else {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t');
+    vword
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
+pub fn cog_su_questionmark(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let vword = if state.chroots.len() > 0 {
+    state.pool.get_vword(0)
+  } else {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t');
+    vword
+  };
+  state.push_quoted(Value::Word(vword));
   state
 }
 
@@ -112,4 +137,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "root", cog_root);
   add_builtin!(state, "su", cog_su);
   add_builtin!(state, "chroot", cog_chroot);
+  add_builtin!(state, "root?", cog_root_questionmark);
+  add_builtin!(state, "su?", cog_root_questionmark);
 }

@@ -109,6 +109,67 @@ pub fn cog_cut(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   state
 }
 
+pub fn cog_ccut(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(vint) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let Some(mut vstr) = stack.pop() else {
+    stack.push(vint);
+    return state.eval_error("TOO FEW ARGUMENTS", w);
+  };
+  if vint.value_stack_ref().len() != 1 || vstr.value_stack_ref().len() != 1 {
+    stack.push(vstr);
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  if !vint.value_stack_ref().first().unwrap().is_word() || !vstr.value_stack_ref().first().unwrap().is_word() {
+    stack.push(vstr);
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  let Some(math) = state.get_math() else {
+    state.current().stack.push(vint);
+    return state.eval_error("MATH BASE ZERO", w);
+  };
+  let string = &mut vstr.value_stack().first_mut().unwrap().vword_mut().str_word;
+  let mut iter = string.char_indices();
+  let result = math.math().stoi(&vint.value_stack_ref().first().unwrap().vword_ref().str_word);
+  state.set_math(math);
+  match result {
+    Ok(mut i) => if i < 0 || i.abs() as usize > string.len() {
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint);
+      return state.eval_error("OUT OF BOUNDS", w)
+    } else {
+      loop {
+        if i == 0 { break }
+        if iter.next().is_none() {
+          state.current().stack.push(vstr);
+          state.current().stack.push(vint);
+          return state.eval_error("OUT OF BOUNDS", w)
+        }
+        i -= 1
+      }
+    },
+    Err(e) => {
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint);
+      return state.eval_error(e, w);
+    },
+  };
+  let new_word = match iter.next() {
+    Some((i, _)) => {
+      let mut new_word = state.pool.get_vword(string.len() - i);
+      new_word.str_word.push_str(&string[i..]);
+      string.truncate(i);
+      new_word
+    },
+    None => state.pool.get_vword(0),
+  };
+  state.current().stack.push(vstr);
+  state.push_quoted(Value::Word(new_word));
+  state
+}
+
 pub fn cog_substr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   if stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) }
@@ -186,6 +247,113 @@ pub fn cog_substr(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   }
   let mut new_word = state.pool.get_vword(int2 - int1);
   new_word.str_word.push_str(&string[int1..int2]);
+  state.pool.add_val(vstr);
+  state.push_quoted(Value::Word(new_word));
+  state
+}
+
+pub fn cog_csubstr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  if stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let vint2 = stack.pop().unwrap();
+  let vint1 = stack.pop().unwrap();
+  let mut vstr = stack.pop().unwrap();
+  if vint1.value_stack_ref().len() != 1 || vint1.value_stack_ref().len() != 1 || vstr.value_stack_ref().len() != 1 {
+    stack.push(vstr);
+    stack.push(vint1);
+    stack.push(vint2);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  if !vint1.value_stack_ref().first().unwrap().is_word() || !vint2.value_stack_ref().first().unwrap().is_word() || !vstr.value_stack_ref().first().unwrap().is_word() {
+    stack.push(vstr);
+    stack.push(vint1);
+    stack.push(vint2);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let Some(math) = state.get_math() else {
+    state.current().stack.push(vstr);
+    state.current().stack.push(vint1);
+    state.current().stack.push(vint2);
+    return state.eval_error("MATH BASE ZERO", w)
+  };
+  let string = &mut vstr.value_stack().first_mut().unwrap().vword_mut().str_word;
+  let int1 = match math.math().stoi(&vint1.value_stack_ref().first().unwrap().vword_ref().str_word) {
+    Ok(i) => if i >= 0 { i as usize } else {
+      state.set_math(math);
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint1);
+      state.current().stack.push(vint2);
+      return state.eval_error("OUT OF BOUNDS", w)
+    },
+    Err(e) => {
+      state.set_math(math);
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint1);
+      state.current().stack.push(vint2);
+      return state.eval_error(e, w)
+    },
+  };
+  let int2 = match math.math().stoi(&vint2.value_stack_ref().first().unwrap().vword_ref().str_word) {
+    Ok(i) => if i >= 0 { i as usize } else {
+      state.set_math(math);
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint1);
+      state.current().stack.push(vint2);
+      return state.eval_error("OUT OF BOUNDS", w)
+    },
+    Err(e) => {
+      state.set_math(math);
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint1);
+      state.current().stack.push(vint2);
+      return state.eval_error(e, w)
+    },
+  };
+  state.set_math(math);
+  if int1 >= int2 {
+    let glen = string.chars().count();
+    if int1 <= glen && int2 <= glen {
+      string.clear();
+      state.current().stack.push(vstr);
+      state.pool.add_val(vint1);
+      state.pool.add_val(vint2);
+      return state
+    } else {
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint1);
+      state.current().stack.push(vint2);
+      return state.eval_error("OUT OF BOUNDS", w)
+    }
+  }
+  let mut iter = string.char_indices();
+  for _ in 0..int1 {
+    if iter.next().is_none() {
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint1);
+      state.current().stack.push(vint2);
+      return state.eval_error("OUT OF BOUNDS", w)
+    }
+  }
+  let i1 = match iter.next() {
+    Some((i, _)) => i,
+    None => string.len(),
+  };
+  for _ in int1..(int2-1) {
+    if iter.next().is_none() {
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint1);
+      state.current().stack.push(vint2);
+      return state.eval_error("OUT OF BOUNDS", w)
+    }
+  }
+  let i2 = match iter.next() {
+    Some((i, _)) => i,
+    None => string.len(),
+  };
+  state.pool.add_val(vint1);
+  state.pool.add_val(vint2);
+  let mut new_word = state.pool.get_vword(i2 - i1);
+  new_word.str_word.push_str(&string[i1..i2]);
   state.pool.add_val(vstr);
   state.push_quoted(Value::Word(new_word));
   state
@@ -415,6 +583,83 @@ pub fn cog_insert(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   state
 }
 
+pub fn cog_cinsert(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(vint) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let Some(mut vstr) = stack.pop() else {
+    stack.push(vint);
+    return state.eval_error("TOO FEW ARGUMENTS", w);
+  };
+  let Some(vsrc) = stack.pop() else {
+    stack.push(vstr);
+    stack.push(vint);
+    return state.eval_error("TOO FEW ARGUMENTS", w)
+  };
+  if vint.value_stack_ref().len() != 1 || vstr.value_stack_ref().len() != 1 {
+    stack.push(vsrc);
+    stack.push(vstr);
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  if !vint.value_stack_ref().first().unwrap().is_word() || !vstr.value_stack_ref().first().unwrap().is_word() {
+    stack.push(vsrc);
+    stack.push(vstr);
+    stack.push(vint);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  }
+  let Some(math) = state.get_math() else {
+    state.current().stack.push(vsrc);
+    state.current().stack.push(vstr);
+    state.current().stack.push(vint);
+    return state.eval_error("MATH BASE ZERO", w);
+  };
+  let string = &vstr.value_stack().first_mut().unwrap().vword_mut().str_word;
+  let source = &vsrc.value_stack_ref().first().unwrap().vword_ref().str_word;
+  let mut iter = source.char_indices();
+  let result = math.math().stoi(&vint.value_stack_ref().first().unwrap().vword_ref().str_word);
+  state.set_math(math);
+  match result {
+    Ok(mut i) => if i < 0 || i.abs() as usize > source.len() {
+      state.current().stack.push(vsrc);
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint);
+      return state.eval_error("OUT OF BOUNDS", w)
+    } else {
+      loop {
+        if i == 0 { break }
+        if iter.next().is_none() {
+          state.current().stack.push(vsrc);
+          state.current().stack.push(vstr);
+          state.current().stack.push(vint);
+          return state.eval_error("OUT OF BOUNDS", w)
+        }
+        i -= 1
+      }
+    },
+    Err(e) => {
+      state.current().stack.push(vsrc);
+      state.current().stack.push(vstr);
+      state.current().stack.push(vint);
+      return state.eval_error(e, w);
+    },
+  };
+  let idx = match iter.next() {
+    Some((i, _)) => i,
+    None => source.len()
+  };
+  let mut new_word = state.pool.get_vword(string.len() + source.len());
+  new_word.str_word.push_str(&source[..idx]);
+  new_word.str_word.push_str(&string);
+  new_word.str_word.push_str(&source[idx..]);
+
+  state.pool.add_val(vint);
+  state.pool.add_val(vstr);
+  state.pool.add_val(vsrc);
+
+  state.push_quoted(Value::Word(new_word));
+  state
+}
+
 pub fn cog_reverse(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
@@ -500,12 +745,15 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "concat", cog_concat);
   add_builtin!(state, "unconcat", cog_unconcat);
   add_builtin!(state, "cut", cog_cut);
+  add_builtin!(state, "ccut", cog_ccut);
   add_builtin!(state, "substr", cog_substr);
+  add_builtin!(state, "csubstr", cog_csubstr);
   add_builtin!(state, "len", cog_len);
   add_builtin!(state, "clen", cog_clen);
   add_builtin!(state, "cat", cog_cat);
   add_builtin!(state, "nth", cog_nth);
   add_builtin!(state, "insert", cog_insert);
+  add_builtin!(state, "cinsert", cog_cinsert);
   add_builtin!(state, "reverse", cog_reverse);
   add_builtin!(state, "word?", cog_word_questionmark);
   add_builtin!(state, "ctoi", cog_ctoi);
