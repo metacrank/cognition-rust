@@ -327,6 +327,14 @@ macro_rules! bad_value_err {
 }
 
 #[macro_export]
+macro_rules! flush {
+  ($f:expr) => {
+    if let Err(e) = $f.flush() {
+      let _ = std::io::stderr().write(format!("{e}").as_bytes()); }
+  }
+}
+
+#[macro_export]
 macro_rules! default_fprint_error {
   ($e:expr) => {
     let _ = std::io::stderr().write("Value::fprint(): error: ".as_bytes());
@@ -359,12 +367,13 @@ macro_rules! fwrite_check {
     for n in 0..s.len() {
       if $crate::fwrite_check_byte!($f, &s[n..n+1], n) { break }
     }
+    flush!($f);
   }
 }
 
 #[macro_export]
 macro_rules! fwrite_check_pretty {
-  ($f:expr,$s:expr) => {{
+  ($f:expr,$s:expr) => {
     let s: &[u8] = $s;
     for n in 0..s.len() {
       match s[n] {
@@ -388,8 +397,9 @@ macro_rules! fwrite_check_pretty {
           if $crate::fwrite_check_byte!($f, &s[n..n+1], n) { break }
         },
       }
-    };
-  }}
+    }
+    flush!($f);
+  }
 }
 
 

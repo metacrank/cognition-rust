@@ -330,11 +330,23 @@ impl Drop for BufWriteCustom {
   }
 }
 
-macro_rules! flush {
-  ($f:expr) => {
-    if let Err(e) = $f.flush() {
-      let _ = io::stderr().write(format!("{e}").as_bytes()); }
+pub struct StringWriter<'a> {
+  ptr: &'a mut String
+}
+
+impl<'a, 's: 'a> StringWriter<'a> {
+  pub fn from(s: &'s mut String) -> Self {
+    Self{ ptr: s }
   }
+}
+
+impl io::Write for StringWriter<'_> {
+  fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+    let s = std::str::from_utf8(buf).map_err(|e| io::Error::other(e))?;
+    self.ptr.push_str(s);
+    Ok(s.len())
+  }
+  fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
 
 pub fn questionmark(state: &CognitionState, f: &mut dyn io::Write) {
@@ -372,6 +384,39 @@ pub fn cog_print(mut state: CognitionState, w: Option<&Value>) -> CognitionState
       let _ = io::stderr().write(format!("{e}").as_bytes()); }}
   flush!(stdout);
   state.pool.add_val(v);
+  state
+}
+
+
+pub fn cog_wprint(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if v.value_stack_ref().iter().any(|x| !x.is_word() && !x.is_fllib() && !x.is_custom() && !x.is_control()) {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let mut vword = state.pool.get_vword(DEFAULT_STRING_LENGTH);
+  let mut string_writer = StringWriter::from(&mut vword.str_word);
+  let handle = |result: io::Result<usize>| if let Err(e) = result {
+    let _ = io::stderr().write(format!("{e}").as_bytes());
+  };
+  for val in v.value_stack_ref().iter() {
+    match val {
+      Value::Word(vw) => handle(string_writer.write(vw.str_word.as_bytes())),
+      Value::FLLib(vf) => if let Some(ref s) = vf.str_word {
+        handle(string_writer.write(s.as_bytes()))
+      },
+      Value::Custom(vc) => vc.custom.printfunc(&mut string_writer),
+      Value::Control(vc) => match vc {
+        VControl::Eval => handle(string_writer.write(b"eval")),
+        VControl::Return => handle(string_writer.write(b"return")),
+        VControl::Ghost => handle(string_writer.write(b"ghost")),
+      },
+      _ => unreachable!(),
+    }
+  }
+  state.current().stack.push(v);
+  state.push_quoted(Value::Word(vword));
   state
 }
 
@@ -1395,6 +1440,7 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "?", cog_questionmark);
   add_builtin!(state, ".", cog_period);
   add_builtin!(state, "print", cog_print);
+  add_builtin!(state, "wprint", cog_wprint);
   add_builtin!(state, "read", cog_read);
   add_builtin!(state, "stdout", cog_stdout);
   add_builtin!(state, "stdin", cog_stdin);
