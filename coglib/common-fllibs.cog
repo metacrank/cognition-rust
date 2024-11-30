@@ -1,0 +1,3 @@
+coglib-dir "/../fllib/graphemes/target/release/libgraphemes.so" concat "graphemes" fllib
+coglib-dir "/../fllib/multithreading/target/release/libmultithreading.so" concat "multithreading" fllib
+coglib-dir "/../fllib/os/target/release/libos.so" concat "os" fllib

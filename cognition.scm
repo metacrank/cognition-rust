@@ -43,10 +43,10 @@
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "611318f65933ea00183113e4cd9e9cc2a04570f9")))
+           (commit "91aae6a223625cc253716ca8d945b04f2144d646")))
      (sha256
       (base32
-       "0hagrvyjxr582iglzbja18gm2rwffyz354f17ckbknb4hmgjdbzk"))))
+       "02lkm6afljhi1bihxl5n2prr3h3lahnx93zg9w61mql53c145p5r"))))
    (build-system cargo-build-system)
    (arguments
     `(#:cargo-inputs
