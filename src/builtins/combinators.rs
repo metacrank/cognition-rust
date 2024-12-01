@@ -102,82 +102,31 @@ pub fn cog_prepose(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   state
 }
 
-pub fn cog_put(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  if state.current_ref().stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
-  let stack = &mut state.current().stack;
-  let i_val = stack.pop().unwrap();
-  let mut v2 = stack.pop().unwrap();
-  let mut v1 = stack.pop().unwrap();
-  let length = v1.value_stack_ref().len();
-  if i > length {
-    stack.push(v1);
-    stack.push(v2);
-    stack.push(i_val);
-    return state.eval_error("OUT OF BOUNDS", w)
-  }
-  let mut tmpstack = state.pool.get_stack(length - i);
-  for _ in i..length {
-    tmpstack.push(v1.value_stack().pop().unwrap())
-  }
-  v1.value_stack().append(v2.value_stack());
-  while let Some(v) = tmpstack.pop() {
-    v1.value_stack().push(v)
-  }
-  state.pool.add_val(i_val);
-  state.pool.add_stack(tmpstack);
-  state.current().stack.push(v1);
-  state
-}
-
-pub fn cog_get(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
-  let stack = &mut state.current().stack;
-  let i_val = stack.pop().unwrap();
-  let mut v1 = stack.pop().unwrap();
-  if i >= v1.value_stack_ref().len() {
-    stack.push(v1);
-    stack.push(i_val);
-    return state.eval_error("OUT OF BOUNDS", w)
-  }
-  let v = v1.value_stack().remove(i);
-  stack.push(v1);
-  state.pool.add_val(i_val);
-  state.push_quoted(v);
-  state
-}
-
-pub fn cog_remove(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  if state.current_ref().stack.len() < 3 { return state.eval_error("TOO FEW ARGUMENTS", w) };
+pub fn cog_displace(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 4 { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let (i, j) = get_2_unsigned!(state, w, isize, ACTIVE);
   let i = i as usize;
   let j = j as usize;
   let stack = &mut state.current().stack;
   let j_val = stack.pop().unwrap();
   let i_val = stack.pop().unwrap();
+  let mut v2 = stack.pop().unwrap();
   let mut v1 = stack.pop().unwrap();
-  let length = v1.value_stack_ref().len();
-  if i > length || j > length {
+  if i > v1.value_stack_ref().len() || j > v1.value_stack_ref().len() {
     stack.push(v1);
+    stack.push(v2);
     stack.push(i_val);
     stack.push(j_val);
     return state.eval_error("OUT OF BOUNDS", w)
   }
+  let iter = v1.value_stack().splice(i..j, v2.value_stack().drain(..));
+  let mut tmp_stack = state.pool.get_stack(j - i);
+  for v in iter { tmp_stack.push(v) }
+  state.pool.add_stack(std::mem::replace(v2.value_stack(), tmp_stack));
   state.pool.add_val(i_val);
   state.pool.add_val(j_val);
-  if i >= j {
-    state.current().stack.push(v1);
-    let vstack = state.pool.get_vstack(0);
-    state.current().stack.push(Value::Stack(vstack));
-    return state
-  }
-  let mut vstack = state.pool.get_vstack(j - i);
-  for v in v1.value_stack().drain(i..j) {
-    vstack.container.stack.push(v);
-  }
   state.current().stack.push(v1);
-  state.current().stack.push(Value::Stack(vstack));
+  state.current().stack.push(v2);
   state
 }
 
@@ -374,9 +323,7 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "cast", cog_cast);
   add_builtin!(state, "compose", cog_compose);
   add_builtin!(state, "prepose", cog_prepose);
-  add_builtin!(state, "put", cog_put);
-  add_builtin!(state, "get", cog_get);
-  add_builtin!(state, "remove", cog_remove);
+  add_builtin!(state, "displace", cog_displace);
   add_builtin!(state, "invert", cog_invert);
   add_builtin!(state, "if", cog_if, EVAL);
   add_builtin!(state, "dip", cog_dip);

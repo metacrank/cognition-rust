@@ -118,10 +118,10 @@ def
 [ ↋ ] split swap [ ↊ ] split drop [ macro ] compose
 [ 8 ] split quote [ prepose ] compose dip
 [ 7 ] split eval eval
-[ 1 ] get drop [ \ ) ] [ 1 ] put
+[ ] [ 1 ] [ 2 ] displace drop [ \ ) ] [ 1 ] [ 1 ] displace drop
 quote quote quote [ prepose ] compose dip
 [ 6 ] split eval eval
-[ 1 ] get drop [ \ ) ] [ 1 ] put
+[ ] [ 1 ] [ 2 ] displace drop [ \ ) ] [ 1 ] [ 1 ] displace drop
 quote quote quote [ prepose ] compose dip
 prepose
 def
