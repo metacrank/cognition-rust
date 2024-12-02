@@ -1,9 +1,10 @@
 pub mod custom;
 
-use crate::custom::*;
+pub use crate::custom::*;
 use cognition::{*, builtins::stackops::cog_swap};
+use time::DurationCustom;
 use std::thread;
-use std::sync::{mpsc, mpsc::TryRecvError, Arc};
+use std::sync::{mpsc, mpsc::TryRecvError, mpsc::RecvTimeoutError, Arc};
 
 fn new_cogstate(state: &mut CognitionState, v: Value) -> CognitionState {
   let mut stack = state.pool.get_stack(DEFAULT_STACK_SIZE);
@@ -224,6 +225,31 @@ pub fn cog_try_recv(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   state
 }
 
+pub fn cog_recv_timeout(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let vd = get_custom!(state, w);
+  let vrx = get_custom!(state, w, { state.current().stack.push(vd) });
+  let vd_custom = vd.value_stack_ref().first().unwrap().vcustom_ref();
+  let vrx_custom = vrx.value_stack_ref().first().unwrap().vcustom_ref();
+  let duration_custom = vd_custom.custom.as_any().downcast_ref::<DurationCustom>();
+  let recv_custom = vrx_custom.custom.as_any().downcast_ref::<RecvCustom>();
+  println!("{}, {}", duration_custom.is_some(), recv_custom.is_some());
+  let (Some(duration_custom), Some(recv_custom)) = (duration_custom, recv_custom) else {
+    state.current().stack.push(vrx);
+    state.current().stack.push(vd);
+    return state.eval_error("BAD ARGUMENT TYPE", w);
+  };
+  let receiver = recv_custom.rx.as_ref().expect("uninitialized RecvCustom on stack");
+  match receiver.recv_timeout(duration_custom.duration) {
+    Ok(value) => state.current().stack.push(value.0),
+    Err(RecvTimeoutError::Timeout) => state = builtins::combinators::cog_stack(state, w),
+    Err(RecvTimeoutError::Disconnected) => state.eval_error_mut("DISCONNECTED CHANNEL", w)
+  }
+  state.pool.add_val(vd);
+  state.current().stack.push(vrx);
+  state
+}
+
 pub fn cog_share(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let shared_vcustom = get_shared_custom(&mut state.pool, Some(v));
@@ -397,6 +423,7 @@ pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
   add_word!(state, lib, "send", cog_send);
   add_word!(state, lib, "recv", cog_recv);
   add_word!(state, lib, "try-recv", cog_try_recv);
+  add_word!(state, lib, "recv-timeout", cog_recv_timeout);
   add_word!(state, lib, "share", cog_share);
   add_word!(state, lib, "steal", cog_steal);
   add_word!(state, lib, "give", cog_give);

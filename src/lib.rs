@@ -27,6 +27,8 @@ use std::fmt::Display;
 use std::io::{Write, stdout};
 use std::sync::Arc;
 
+pub const VERSION: &'static str = "0.3.4";
+
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library);
 
@@ -171,6 +173,7 @@ pub struct Container {
   pub err_stack: Option<Stack>,
   pub cranks: Option<Cranks>,
   pub math: Option<Math>,
+  pub word_table: Option<WordTable>,
   pub faliases: Option<Faliases>,
   pub delims: Option<String>,
   pub ignored: Option<String>,
@@ -178,8 +181,6 @@ pub struct Container {
   pub dflag: bool,
   pub iflag: bool,
   pub sflag: bool,
-
-  word_table: Option<WordTable>,
 }
 
 impl Default for Container {
@@ -189,6 +190,7 @@ impl Default for Container {
       err_stack: None,
       cranks: None,
       math: None,
+      word_table: None,
       faliases: None,
       delims: None,
       ignored: None,
@@ -196,8 +198,6 @@ impl Default for Container {
       dflag: false,
       iflag: true,
       sflag: true,
-
-      word_table: None,
     }
   }
 }

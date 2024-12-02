@@ -1,5 +1,4 @@
 use crate::*;
-use std::{thread, time};
 
 pub fn cog_panic(_: CognitionState, _: Option<&Value>) -> CognitionState { panic!() }
 pub fn cog_nop(state: CognitionState, _: Option<&Value>) -> CognitionState { state }
@@ -83,51 +82,6 @@ pub fn cog_setargs(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     },
     _ => bad_value_err!(),
   };
-  state
-}
-
-pub fn cog_sleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
-  if i > u64::MAX as usize {
-    return state.eval_error("OUT OF BOUNDS", w);
-  } else {
-    let v = state.current().stack.pop().unwrap();
-    state.pool.add_val(v);
-  }
-  thread::sleep(time::Duration::from_secs(i as u64));
-  state
-}
-pub fn cog_msleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
-  if i > u64::MAX as usize {
-    return state.eval_error("OUT OF BOUNDS", w);
-  } else {
-    let v = state.current().stack.pop().unwrap();
-    state.pool.add_val(v);
-  }
-  thread::sleep(time::Duration::from_millis(i as u64));
-  state
-}
-pub fn cog_usleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
-  if i > u64::MAX as usize {
-    return state.eval_error("OUT OF BOUNDS", w);
-  } else {
-    let v = state.current().stack.pop().unwrap();
-    state.pool.add_val(v);
-  }
-  thread::sleep(time::Duration::from_micros(i as u64));
-  state
-}
-pub fn cog_nanosleep(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let i = get_unsigned!(state, w, isize, ACTIVE) as usize;
-  if i > u64::MAX as usize {
-    return state.eval_error("OUT OF BOUNDS", w);
-  } else {
-    let v = state.current().stack.pop().unwrap();
-    state.pool.add_val(v);
-  }
-  thread::sleep(time::Duration::from_nanos(i as u64));
   state
 }
 
@@ -312,6 +266,13 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state.with_math(math)
 }
 
+pub fn cog_version(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let mut vword = state.pool.get_vword(VERSION.len());
+  vword.str_word.push_str(VERSION);
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
 pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "panic", cog_panic);
   add_builtin!(state, "nothing");
@@ -322,10 +283,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "reset", cog_reset);
   add_builtin!(state, "getargs", cog_getargs);
   add_builtin!(state, "setargs", cog_setargs);
-  add_builtin!(state, "sleep", cog_sleep);
-  add_builtin!(state, "msleep", cog_msleep);
-  add_builtin!(state, "μsleep", cog_usleep);
-  add_builtin!(state, "nanosleep", cog_nanosleep);
   add_builtin!(state, "void", cog_void);
   add_builtin!(state, "void?", cog_void_questionmark);
   add_builtin!(state, "custom?", cog_custom_questionmark);
@@ -335,4 +292,5 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "var", cog_var);
   add_builtin!(state, "getp", cog_getp);
   add_builtin!(state, "setp", cog_setp);
+  add_builtin!(state, "version", cog_version);
 }

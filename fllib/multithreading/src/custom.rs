@@ -29,7 +29,7 @@ pub fn get_thread_custom_clone(pool: &mut Pool, handle: ThreadCustomHandle) -> V
 
 pub fn get_thread_custom(pool: &mut Pool, option: OptionHandle) -> VCustom {
   get_from_custom_pool! (
-    pool, "ThreadCustom", None, thread_custom, ThreadCustom,
+    pool, "ThreadCustoms", None, thread_custom, ThreadCustom,
     {
       const ERROR: &str = "null or non-unique thread custom in custom pool";
       let arc = thread_custom.handle.as_mut().expect(ERROR);
@@ -46,7 +46,7 @@ pub fn get_thread_custom(pool: &mut Pool, option: OptionHandle) -> VCustom {
 
 pub fn get_send_custom(pool: &mut Pool, tx: Option<Sender<ValueWrapper>>) -> VCustom {
   get_from_custom_pool! (
-    pool, "SendCustom", None, send_custom, SendCustom,
+    pool, "SendCustoms", None, send_custom, SendCustom,
     { send_custom.tx = tx },
     { VCustom::with_custom(Box::new(SendCustom{ tx })) }
   )
@@ -54,7 +54,7 @@ pub fn get_send_custom(pool: &mut Pool, tx: Option<Sender<ValueWrapper>>) -> VCu
 
 pub fn get_recv_custom(pool: &mut Pool, rx: Option<Receiver<ValueWrapper>>) -> VCustom {
   get_from_custom_pool! (
-    pool, "RecvCustom", None, recv_custom, RecvCustom,
+    pool, "RecvCustoms", None, recv_custom, RecvCustom,
     { recv_custom.rx = rx },
     { VCustom::with_custom(Box::new(RecvCustom{ rx })) }
   )
@@ -70,7 +70,7 @@ pub fn get_shared_custom_clone(pool: &mut Pool, value: SharedCustomValue) -> VCu
 
 pub fn get_shared_custom(pool: &mut Pool, option: Option<Value>) -> VCustom {
   get_from_custom_pool! (
-    pool, "SharedCustom", None, shared_custom, SharedCustom,
+    pool, "SharedCustoms", None, shared_custom, SharedCustom,
     {
       const ERROR: &str = "null or non-unique shared custom in custom pool";
       let arc = shared_custom.value.as_mut().expect(ERROR);
@@ -85,20 +85,13 @@ pub fn get_shared_custom(pool: &mut Pool, option: Option<Value>) -> VCustom {
   )
 }
 
-fn clear_pool(pool: &mut Pool, name: &str) {
-  if let Some((k, p)) = pool.custom_pools.remove_entry(name) {
-    pool.add_string(k);
-    drop(p);
-  }
-}
-
 pub fn clear_pools(pool: &mut Pool) {
-  clear_pool(pool, custom_pool_name!("ThreadCustom"));
-  clear_pool(pool, custom_pool_name!("ThreadCustomClones"));
-  clear_pool(pool, custom_pool_name!("SendCustom"));
-  clear_pool(pool, custom_pool_name!("RecvCustom"));
-  clear_pool(pool, custom_pool_name!("SharedCustom"));
-  clear_pool(pool, custom_pool_name!("SharedCustomClones"));
+  pool.clear_custom_pool(custom_pool_name!("ThreadCustoms"));
+  pool.clear_custom_pool(custom_pool_name!("ThreadCustomClones"));
+  pool.clear_custom_pool(custom_pool_name!("SendCustoms"));
+  pool.clear_custom_pool(custom_pool_name!("RecvCustoms"));
+  pool.clear_custom_pool(custom_pool_name!("SharedCustoms"));
+  pool.clear_custom_pool(custom_pool_name!("SharedCustomClones"));
 }
 
 #[custom(serde_as_void)]
@@ -125,7 +118,7 @@ impl Custom for ThreadCustom {
     if let Some(ref arc) = self.handle {
       if Arc::<Mutex<OptionHandle>>::strong_count(arc) == 1 {
         drop(arc.lock().map_or(None, |mut v| v.take()));
-        return CustomPoolPackage::from(pool, custom_pool_name!("ThreadCustom"), None)
+        return CustomPoolPackage::from(pool, custom_pool_name!("ThreadCustoms"), None)
       }
     }
     drop(self.handle.take());
@@ -143,7 +136,7 @@ impl Custom for SendCustom {
   }
   fn custom_pool(&mut self, pool: &mut Pool) -> CustomPoolPackage {
     drop(self.tx.take());
-    CustomPoolPackage::from(pool, custom_pool_name!("SendCustom"), None)
+    CustomPoolPackage::from(pool, custom_pool_name!("SendCustoms"), None)
   }
 }
 
@@ -158,7 +151,7 @@ impl Custom for RecvCustom {
   }
   fn custom_pool(&mut self, pool: &mut Pool) -> CustomPoolPackage {
     drop(self.rx.take());
-    CustomPoolPackage::from(pool, custom_pool_name!("RecvCustom"), None)
+    CustomPoolPackage::from(pool, custom_pool_name!("RecvCustoms"), None)
   }
 }
 
@@ -224,7 +217,7 @@ impl Custom for SharedCustom {
         if let Some(v) = arc.lock().map_or(None, |mut v| v.take()) {
           pool.add_val(v);
         }
-        return CustomPoolPackage::from(pool, custom_pool_name!("SharedCustom"), None)
+        return CustomPoolPackage::from(pool, custom_pool_name!("SharedCustoms"), None)
       }
     }
     drop(self.value.take());

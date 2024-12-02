@@ -8,8 +8,6 @@ use std::io::stdin;
 
 use cognition::*;
 
-const VERSION: &'static str = "0.3.3 alpha";
-
 fn main() -> ExitCode {
   let args: Vec<String> = env::args().collect();
   let argc = args.len();

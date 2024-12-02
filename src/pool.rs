@@ -513,6 +513,13 @@ impl Pool {
     })
   }
 
+  pub fn clear_custom_pool(&mut self, name: &str) {
+    if let Some((k, p)) = self.custom_pools.remove_entry(name) {
+      self.add_string(k);
+      drop(p);
+    }
+  }
+
   pub fn get_capacity(&self) -> [isize;32] {
     [
       self.vwords.as_ref().map_or(0, |t| t.size().min(isize::MAX as usize)) as isize,
