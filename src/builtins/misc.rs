@@ -266,13 +266,6 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
   state.with_math(math)
 }
 
-pub fn cog_version(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
-  let mut vword = state.pool.get_vword(VERSION.len());
-  vword.str_word.push_str(VERSION);
-  state.push_quoted(Value::Word(vword));
-  state
-}
-
 pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "panic", cog_panic);
   add_builtin!(state, "nothing");
@@ -292,5 +285,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "var", cog_var);
   add_builtin!(state, "getp", cog_getp);
   add_builtin!(state, "setp", cog_setp);
-  add_builtin!(state, "version", cog_version);
+
+  state.add_const_word("version", VERSION);
 }

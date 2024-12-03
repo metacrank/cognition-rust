@@ -148,6 +148,34 @@ pub trait CustomTypeData {
   fn deserialize_fn() -> DeserializeFn<dyn Custom>;
 }
 
+pub trait CustomCast {
+  unsafe fn as_custom<T: CustomTypeData>(self) -> Option<Box<T>>;
+  unsafe fn as_custom_ref<T: CustomTypeData>(&self) -> Option<&T>;
+  unsafe fn as_custom_mut<T: CustomTypeData>(&mut self) -> Option<&mut T>;
+}
+
+impl CustomCast for Box<dyn Custom> {
+  unsafe fn as_custom<T>(self) -> Option<Box<T>>
+  where T: CustomTypeData
+  {
+    if <T>::custom_type_name() != (*self).custom_type_name() { return None }
+    let raw = Box::into_raw(self);
+    Some(Box::from_raw(raw.cast::<T>()))
+  }
+  unsafe fn as_custom_ref<T>(&self) -> Option<&T>
+  where T: CustomTypeData
+  {
+    if <T>::custom_type_name() != (*self).custom_type_name() { return None }
+    Some(&*(&**self as *const dyn Custom).cast::<T>())
+  }
+  unsafe fn as_custom_mut<T>(&mut self) -> Option<&mut T>
+  where T: CustomTypeData
+  {
+    if <T>::custom_type_name() != (*self).custom_type_name() { return None }
+    Some(&mut *(&mut **self as *mut dyn Custom).cast::<T>())
+  }
+}
+
 /// Useful Custom type
 #[derive(Serialize, Deserialize)]
 pub struct Void {}
@@ -823,7 +851,7 @@ impl CognitionState {
     retval
   }
 
-  pub fn string_copy(&mut self, s: &String) -> String {
+  pub fn string_copy(&mut self, s: &str) -> String {
     let mut newstr = self.pool.get_string(s.len());
     newstr.push_str(s);
     newstr
@@ -1002,6 +1030,29 @@ impl CognitionState {
     if let Some(v) = self.current().word_table.as_mut().unwrap().insert(name, word_def) {
       self.pool.add_word_def(v);
     }
+  }
+
+  pub fn add_constant(&mut self, name: &str, v: Value) {
+    let mut vstack = self.pool.get_vstack(1);
+    vstack.container.stack.push(v);
+    let name = self.string_copy(name);
+    self.def(Value::Stack(vstack), name)
+  }
+
+  pub fn add_const_value(&mut self, name: &str, v: Value) {
+    let mut vstack = self.pool.get_vstack(1);
+    vstack.container.stack.push(v);
+    self.add_constant(name, Value::Stack(vstack))
+  }
+
+  pub fn add_const_custom(&mut self, name: &str, custom: Box<dyn Custom>) {
+    self.add_const_value(name, Value::Custom(VCustom::with_custom(custom)))
+  }
+
+  pub fn add_const_word(&mut self, name: &str, s: &str) {
+    let mut vword = self.pool.get_vword(s.len());
+    vword.str_word.push_str(s);
+    self.add_const_value(name, Value::Word(vword))
   }
 
   pub unsafe fn load_fllib(&mut self, lib_name: &String, filename: &String) -> Option<&'static str> {

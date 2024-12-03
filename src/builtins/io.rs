@@ -1442,11 +1442,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "print", cog_print);
   add_builtin!(state, "wprint", cog_wprint);
   add_builtin!(state, "read", cog_read);
-  add_builtin!(state, "stdout", cog_stdout);
-  add_builtin!(state, "stdin", cog_stdin);
-  add_builtin!(state, "stderr", cog_stderr);
-  add_builtin!(state, "stdout", cog_stdout);
-  add_builtin!(state, "empty", cog_empty);
   add_builtin!(state, "fopen", cog_fopen);
   add_builtin!(state, "file", cog_file);
   add_builtin!(state, "file-new", cog_file_new);
@@ -1475,4 +1470,9 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "bufreader?", cog_bufreader_questionmark);
   add_builtin!(state, "bufwriter?", cog_bufwriter_questionmark);
   add_builtin!(state, "stream?", cog_stream_questionmark);
+
+  state.add_const_custom("stdout", Box::new(WriteCustom{ writer: Some(Box::new(io::stdout())) }));
+  state.add_const_custom("stderr", Box::new(WriteCustom{ writer: Some(Box::new(io::stderr())) }));
+  state.add_const_custom("stdin", Box::new(ReadCustom{ reader: Some(Box::new(io::stdin())) }));
+  state.add_const_custom("empty", Box::new(ReadWriteCustom{ stream: Some(Box::new(io::empty())) }));
 }

@@ -231,9 +231,8 @@ pub fn cog_recv_timeout(mut state: CognitionState, w: Option<&Value>) -> Cogniti
   let vrx = get_custom!(state, w, { state.current().stack.push(vd) });
   let vd_custom = vd.value_stack_ref().first().unwrap().vcustom_ref();
   let vrx_custom = vrx.value_stack_ref().first().unwrap().vcustom_ref();
-  let duration_custom = vd_custom.custom.as_any().downcast_ref::<DurationCustom>();
+  let duration_custom = unsafe { vd_custom.custom.as_custom_ref::<DurationCustom>() };
   let recv_custom = vrx_custom.custom.as_any().downcast_ref::<RecvCustom>();
-  println!("{}, {}", duration_custom.is_some(), recv_custom.is_some());
   let (Some(duration_custom), Some(recv_custom)) = (duration_custom, recv_custom) else {
     state.current().stack.push(vrx);
     state.current().stack.push(vd);

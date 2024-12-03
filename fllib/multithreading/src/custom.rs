@@ -23,7 +23,7 @@ pub fn get_thread_custom_clone(pool: &mut Pool, handle: ThreadCustomHandle) -> V
   get_from_custom_pool! (
     pool, "ThreadCustomClones", None, thread_custom, ThreadCustom,
     { thread_custom.handle = handle },
-    { VCustom::with_custom(Box::new(ThreadCustom{ handle })) }
+    { Box::new(ThreadCustom{ handle }) }
   )
 }
 
@@ -39,7 +39,7 @@ pub fn get_thread_custom(pool: &mut Pool, option: OptionHandle) -> VCustom {
     },
     {
       let handle = Some(Arc::new(Mutex::new(option)));
-      VCustom::with_custom(Box::new(ThreadCustom{ handle }))
+      Box::new(ThreadCustom{ handle })
     }
   )
 }
@@ -48,7 +48,7 @@ pub fn get_send_custom(pool: &mut Pool, tx: Option<Sender<ValueWrapper>>) -> VCu
   get_from_custom_pool! (
     pool, "SendCustoms", None, send_custom, SendCustom,
     { send_custom.tx = tx },
-    { VCustom::with_custom(Box::new(SendCustom{ tx })) }
+    { Box::new(SendCustom{ tx }) }
   )
 }
 
@@ -56,7 +56,7 @@ pub fn get_recv_custom(pool: &mut Pool, rx: Option<Receiver<ValueWrapper>>) -> V
   get_from_custom_pool! (
     pool, "RecvCustoms", None, recv_custom, RecvCustom,
     { recv_custom.rx = rx },
-    { VCustom::with_custom(Box::new(RecvCustom{ rx })) }
+    { Box::new(RecvCustom{ rx }) }
   )
 }
 
@@ -64,7 +64,7 @@ pub fn get_shared_custom_clone(pool: &mut Pool, value: SharedCustomValue) -> VCu
   get_from_custom_pool! (
     pool, "SharedCustomClones", None, shared_custom, SharedCustom,
     { shared_custom.value = value },
-    { VCustom::with_custom(Box::new(SharedCustom{ value })) }
+    { Box::new(SharedCustom{ value }) }
   )
 }
 
@@ -80,7 +80,7 @@ pub fn get_shared_custom(pool: &mut Pool, option: Option<Value>) -> VCustom {
     },
     {
       let value = Some(Arc::new(Mutex::new(option)));
-      VCustom::with_custom(Box::new(SharedCustom{ value }))
+      Box::new(SharedCustom{ value })
     }
   )
 }

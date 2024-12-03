@@ -12,7 +12,7 @@
 (define-public cognition-macros-0.1
   (package
    (name "cognition-macros")
-   (version "0.1.1")
+   (version "0.1.2")
    (source
     (origin
      (method git-fetch)
@@ -37,7 +37,7 @@
 (define-public cognition-0.3
   (package
    (name "cognition")
-   (version "0.3.3")
+   (version "0.3.4")
    (source
     (origin
      (method git-fetch)

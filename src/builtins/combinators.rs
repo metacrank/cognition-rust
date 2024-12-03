@@ -18,19 +18,19 @@ pub fn cog_child(mut state: CognitionState, _: Option<&Value>) -> CognitionState
 }
 
 pub fn cog_stack(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
-  let vstack = state.pool.get_vstack(0);
+  let vstack = state.pool.get_vstack(DEFAULT_STACK_SIZE);
   state.current().stack.push(Value::Stack(vstack));
   state
 }
 
 pub fn cog_macro(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
-  let vmacro = state.pool.get_vmacro(0);
+  let vmacro = state.pool.get_vmacro(DEFAULT_STACK_SIZE);
   state.current().stack.push(Value::Macro(vmacro));
   state
 }
 
 pub fn cog_sub(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
-  let mut vstack = state.pool.get_vstack(0);
+  let mut vstack = state.pool.get_vstack(DEFAULT_STACK_SIZE);
   vstack.container.faliases = state.default_faliases();
   state.current().stack.push(Value::Stack(vstack));
   super::add_builtins(&mut state);

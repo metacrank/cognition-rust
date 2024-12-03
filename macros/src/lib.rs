@@ -233,10 +233,10 @@ pub fn custom(args: TokenStream, input: TokenStream) -> TokenStream {
   let args: CustomArgs = parse_macro_input!(args as CustomArgs);
   let mut input = parse_macro_input!(input as ItemImpl);
 
-  let (name, custom_type) = match &args.name {
-    Some(n) => (quote!{ #n }, parse_str::<Type>(n.suffix()).unwrap()),
+  let (name, custom_type, snake_name) = match &args.name {
+    Some(n) => (quote!{ #n }, parse_str::<Type>(n.suffix()).unwrap(), snake_name(n.suffix())),
     None => match type_name(&input.self_ty) {
-      Some(n) => (quote!{ #n }, parse_str::<Type>(&n).unwrap()),
+      Some(n) => (quote!{ #n }, parse_str::<Type>(&n).unwrap(), snake_name(&n)),
       None => {
         let msg = "Custom impl must specify a custom type with syn::Type::Path or syn::Type::Group";
         return Error::new_spanned(&input.self_ty, msg).to_compile_error().into();
@@ -254,6 +254,27 @@ pub fn custom(args: TokenStream, input: TokenStream) -> TokenStream {
     }
   });
 
+  add_custom_pool(&mut input);
+
+  let mut expanded = if args.serde_as_void {
+    void_serde(name, custom_type.clone())
+  } else if args.cognition_serde {
+    cognition_serde(name, custom_type.clone())
+  } else if args.option_serde {
+    option_serde(name, custom_type.clone())
+  } else {
+    default_serde(name, custom_type.clone())
+  };
+
+  if serde_as_void { add_serialize(&mut expanded, custom_type.clone()) }
+  expanded.extend(quote!{ #input });
+
+  add_downcast(&mut expanded, &snake_name, custom_type);
+
+  expanded.into()
+}
+
+fn add_custom_pool(input: &mut ItemImpl) {
   let cond = |item: &ImplItem| 'ret: {
     if let ImplItem::Fn(f) = item {
       if f.sig.ident == Ident::new("custom_pool", Span::call_site()) {
@@ -268,76 +289,119 @@ pub fn custom(args: TokenStream, input: TokenStream) -> TokenStream {
       fn custom_pool(&mut self, _: &mut Pool) -> CustomPoolPackage { CustomPoolPackage::None }
     })
   }
+}
 
-  let mut expanded = if args.serde_as_void {
-    quote! {
-      impl CustomTypeData for #custom_type {
-        fn custom_type_name() -> &'static str {
-          concat!(module_path!(), "::", #name)
-        }
-        fn deserialize_fn() -> DeserializeFn<dyn Custom> {
-          (|deserializer, _state| Ok(
-            Box::new(erased_serde::deserialize::<Void>(deserializer)?),
-          )) as DeserializeFn<dyn Custom>
-        }
+fn void_serde(name: proc_macro2::TokenStream, custom_type: Type) -> proc_macro2::TokenStream {
+  quote! {
+    impl CustomTypeData for #custom_type {
+      fn custom_type_name() -> &'static str {
+        concat!(module_path!(), "::", #name)
+      }
+      fn deserialize_fn() -> DeserializeFn<dyn Custom> {
+        (|deserializer, _state| Ok(
+          Box::new(erased_serde::deserialize::<Void>(deserializer)?),
+        )) as DeserializeFn<dyn Custom>
       }
     }
-  } else if args.cognition_serde {
-    quote! {
-      impl CustomTypeData for #custom_type {
-        fn custom_type_name() -> &'static str {
-          concat!(module_path!(), "::", #name)
-        }
-        fn deserialize_fn() -> DeserializeFn<dyn Custom> {
-          (|deserializer, state| Ok(
-            Box::new(<#custom_type as CognitionDeserialize>::cognition_deserialize(deserializer, state)?),
-          )) as DeserializeFn<dyn Custom>
-        }
-      }
-    }
-  } else if args.option_serde {
-    quote! {
-      impl CustomTypeData for #custom_type {
-        fn custom_type_name() -> &'static str {
-          concat!(module_path!(), "::", #name)
-        }
-        fn deserialize_fn() -> DeserializeFn<dyn Custom> {
-          (|deserializer, state| Ok(
-            match <#custom_type as OptionDeserialize>::option_deserialize(deserializer, state)? {
-              Some(c) => Box::new(c),
-              None => Box::new(Void{})
-            }
-          )) as DeserializeFn<dyn Custom>
-        }
-      }
-    }
-  } else {
-    quote! {
-      impl CustomTypeData for #custom_type {
-        fn custom_type_name() -> &'static str {
-          concat!(module_path!(), "::", #name)
-        }
-        fn deserialize_fn() -> DeserializeFn<dyn Custom> {
-          (|deserializer, _state| Ok(
-            Box::new(erased_serde::deserialize::<#custom_type>(deserializer)?),
-          )) as DeserializeFn<dyn Custom>
-        }
-      }
-    }
-  };
-
-  if serde_as_void {
-    expanded.extend(quote! {
-      impl ::serde::ser::Serialize for #custom_type {
-        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-          S: ::serde::ser::Serializer,
-        { Void::serialize(&Void{}, serializer) }
-      }
-    });
   }
-  expanded.extend(quote!{ #input });
-  expanded.into()
+}
+
+fn cognition_serde(name: proc_macro2::TokenStream, custom_type: Type) -> proc_macro2::TokenStream {
+  quote! {
+    impl CustomTypeData for #custom_type {
+      fn custom_type_name() -> &'static str {
+        concat!(module_path!(), "::", #name)
+      }
+      fn deserialize_fn() -> DeserializeFn<dyn Custom> {
+        (|deserializer, state| Ok(
+          Box::new(<#custom_type as CognitionDeserialize>::cognition_deserialize(deserializer, state)?),
+        )) as DeserializeFn<dyn Custom>
+      }
+    }
+  }
+}
+
+fn option_serde(name: proc_macro2::TokenStream, custom_type: Type) -> proc_macro2::TokenStream {
+  quote! {
+    impl CustomTypeData for #custom_type {
+      fn custom_type_name() -> &'static str {
+        concat!(module_path!(), "::", #name)
+      }
+      fn deserialize_fn() -> DeserializeFn<dyn Custom> {
+        (|deserializer, state| Ok(
+          match <#custom_type as OptionDeserialize>::option_deserialize(deserializer, state)? {
+            Some(c) => Box::new(c),
+            None => Box::new(Void{})
+          }
+        )) as DeserializeFn<dyn Custom>
+      }
+    }
+  }
+}
+
+fn default_serde(name: proc_macro2::TokenStream, custom_type: Type) -> proc_macro2::TokenStream {
+  quote! {
+    impl CustomTypeData for #custom_type {
+      fn custom_type_name() -> &'static str {
+        concat!(module_path!(), "::", #name)
+      }
+      fn deserialize_fn() -> DeserializeFn<dyn Custom> {
+        (|deserializer, _state| Ok(
+          Box::new(erased_serde::deserialize::<#custom_type>(deserializer)?),
+        )) as DeserializeFn<dyn Custom>
+      }
+    }
+  }
+}
+
+fn add_serialize(expanded: &mut proc_macro2::TokenStream, custom_type: Type) {
+  expanded.extend(quote! {
+    impl ::serde::ser::Serialize for #custom_type {
+      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+      where
+        S: ::serde::ser::Serializer,
+      { Void::serialize(&Void{}, serializer) }
+    }
+  });
+}
+
+fn add_downcast(expanded: &mut proc_macro2::TokenStream, snake_name: &str, custom_type: Type) {
+  let downcast_ref = downcast_snake(snake_name, "_ref");
+  let downcast_mut = downcast_snake(snake_name, "_mut");
+
+  expanded.extend(quote! {
+    pub fn #downcast_ref(custom: &dyn Custom) -> Option<&#custom_type> {
+      custom.as_any().downcast_ref::<#custom_type>()
+    }
+    pub fn #downcast_mut(custom: &mut dyn Custom) -> Option<&mut #custom_type> {
+      custom.as_any_mut().downcast_mut::<#custom_type>()
+    }
+  });
+}
+
+fn downcast_snake(snake_name: &str, ext: &str) -> proc_macro2::TokenStream {
+  let mut downcast = String::from("downcast_");
+  downcast.push_str(snake_name);
+  downcast.push_str(ext);
+  let identifier = Ident::new(&downcast, Span::call_site());
+  quote!{ #identifier }
+}
+
+fn snake_name(name: &str) -> String {
+  let mut snake_name = String::new();
+  let mut iter = name.chars();
+  if let Some(c) = iter.next() {
+    snake_name.push(c.to_ascii_lowercase())
+  }
+  for c in iter {
+    if c.is_ascii_uppercase() {
+      snake_name.push('_');
+      snake_name.push(c.to_ascii_lowercase())
+    } else {
+      snake_name.push(c.clone());
+    }
+  }
+  snake_name
 }
 
 fn type_name(mut ty: &Type) -> Option<String> {

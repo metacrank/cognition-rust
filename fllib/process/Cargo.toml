@@ -12,3 +12,4 @@ crate-type = ["lib", "cdylib"]
 
 [dependencies]
 cognition = { path = "../.." }
+time = { path = "../time" }

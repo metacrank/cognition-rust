@@ -475,7 +475,7 @@ macro_rules! get_from_custom_pool {
         }
         $pool.add_vcustom(vcustom);
       }
-      $default_block
+      VCustom::with_custom($default_block)
     }
   }
 }
@@ -604,7 +604,7 @@ macro_rules! add_builtin {
 
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
   };
-  ($state:ident,$name:literal$ (,$f:ident)*) => {
+  ($state:ident,$name:literal$ (,$f:tt)*) => {
     let vmacro = build_macro!($state, 0, [$($f)*]);
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
   }
@@ -736,40 +736,35 @@ macro_rules! compose_macro {
 }
 #[macro_export]
 macro_rules! prepose_word {
-  ($state:ident,$lib:ident,$name:literal,EVAL) => {
-    let mut vmacro = build_macro!($state, 1, EVAL);
-    prepose_macro!($state, $name, vmacro);
-  };
-  ($state:ident,$lib:ident,$name:literal,RETURN) => {
-    let mut vmacro = build_macro!($state, 1, RETURN);
-    prepose_macro!($state, $name, vmacro);
-  };
-  ($state:ident,$lib:ident,$name:literal,GHOST) => {
-    let mut vmacro = build_macro!($state, 1, GHOST);
-    prepose_macro!($state, $name, vmacro);
-  };
-  ($state:ident,$lib:ident,$name:literal$ (,$f:ident)*) => {
+  ($state:ident,$lib:ident,$name:literal$ (,$f:tt)*) => {
     let mut vmacro = build_macro!(WORD,$state,$lib, 0, [$($f)*]);
     prepose_macro!($state, $name, vmacro);
   }
 }
 #[macro_export]
 macro_rules! compose_word {
-  ($state:ident,$lib:ident,$name:literal,EVAL) => {
-    let mut vmacro = build_macro!($state, 1, EVAL);
-    compose_macro!($state, $name, vmacro);
-  };
-  ($state:ident,$lib:ident,$name:literal,RETURN) => {
-    let mut vmacro = build_macro!($state, 1, RETURN);
-    compose_macro!($state, $name, vmacro);
-  };
-  ($state:ident,$lib:ident,$name:literal,GHOST) => {
-    let mut vmacro = build_macro!($state, 1, GHOST);
-    compose_macro!($state, $name, vmacro);
-  };
-  ($state:ident,$lib:ident,$name:literal$ (,$f:ident)*) => {
+  ($state:ident,$lib:ident,$name:literal$ (,$f:tt)*) => {
     let mut vmacro = build_macro!(WORD,$state,$lib, 0, [$($f)*]);
     compose_macro!($state, $name, vmacro);
+  }
+}
+#[macro_export]
+macro_rules! add_constant {
+  ($state:ident,$name:expr$ (,$v:expr)*) => {
+    add_constant!(INTERNAL,$state:ident,$name:expr,0,[$($v),*]);
+  };
+  // base case
+  (INTERNAL,$state:ident,$name:expr,$n:expr $(,$v:expr)*) => {
+    let mut vstack = $state.pool.get_vstack($n);
+    $( vstack.container.stack.push($v); )*
+    state.add_constant($name, $crate::Value::Stack(vstack));
+  };
+  // count arguments
+  (INTERNAL,$state:ident,$name:expr,$n:expr,[] $($v:expr),*) => {
+    build_macro!($state, $n $(,$v)*);
+  };
+  (INTERNAL,$state:ident,$name:expr,$n:expr,[$vn:expr, $($vi:expr),*] $($vp:expr),*) => {
+    add_constant!($state, $name, $n + 1, [$($fi),*] $($vp),* , $vn);
   }
 }
 
