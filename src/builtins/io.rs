@@ -1,6 +1,6 @@
 use crate::*;
 use crate::serde::OptionDeserialize;
-use std::io::{self, Read, BufRead, Seek};
+use std::io::{self, Read, BufRead, Seek, IsTerminal};
 use std::fs::File;
 use ::serde::ser::{Serialize, Serializer};
 use ::serde::de::{Deserialize, Deserializer};
@@ -349,18 +349,24 @@ impl io::Write for StringWriter<'_> {
   fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
 
-pub fn questionmark(state: &CognitionState, f: &mut dyn io::Write) {
-  fwrite_check!(f, GRN);
-  println!("STACK:");
-  fwrite_check!(f, COLOR_RESET);
+pub fn questionmark(state: &CognitionState, f: &mut dyn io::Write, term: bool) {
+  if term {
+    fwrite_check!(f, GRN);
+    println!("STACK:");
+    fwrite_check!(f, COLOR_RESET);
+  } else {
+    println!("STACK:");
+  }
   let cur = state.current_ref();
-  for v in cur.stack.iter() { v.fprint(f, "\n"); }
+  for v in cur.stack.iter() { v.fprint(f, "\n", term); }
   fwrite_check!(f, b"\n");
   flush!(f);
 }
 
 pub fn cog_questionmark(state: CognitionState, _: Option<&Value>) -> CognitionState {
-  questionmark(&state, &mut io::stdout());
+  let mut stdout = io::stdout();
+  let is_terminal = stdout.is_terminal();
+  questionmark(&state, &mut stdout, is_terminal);
   state
 }
 
@@ -391,7 +397,7 @@ pub fn cog_print(mut state: CognitionState, w: Option<&Value>) -> CognitionState
 pub fn cog_wprint(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   let Some(v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  if v.value_stack_ref().iter().any(|x| !x.is_word() && !x.is_fllib() && !x.is_custom() && !x.is_control()) {
+  if v.value_stack_ref().iter().any(|x| !x.is_word() && !x.is_fllib() && !x.is_custom()) {
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
@@ -407,11 +413,6 @@ pub fn cog_wprint(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
         handle(string_writer.write(s.as_bytes()))
       },
       Value::Custom(vc) => vc.custom.printfunc(&mut string_writer),
-      Value::Control(vc) => match vc {
-        VControl::Eval => handle(string_writer.write(b"eval")),
-        VControl::Return => handle(string_writer.write(b"return")),
-        VControl::Ghost => handle(string_writer.write(b"ghost")),
-      },
       _ => unreachable!(),
     }
   }
@@ -654,13 +655,15 @@ pub fn cog_fquestionmark(mut state: CognitionState, w: Option<&Value>) -> Cognit
     Value::Custom(vcustom) => {
       let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
-        questionmark(&state, &mut file.file.as_mut().unwrap());
+        let file = file.file.as_mut().unwrap();
+        let is_terminal = file.is_terminal();
+        questionmark(&state, file, is_terminal);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
-        questionmark(&state, writer.writer.as_mut().unwrap().as_write_mut());
+        questionmark(&state, writer.writer.as_mut().unwrap().as_write_mut(), false);
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
-        questionmark(&state, stream.stream.as_mut().unwrap().as_write_mut());
+        questionmark(&state, stream.stream.as_mut().unwrap().as_write_mut(), false);
       } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
-        questionmark(&state, bufwriter.bufwriter.as_mut().unwrap().as_write_mut());
+        questionmark(&state, bufwriter.bufwriter.as_mut().unwrap().as_write_mut(), false);
       } else {
         stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
@@ -669,9 +672,11 @@ pub fn cog_fquestionmark(mut state: CognitionState, w: Option<&Value>) -> Cognit
     },
     Value::Word(vword) => {
       if let Ok(mut file) = File::create_new(&vword.str_word) {
-        questionmark(&state, &mut file);
+        let is_terminal = file.is_terminal();
+        questionmark(&state, &mut file, is_terminal);
       } else if let Ok(mut file) = File::options().write(true).create(true).open(&vword.str_word) {
-        questionmark(&state, &mut file);
+        let is_terminal = file.is_terminal();
+        questionmark(&state, &mut file, is_terminal);
       } else {
         stack.push(v);
         return state.eval_error("INVALID FILENAME", w)
@@ -700,22 +705,24 @@ pub fn cog_fperiod(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
       let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
-        print_v.fprint(&mut file.file.as_mut().unwrap(), "\n");
-        flush!(file.file.as_mut().unwrap());
+        let file = file.file.as_mut().unwrap();
+        let is_terminal = file.is_terminal();
+        print_v.fprint(file, "\n", is_terminal);
+        flush!(file);
         state.pool.add_val(print_v);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
         let print_v = stack.pop().unwrap();
-        print_v.fprint(&mut writer.writer.as_mut().unwrap().as_write_mut(), "\n");
+        print_v.fprint(writer.writer.as_mut().unwrap().as_write_mut(), "\n", false);
         flush!(writer.writer.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
         let print_v = stack.pop().unwrap();
-        print_v.fprint(&mut stream.stream.as_mut().unwrap().as_write_mut(), "\n");
+        print_v.fprint(stream.stream.as_mut().unwrap().as_write_mut(), "\n", false);
         flush!(stream.stream.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
         let print_v = stack.pop().unwrap();
-        print_v.fprint(&mut bufwriter.bufwriter.as_mut().unwrap().as_write_mut(), "\n");
+        print_v.fprint(bufwriter.bufwriter.as_mut().unwrap().as_write_mut(), "\n", false);
         flush!(bufwriter.bufwriter.as_mut().unwrap());
         state.pool.add_val(print_v);
       } else {
@@ -727,12 +734,14 @@ pub fn cog_fperiod(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     Value::Word(vword) => {
       if let Ok(mut file) = File::create_new(&vword.str_word) {
         let print_v = stack.pop().unwrap();
-        print_v.fprint(&mut file, "\n");
+        let is_terminal = file.is_terminal();
+        print_v.fprint(&mut file, "\n", is_terminal);
         flush!(file);
         state.pool.add_val(print_v);
       } else if let Ok(mut file) = File::options().write(true).create(true).open(&vword.str_word) {
         let print_v = stack.pop().unwrap();
-        print_v.fprint(&mut file, "\n");
+        let is_terminal = file.is_terminal();
+        print_v.fprint(&mut file, "\n", is_terminal);
         flush!(file);
         state.pool.add_val(print_v);
       } else {
@@ -1471,8 +1480,8 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "bufwriter?", cog_bufwriter_questionmark);
   add_builtin!(state, "stream?", cog_stream_questionmark);
 
-  state.add_const_custom("stdout", Box::new(WriteCustom{ writer: Some(Box::new(io::stdout())) }));
-  state.add_const_custom("stderr", Box::new(WriteCustom{ writer: Some(Box::new(io::stderr())) }));
-  state.add_const_custom("stdin", Box::new(ReadCustom{ reader: Some(Box::new(io::stdin())) }));
-  state.add_const_custom("empty", Box::new(ReadWriteCustom{ stream: Some(Box::new(io::empty())) }));
+  state.add_const_custom("STDOUT", Box::new(WriteCustom{ writer: Some(Box::new(io::stdout())) }));
+  state.add_const_custom("STDERR", Box::new(WriteCustom{ writer: Some(Box::new(io::stderr())) }));
+  state.add_const_custom("STDIN", Box::new(ReadCustom{ reader: Some(Box::new(io::stdin())) }));
+  state.add_const_custom("EMPTY", Box::new(ReadWriteCustom{ stream: Some(Box::new(io::empty())) }));
 }

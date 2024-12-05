@@ -392,7 +392,7 @@ pub fn cog_column(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   }
 }
 
-pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+pub fn cog_streval(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(mut v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let stack = v.value_stack_ref();
   if !(stack.len() == 1 || stack.len() == 2 || stack.len() == 4) {
@@ -427,6 +427,10 @@ pub fn cog_evalstr(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
       None => break,
     }
     if state.exited { break }
+    if state.control.is_return() {
+      state.control.clear();
+      break
+    }
   }
   let parser = state.parser.take();
   state.parser = oldparser;
@@ -488,6 +492,6 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "filename", cog_filename);
   add_builtin!(state, "line", cog_line);
   add_builtin!(state, "column", cog_column);
-  add_builtin!(state, "evalstr", cog_evalstr);
+  add_builtin!(state, "streval", cog_streval);
   add_builtin!(state, "strstack", cog_strstack);
 }

@@ -24,7 +24,7 @@ fn main() -> ExitCode {
   if opts.list_formats { return list_formats(); }
 
   let sources = opts.sources as usize;
-  let no_input = opts.fileidx == 0 && opts.sources != 0 && !opts.stdin;
+  let no_input = opts.fileidx == 0 && opts.sources != 0;
   let too_few_filenames = opts.fileidx + sources > argc;
 
   if no_input || too_few_filenames {
@@ -58,10 +58,8 @@ fn main() -> ExitCode {
       let mut vstack = Box::new(VStack::with_capacity(DEFAULT_STACK_SIZE));
       vstack.container.faliases = Container::default_faliases();
       state.stack.push(Value::Stack(vstack));
-      if !opts.stdin {
-        for arg in args[(opts.fileidx + sources)..].iter() {
-          state.args.push(Value::Word(Box::new(VWord{ str_word: arg.clone() })));
-        }
+      for arg in args[(opts.fileidx + sources)..].iter() {
+        state.args.push(Value::Word(Box::new(VWord{ str_word: arg.clone() })));
       }
       builtins::add_builtins(&mut state);
       state
@@ -72,31 +70,33 @@ fn main() -> ExitCode {
     state.parser = Some(Parser::new(None, None));
   }
 
-  let (mut fileidx_iter, mut stdin_iter) = if opts.stdin {
-    (None, Some(stdin().lines()))
-  } else { (Some(0..sources), None) };
-
+  let mut idx = 0;
   'inputs: loop {
+    if idx >= sources { break 'inputs }
     // Read code from file
-    let (source, filename) = if opts.stdin {
-      let Some(Ok(s)) = stdin_iter.as_mut().unwrap().next() else { break 'inputs };
-      (s, None)
+    let file = &args[opts.fileidx + idx];
+    let (source, filename, stdin) = if *file == "-" {
+      let Some(Ok(s)) = stdin().lines().next() else { break 'inputs };
+      (s, None, true)
     } else {
-      let Some(i) = fileidx_iter.as_mut().unwrap().next() else { break 'inputs };
-      let filename = &args[opts.fileidx + i];
-      let mut fs_result = fs::read_to_string(filename);
+      let mut filename = None;
+      let mut fs_result = fs::read_to_string(file);
       if let Err(_) = fs_result {
         if let Some(ref dir) = opts.coglib {
-          fs_result = fs::read_to_string(format!("{dir}/{filename}"));
+          let f = format!("{dir}/{file}");
+          fs_result = fs::read_to_string(&f);
+          filename = Some(f);
         } else if let Ok(dir) = env::var("COGLIB_DIR") {
-          fs_result = fs::read_to_string(format!("{dir}/{filename}"));
+          let f = format!("{dir}/{file}");
+          fs_result = fs::read_to_string(&f);
+          filename = Some(f);
         }
       }
       if let Err(e) = fs_result {
-        println!("{}: could not open file for reading: {filename}: {e}", binary_name());
+        println!("{}: could not open file for reading: {file}: {e}", binary_name());
         return ExitCode::from(4);
       }
-      (fs_result.unwrap(), Some(state.string_copy(filename)))
+      (fs_result.unwrap(), filename, false)
     };
 
     let mut parser = state.parser.take().unwrap();
@@ -109,13 +109,18 @@ fn main() -> ExitCode {
       let w = state.parser_get_next();
       match w {
         Some(v) => {
-          if let Some(f) = &mut logfile { v.fprint(f, "\n") }
+          if let Some(f) = &mut logfile { v.fprint(f, "\n", false) }
           state = state.eval(v)
         },
         None => break,
       }
+      if state.control.is_return() {
+        if stdin { idx += 1 }
+        break
+      }
       if state.exited { break 'inputs }
     }
+    if !stdin { idx += 1 }
   }
 
   let end = opts.end.unwrap_or_else(|| End::with(true));
@@ -127,6 +132,7 @@ fn main() -> ExitCode {
   // Ensure foreign libraries stay loaded when
   // dropping custom objects in cognition state
   let fllibs = state.fllibs.take();
+
   drop(state);
 
   ExitCode::SUCCESS
@@ -147,7 +153,6 @@ struct Config {
   save: Option<String>,
   save_format: Option<String>,
   version: bool,
-  stdin: bool,
   usage: bool,
   fileidx: usize
 }
@@ -169,7 +174,6 @@ impl Config {
       save: None,
       save_format: None,
       version: false,
-      stdin: false,
       usage: false,
       fileidx: 0
     }
@@ -260,11 +264,7 @@ fn parse_short(short: &str, args: &Vec<String>, argc: usize, iptr: &mut usize, c
   define_config_parsers!{ set_bool, set_str, args, argc }
   let mut i = *iptr;
   let mut char_iter = short.chars().rev();
-  // handle stdin on '-'
-  let Some(last) = char_iter.next() else {
-    config.stdin = true;
-    return Ok(true)
-  };
+  let last = char_iter.next().unwrap();
   // check if short args are valid
   for c in short[..short.len()-1].chars() {
     if "hqv".chars().all(|ch| ch != c) {
@@ -306,15 +306,15 @@ fn parse_other(args: &Vec<String>, argc: usize, iptr: &mut usize, config: &mut C
   let slice = &args[*iptr];
 
   if let Some(c) = slice.bytes().next() {
-    if c == b'-' { return parse_short(&slice[1..], args, argc, iptr, config) }
+    if c == b'-' && slice.len() > 1 { return parse_short(&slice[1..], args, argc, iptr, config) }
   }
 
   let s = if config.sources < 0 { 1 } else { config.sources as usize };
+  config.fileidx = *iptr;
   if config.fileidx + s > argc {
     println!("{}: missing filename", binary_name());
     return Err(try_help(1))
   }
-  config.fileidx = *iptr;
   Ok(true)
 }
 
@@ -354,7 +354,6 @@ fn parse_configs(args: &Vec<String>, argc: usize) -> Result<Config, ExitCode> {
   }
   if config.load.is_some() && config.list_formats { return Err(usage_help(1)) }
   if config.save.is_none() && config.save_format.is_some() { return Err(usage_help(1)) }
-  if config.stdin && config.sources >= 0 { return Err(usage_help(1)) }
   if config.sources < 0 { config.sources = 1 }
 
   Ok(config)
@@ -366,7 +365,6 @@ const OPTIONS: &str = "[-hquv] [-e [sefpcmFPCE]] [-l FILE] [-L FILE [-f FORMAT] 
 
 fn usage() -> ExitCode {
   println!("Usage: {} {OPTIONS} [-s N] [file...] [arg...]", binary_name());
-  println!("       {} {OPTIONS} - stdin", binary_name());
   ExitCode::SUCCESS
 }
 
@@ -382,7 +380,7 @@ fn try_help(code: u8) -> ExitCode {
 
 fn help() -> ExitCode {
   println!("Usage: {} [options] [file...] [arg...]", binary_name());
-  println!("       {} [options] - stdin", binary_name());
+  println!("The [file] option can be either a filename or '-' (read from standard input)");
   println!("");
   println!("Options:");
   println!(" -h, --help                print this help message");

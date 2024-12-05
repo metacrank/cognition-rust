@@ -24,7 +24,7 @@ use std::collections::{HashSet, HashMap, BTreeMap};
 use std::default::Default;
 // use std::error::Error;
 use std::fmt::Display;
-use std::io::{Write, stdout};
+use std::io::{stdout, IsTerminal, Write};
 use std::sync::Arc;
 
 pub const VERSION: &'static str = "0.3.4";
@@ -190,6 +190,20 @@ impl Custom for Void {
   }
 }
 
+/// Unique crank system control value
+#[derive(Serialize, Deserialize)]
+pub struct Ghost {}
+
+#[custom]
+impl Custom for Ghost {
+  fn printfunc(&self, f: &mut dyn Write) {
+    fwrite_check!(f, b"ghost");
+  }
+  fn copyfunc(&self, _: &mut CognitionState) -> Box<dyn Custom> {
+    Box::new(Ghost{})
+  }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Crank {
   pub modulo: i32,
@@ -303,12 +317,6 @@ pub struct VFLLib {
 pub struct VCustom {
   pub custom: Box<dyn Custom>,
 }
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub enum VControl {
-  Eval,
-  Return,
-  Ghost,
-}
 
 impl VWord {
   pub fn with_string(str_word: String) -> VWord {
@@ -373,7 +381,6 @@ pub enum Value {
   Error(Box<VError>),
   FLLib(Box<VFLLib>),
   Custom(VCustom),
-  Control(VControl)
 }
 
 macro_rules! return_value_type {
@@ -386,11 +393,12 @@ macro_rules! is_value_type {
 impl Value {
   pub fn print(&self, end: &'static str) {
     let mut f = stdout();
-    self.fprint(&mut f, end);
+    let is_terminal = f.is_terminal();
+    self.fprint(&mut f, end, is_terminal);
     if let Err(e) = f.flush() {
       let _ = std::io::stderr().write(format!("{e}").as_bytes()); }
   }
-  pub fn fprint(&self, f: &mut dyn Write, end: &'static str) {
+  pub fn fprint(&self, f: &mut dyn Write, end: &'static str, term: bool) {
     match self {
       Self::Word(vword) => {
         fwrite_check!(f, b"'");
@@ -399,12 +407,12 @@ impl Value {
       },
       Self::Stack(vstack) => {
         fwrite_check!(f, b"[ ");
-        for v in vstack.container.stack.iter() { v.fprint(f, " "); }
+        for v in vstack.container.stack.iter() { v.fprint(f, " ", term); }
         fwrite_check!(f, b"]");
       },
       Self::Macro(vmacro) => {
         fwrite_check!(f, b"( ");
-        for v in vmacro.macro_stack.iter() { v.fprint(f, " "); }
+        for v in vmacro.macro_stack.iter() { v.fprint(f, " ", term); }
         fwrite_check!(f, b")");
       },
       Self::Error(verror) => {
@@ -431,9 +439,13 @@ impl Value {
             fwrite_check!(f, b"(none):");
           }
         }
-        fwrite_check!(f, RED);
-        verror.error.fprint_pretty(f);
-        fwrite_check!(f, COLOR_RESET);
+        if term {
+          fwrite_check!(f, RED);
+          verror.error.fprint_pretty(f);
+          fwrite_check!(f, COLOR_RESET);
+        } else {
+          verror.error.fprint_pretty(f);
+        }
       },
       Self::FLLib(vfllib) => {
         match &vfllib.str_word {
@@ -441,23 +453,18 @@ impl Value {
             s.fprint_pretty(f);
           },
           None => {
-            fwrite_check!(f, HBLK);
-            fwrite_check!(f, b"FLLIB");
-            fwrite_check!(f, COLOR_RESET);
+            if term {
+              fwrite_check!(f, HBLK);
+              fwrite_check!(f, b"FLLIB");
+              fwrite_check!(f, COLOR_RESET);
+            } else {
+              fwrite_check!(f, b"FLLIB");
+            }
           },
         }
       },
       Self::Custom(vcustom) => {
         vcustom.custom.printfunc(f);
-      },
-      Self::Control(vcontrol) => {
-        fwrite_check_pretty!(f, GRN);
-        match vcontrol {
-          VControl::Eval   => { fwrite_check!(f, b"eval"); },
-          VControl::Return => { fwrite_check!(f, b"return"); },
-          VControl::Ghost => { fwrite_check!(f, b"ghost"); },
-        }
-        fwrite_check!(f, COLOR_RESET);
       },
     }
     fwrite_check!(f, end.as_bytes());
@@ -495,21 +502,18 @@ impl Value {
   pub fn verror(self) -> Box<VError> { return_value_type!(self, Value::Error(v), v) }
   pub fn vfllib(self) -> Box<VFLLib> { return_value_type!(self, Value::FLLib(v), v) }
   pub fn vcustom(self) -> VCustom { return_value_type!(self, Value::Custom(v), v) }
-  pub fn vcontrol(self) -> VControl { return_value_type!(self, Value::Control(v), v) }
   pub fn vword_ref(&self) -> &Box<VWord> { return_value_type!(self, Value::Word(v), v) }
   pub fn vstack_ref(&self) -> &Box<VStack> { return_value_type!(self, Value::Stack(v), v) }
   pub fn vmacro_ref(&self) -> &Box<VMacro> { return_value_type!(self, Value::Macro(v), v) }
   pub fn verror_ref(&self) -> &Box<VError> { return_value_type!(self, Value::Error(v), v) }
   pub fn vfllib_ref(&self) -> &Box<VFLLib> { return_value_type!(self, Value::FLLib(v), v) }
   pub fn vcustom_ref(&self) -> &VCustom { return_value_type!(self, Value::Custom(v), v) }
-  pub fn vcontrol_ref(&self) -> &VControl { return_value_type!(self, Value::Control(v), v) }
   pub fn vword_mut(&mut self) -> &mut Box<VWord> { return_value_type!(self, Value::Word(v), v) }
   pub fn vstack_mut(&mut self) -> &mut Box<VStack> { return_value_type!(self, Value::Stack(v), v) }
   pub fn vmacro_mut(&mut self) -> &mut Box<VMacro> { return_value_type!(self, Value::Macro(v), v) }
   pub fn verror_mut(&mut self) -> &mut Box<VError> { return_value_type!(self, Value::Error(v), v) }
   pub fn vfllib_mut(&mut self) -> &mut Box<VFLLib> { return_value_type!(self, Value::FLLib(v), v) }
   pub fn vcustom_mut(&mut self) -> &mut VCustom { return_value_type!(self, Value::Custom(v), v) }
-  pub fn vcontrol_mut(&mut self) -> &mut VControl { return_value_type!(self, Value::Control(v), v) }
 
   pub fn is_word(&self) -> bool { is_value_type!(self, Value::Word(_)) }
   pub fn is_stack(&self) -> bool { is_value_type!(self, Value::Stack(_)) }
@@ -517,7 +521,6 @@ impl Value {
   pub fn is_error(&self) -> bool { is_value_type!(self, Value::Error(_)) }
   pub fn is_fllib(&self) -> bool { is_value_type!(self, Value::FLLib(_)) }
   pub fn is_custom(&self) -> bool { is_value_type!(self, Value::Custom(_)) }
-  pub fn is_control(&self) -> bool { is_value_type!(self, Value::Control(_)) }
 }
 
 pub struct ParserLoc {
@@ -630,11 +633,34 @@ impl Parser {
   }
 }
 
+pub enum CognitionControl {
+  Eval,
+  Return,
+  None
+}
+
+impl CognitionControl {
+  pub fn eval(&mut self) { *self = Self::Eval }
+  pub fn ret(&mut self) { *self = Self::Return  }
+  pub fn clear(&mut self) { *self = Self::None }
+  pub fn is_eval(&self) -> bool { if let Self::Eval = self { true } else { false } }
+  pub fn is_return(&self) -> bool { if let Self::Return = self { true } else { false } }
+  pub fn is_none(&self) -> bool { if let Self::None = self { true } else { false } }
+}
+
+enum RecurseControl {
+  Evalf(WordDef, Stack),
+  Crank(WordDef, Stack),
+  Def(WordDef, Value),
+  None,
+}
+
 pub struct CognitionState {
   pub chroots: Vec<Stack>, // meta metastack
   pub stack: Stack, // metastack
   pub family: Family, // for reuse
   pub parser: Option<Parser>,
+  pub control: CognitionControl,
   pub exited: bool,
   pub exit_code: Option<String>,
   pub args: Stack, //
@@ -718,15 +744,17 @@ macro_rules! evalstack_recurse {
       while let Some(f) = $local_family.pop() { $self.family.push(f) }
     }
   };
-  ($self:ident,$is_macro:ident,$wd:ident,$wdn:ident,$local_family:ident,$legacy_family:ident,$family_stack_pushes:ident,$new_family_member:ident,$refstack:ident,$i:ident,$destructive:ident,$callword:ident,$crank_first:ident,$callw:expr,$word_holder:ident,$crnkf:expr,$last_v:ident) => {
+  ($self:ident,$is_macro:ident,$wd:ident,$wdn:ident,$local_family:ident,$legacy_family:ident,$family_stack_pushes:ident,$new_family_member:ident,$refstack:ident,$i:ident,$destructive:ident,$callword:ident,$crank_first:ident,$callw:expr,$word_holder:ident,$crnkf:expr,$last_v:ident,$return_mode:ident) => {
     if $last_v {
       evalstack_recurse_setup!($self, $is_macro, $wd, $wdn, $local_family, $legacy_family, $family_stack_pushes, $new_family_member, $refstack, $i, $word_holder);
       $destructive = false;
       $callword = None;
       $word_holder = Some($callw);
       $crank_first = $crnkf;
+      $return_mode = false;
     } else {
       $self = $self.evalstack($wdn, None, Some(&$callw), $crnkf);
+      $self.control.clear();
       while let Some(f) = $local_family.pop() { $self.family.push(f) }
       $self.pool.add_val($callw);
     }
@@ -738,14 +766,6 @@ macro_rules! callword {
   }
 }
 
-enum RecurseControl {
-  Evalf(WordDef, Stack),
-  Crank(WordDef, Stack),
-  Def(WordDef, Value),
-  None,
-  Return,
-}
-
 impl CognitionState {
   pub fn new(stack: Stack) -> Self {
     Self{
@@ -753,6 +773,7 @@ impl CognitionState {
       stack,
       family: Family::with_capacity(DEFAULT_STACK_SIZE),
       parser: None,
+      control: CognitionControl::None,
       exited: false,
       exit_code: None,
       args: Stack::new(),
@@ -959,8 +980,8 @@ impl CognitionState {
       },
       Value::Custom(vcustom) => Value::Custom({
         VCustom::with_custom(vcustom.custom.copyfunc(self))
-      }),
-      Value::Control(vcontrol) => Value::Control(vcontrol.clone()),
+      })
+      //Value::Control(vcontrol) => Value::Control(vcontrol.clone()),
     }
   }
 
@@ -1100,7 +1121,7 @@ impl CognitionState {
     true
   }
 
-  fn evalword(mut self, v: Value, local_family: &mut Family, always_evalf: bool, try_eval: bool, cranking: bool) -> (Self, RecurseControl) {
+  fn eval_word(mut self, v: Value, local_family: &mut Family, always_evalf: bool, try_eval: bool, cranking: bool) -> (Self, RecurseControl) {
     loop {
       let Some(family_stack) = self.family.pop() else {
         // Assuming family stack has failed
@@ -1159,62 +1180,53 @@ impl CognitionState {
     }
   }
 
+  fn eval_fllib(mut self, v: Value, callword: Option<&Value>, force_eval: bool, cranking: bool) -> (Self, RecurseControl) {
+    let fllib = v.vfllib_ref().fllib.clone();
+    if self.is_high_tide() || force_eval {
+      self.pool.add_val(v);
+      if cranking { self.current().inc_crank() }
+      self = fllib(self, callword.clone());
+      if self.control.is_eval() {
+        self.control.clear();
+        let (new_self, result) = self.get_evalf_val(callword);
+        let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
+        return (new_self, RecurseControl::Evalf(wd, defstack))
+      }
+    } else {
+      self.push_quoted(v);
+      if cranking {
+        let (new_self, result) = self.get_crank_val();
+        let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
+        return (new_self, RecurseControl::Crank(wd, defstack))
+      }
+    }
+    (self, RecurseControl::None)
+  }
+
+  fn eval_custom(mut self, v: Value, force_eval: bool, cranking: bool) -> (Self, RecurseControl) {
+    if !v.vcustom_ref().custom.as_any().is::<Ghost>() {
+      self.push_quoted(v);
+      if cranking {
+        if self.is_high_tide() || force_eval { self.current().inc_crank() }
+        else {
+          let (new_self, result) = self.get_crank_val();
+          let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
+          return (new_self, RecurseControl::Crank(wd, defstack))
+        }
+      }
+    }
+    (self, RecurseControl::None)
+  }
+
   fn eval_value(mut self, v: Value, callword: Option<&Value>, local_family: &mut Family, force_eval: bool, cranking: bool) -> (Self, RecurseControl) {
     match &v {
       Value::Word(_) => {
         let high_tide = self.is_high_tide();
-        return self.evalword(v, local_family, force_eval, high_tide || force_eval, cranking);
+        self.eval_word(v, local_family, force_eval, high_tide || force_eval, cranking)
       },
       Value::Error(_) => panic!("VError on stack"),
-      Value::FLLib(vfllib) => {
-        let fllib = vfllib.fllib.clone();
-        if self.is_high_tide() || force_eval {
-          self.pool.add_val(v);
-          if cranking { self.current().inc_crank() }
-          self = fllib(self, callword.clone())
-        } else {
-          self.push_quoted(v);
-          if cranking {
-            let (new_self, result) = self.get_crank_val();
-            let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-            return (new_self, RecurseControl::Crank(wd, defstack))
-          }
-        }
-      },
-      Value::Custom(_) => {
-        self.push_quoted(v);
-        if cranking {
-          if self.is_high_tide() || force_eval { self.current().inc_crank() }
-          else {
-            let (new_self, result) = self.get_crank_val();
-            let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-            return (new_self, RecurseControl::Crank(wd, defstack))
-          }
-        }
-      },
-      Value::Control(VControl::Eval) => {
-        if self.is_high_tide() || force_eval {
-          if cranking { self.current().inc_crank() }
-          let (new_self, result) = self.get_evalf_val(callword);
-          let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-          return (new_self, RecurseControl::Evalf(wd, defstack))
-        } else {
-          self.push_quoted(v);
-          let (new_self, result) = self.get_crank_val();
-          let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-          return (new_self, RecurseControl::Crank(wd, defstack))
-        }
-      },
-      Value::Control(VControl::Return) => {
-        if self.is_high_tide() || force_eval { return (self, RecurseControl::Return) }
-        else {
-          self.push_quoted(v);
-          let (new_self, result) = self.get_crank_val();
-          let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-          return (new_self, RecurseControl::Crank(wd, defstack))
-        }
-      },
-      Value::Control(VControl::Ghost) => {}
+      Value::FLLib(_) => self.eval_fllib(v, callword, force_eval, cranking),
+      Value::Custom(_) => self.eval_custom(v, force_eval, cranking),
       _ => {
         self.current().stack.push(v);
         if cranking {
@@ -1225,9 +1237,9 @@ impl CognitionState {
             return (new_self, RecurseControl::Crank(wd, defstack))
           }
         }
+        (self, RecurseControl::None)
       },
     }
-    (self, RecurseControl::None)
   }
 
   #[inline(always)]
@@ -1243,6 +1255,7 @@ impl CognitionState {
     let mut local_family = self.pool.get_family();
     let mut legacy_family: Option<Family> = None;
     let mut control: RecurseControl;
+    let mut return_mode = true;
 
     let mut refstack = wd.value_stack_ref();
     let (mut stack, mut destructive) = if defstack.is_some() {
@@ -1269,11 +1282,14 @@ impl CognitionState {
                              refstack, i, destructive, callword, crank_first, DESTRUCTIVE, stack, retstack, word_holder, true, last_v); },
         RecurseControl::Def(wdn, v) => {
           evalstack_recurse!(self, is_macro, wd, wdn, local_family, legacy_family, family_stack_pushes, new_family_member,
-                             refstack, i, destructive, callword, crank_first, v, word_holder, cranking, last_v); },
+                             refstack, i, destructive, callword, crank_first, v, word_holder, cranking, last_v, return_mode); },
         RecurseControl::None => {},
-        RecurseControl::Return => break,
       }
       if self.exited { break }
+      if self.control.is_return() {
+        if !return_mode { self.control.clear(); }
+        break
+      }
       i = i.wrapping_add(1);
     }
     if let Some(wh) = word_holder { self.pool.add_val(wh) }

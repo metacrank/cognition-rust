@@ -614,7 +614,6 @@ impl Pool {
       Value::Error(verror)   => self.add_verror(verror),
       Value::FLLib(vfllib)   => self.add_vfllib(vfllib),
       Value::Custom(vcustom) => self.add_vcustom(vcustom),
-      _ => {}
     }
   }
   pub fn add_vword(&mut self, vword: Box<VWord>) {
@@ -967,7 +966,7 @@ pub fn init_vfllib() -> Value {
   Value::FLLib(Box::new(VFLLib::with_nop()))
 }
 pub fn init_word_def() -> WordDef {
-  WordDef::new(Value::Control(VControl::Ghost))
+  WordDef::new(init_vfllib())
 }
 pub fn init_family() -> Family {
   Family::with_capacity(DEFAULT_STACK_SIZE)

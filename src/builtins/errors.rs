@@ -154,13 +154,15 @@ pub fn cog_fewrite(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     Value::Custom(vcustom) => {
       let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
-        estack.last().as_ref().unwrap().fprint(file.file.as_mut().unwrap(), "\n");
+        let file = file.file.as_mut().unwrap();
+        let is_terminal = file.is_terminal();
+        estack.last().as_ref().unwrap().fprint(file, "\n", is_terminal);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
-        estack.last().as_ref().unwrap().fprint(writer.writer.as_mut().unwrap(), "\n");
+        estack.last().as_ref().unwrap().fprint(writer.writer.as_mut().unwrap(), "\n", false);
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
-        estack.last().as_ref().unwrap().fprint(stream.stream.as_mut().unwrap(), "\n");
+        estack.last().as_ref().unwrap().fprint(stream.stream.as_mut().unwrap(), "\n", false);
       } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
-        estack.last().as_ref().unwrap().fprint(bufwriter.bufwriter.as_mut().unwrap(), "\n");
+        estack.last().as_ref().unwrap().fprint(bufwriter.bufwriter.as_mut().unwrap(), "\n", false);
       } else {
         state.current().stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
@@ -169,7 +171,8 @@ pub fn cog_fewrite(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     },
     Value::Word(vword) => {
       if let Ok(mut file) = File::create(&vword.str_word) {
-        estack.last().as_ref().unwrap().fprint(&mut file, "\n");
+        let is_terminal = file.is_terminal();
+        estack.last().as_ref().unwrap().fprint(&mut file, "\n", is_terminal);
       } else {
         state.current().stack.push(v);
         return state.eval_error("INVALID FILENAME", w)
@@ -200,13 +203,15 @@ pub fn cog_feprint(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     Value::Custom(vcustom) => {
       let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
-        estack.last().as_ref().unwrap().fprint(file.file.as_mut().unwrap(), "\n");
+        let file = file.file.as_mut().unwrap();
+        let is_terminal = file.is_terminal();
+        estack.last().as_ref().unwrap().fprint(file, "\n", is_terminal);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
-        estack.last().as_ref().unwrap().fprint(writer.writer.as_mut().unwrap(), "\n");
+        estack.last().as_ref().unwrap().fprint(writer.writer.as_mut().unwrap(), "\n", false);
       } else if let Some(stream) = custom.as_any_mut().downcast_mut::<ReadWriteCustom>() {
-        estack.last().as_ref().unwrap().fprint(stream.stream.as_mut().unwrap(), "\n");
+        estack.last().as_ref().unwrap().fprint(stream.stream.as_mut().unwrap(), "\n", false);
       } else if let Some(bufwriter) = custom.as_any_mut().downcast_mut::<BufWriteCustom>() {
-        estack.last().as_ref().unwrap().fprint(bufwriter.bufwriter.as_mut().unwrap(), "\n");
+        estack.last().as_ref().unwrap().fprint(bufwriter.bufwriter.as_mut().unwrap(), "\n", false);
       } else {
         state.current().stack.push(v);
         return state.eval_error("BAD ARGUMENT TYPE", w)
@@ -215,7 +220,8 @@ pub fn cog_feprint(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     },
     Value::Word(vword) => {
       if let Ok(mut file) = File::options().append(true).create(true).open(&vword.str_word) {
-        estack.last().as_ref().unwrap().fprint(&mut file, "\n");
+        let is_terminal = file.is_terminal();
+        estack.last().as_ref().unwrap().fprint(&mut file, "\n", is_terminal);
       } else {
         state.current().stack.push(v);
         return state.eval_error("INVALID FILENAME", w)

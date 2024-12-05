@@ -1,7 +1,7 @@
 # Cognition Standard Library
 # Apr. 2024
 
-2 crank stdquote.cog load
+cog stdquote.cog
 
 # Parsing aliases
 [ setd ] dup def? ( ) ( ( d ) def [ d ] undef ) if
@@ -36,7 +36,6 @@
 
 # Metastack extension
 [ meta ] ( qstack reset ) def
-[ meta-unsafe ] ( uncd quote cd reset ) def # more efficient in most cases but does not preserve root in chroots
 [ parent ] ( qstack [ 1 ] crank ) def # qstack halt in baremetal environments
 [ pop ] ( ( uncd ) dip ) def
 [ popf ] ( ( uncdf ) dip ) def

@@ -36,6 +36,7 @@ fn new_cogstate(state: &mut CognitionState, v: Value) -> CognitionState {
     chroots: Vec::new(),
     stack, family,
     parser: None,
+    control: CognitionControl::None,
     exited: false,
     exit_code: None,
     args, fllibs, builtins,

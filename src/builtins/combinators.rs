@@ -1,5 +1,11 @@
 use crate::*;
 
+pub fn cog_eval(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() == 0 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  state.control.eval();
+  state
+}
+
 pub fn cog_quote(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let Some(v) = state.current().stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   let mut wrapper = state.pool.get_vstack(1);
@@ -173,6 +179,7 @@ pub fn cog_if(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
     state.current().stack.push(v2);
     state.pool.add_val(v1);
   }
+  state.control.eval();
   state
 }
 
@@ -313,8 +320,7 @@ pub fn cog_type(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 }
 
 pub fn add_builtins(state: &mut CognitionState) {
-  add_builtin!(state, "eval", EVAL);
-  add_builtin!(state, "return", RETURN);
+  add_builtin!(state, "eval", cog_eval);
   add_builtin!(state, "quote", cog_quote);
   add_builtin!(state, "child", cog_child);
   add_builtin!(state, "stack", cog_stack);
@@ -325,7 +331,7 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "prepose", cog_prepose);
   add_builtin!(state, "displace", cog_displace);
   add_builtin!(state, "invert", cog_invert);
-  add_builtin!(state, "if", cog_if, EVAL);
+  add_builtin!(state, "if", cog_if);
   add_builtin!(state, "dip", cog_dip);
   add_builtin!(state, "split", cog_split);
   add_builtin!(state, "vat", cog_vat);

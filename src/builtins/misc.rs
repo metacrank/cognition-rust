@@ -3,6 +3,11 @@ use crate::*;
 pub fn cog_panic(_: CognitionState, _: Option<&Value>) -> CognitionState { panic!() }
 pub fn cog_nop(state: CognitionState, _: Option<&Value>) -> CognitionState { state }
 
+pub fn cog_return(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  state.control.ret();
+  state
+}
+
 pub fn cog_exit(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   let Some(v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
@@ -123,47 +128,6 @@ pub fn cog_custom_questionmark(mut state: CognitionState, w: Option<&Value>) -> 
   state
 }
 
-pub fn cog_control_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  let Some(v) = stack.last() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
-  if v.value_stack_ref().len() != 1 { return state.eval_error("BAD ARGUMENT TYPE", w) }
-  let vword = if v.value_stack_ref().first().unwrap().is_control() {
-    let mut vword = state.pool.get_vword(1);
-    vword.str_word.push('t');
-    vword
-  } else {
-    state.pool.get_vword(0)
-  };
-  state.push_quoted(Value::Word(vword));
-  state
-}
-
-pub fn cog_same_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let stack = &mut state.current().stack;
-  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
-  let v2 = stack.last().unwrap();
-  let v1 = stack.get(stack.len() - 2).unwrap();
-  if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
-    return state.eval_error("BAD ARGUMENT TYPE", w)
-  }
-  let truth = match (v1.value_stack_ref().first().unwrap(), v2.value_stack_ref().first().unwrap()) {
-    (Value::Control(vcontrol1),Value::Control(vcontrol2)) => vcontrol1 == vcontrol2,
-    (Value::Control(_),Value::FLLib(_)) => false,
-    (Value::FLLib(_),Value::Control(_)) => false,
-    (Value::FLLib(vfllib1),Value::FLLib(vfllib2)) => vfllib1.fllib == vfllib2.fllib,
-    _ => return state.eval_error("BAD ARGUMENT TYPE", w),
-  };
-  let vword = if truth {
-    let mut vword = state.pool.get_vword(1);
-    vword.str_word.push('t');
-    vword
-  } else {
-    state.pool.get_vword(0)
-  };
-  state.push_quoted(Value::Word(vword));
-  state
-}
-
 pub fn cog_ctype(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let v = get_custom!(state, w);
   let ctype = v.vcustom_ref().custom.custom_type_name();
@@ -270,8 +234,8 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "panic", cog_panic);
   add_builtin!(state, "nothing");
   add_builtin!(state, "nop", cog_nop);
+  add_builtin!(state, "return", cog_return);
   add_builtin!(state, "ghost", GHOST);
-  add_builtin!(state, "return", RETURN);
   add_builtin!(state, "exit", cog_exit);
   add_builtin!(state, "reset", cog_reset);
   add_builtin!(state, "getargs", cog_getargs);
@@ -279,12 +243,10 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "void", cog_void);
   add_builtin!(state, "void?", cog_void_questionmark);
   add_builtin!(state, "custom?", cog_custom_questionmark);
-  add_builtin!(state, "control?", cog_control_questionmark);
-  add_builtin!(state, "same?", cog_same_questionmark);
   add_builtin!(state, "ctype", cog_ctype);
   add_builtin!(state, "var", cog_var);
   add_builtin!(state, "getp", cog_getp);
   add_builtin!(state, "setp", cog_setp);
 
-  state.add_const_word("version", VERSION);
+  state.add_const_word("VERSION", VERSION);
 }

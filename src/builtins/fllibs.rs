@@ -162,6 +162,29 @@ pub fn cog_library(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   state
 }
 
+pub fn cog_same_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  if stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let v2 = stack.last().unwrap();
+  let v1 = stack.get(stack.len() - 2).unwrap();
+  if v1.value_stack_ref().len() != 1 || v2.value_stack_ref().len() != 1 {
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let truth = match (v1.value_stack_ref().first().unwrap(), v2.value_stack_ref().first().unwrap()) {
+    (Value::FLLib(vfllib1),Value::FLLib(vfllib2)) => vfllib1.fllib == vfllib2.fllib,
+    _ => return state.eval_error("BAD ARGUMENT TYPE", w),
+  };
+  let vword = if truth {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
 pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "fllib?", cog_fllib_questionmark);
   add_builtin!(state, "fllib", cog_fllib);
@@ -171,4 +194,5 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "name", cog_name);
   add_builtin!(state, "set-name", cog_set_name);
   add_builtin!(state, "library", cog_library);
+  add_builtin!(state, "same?", cog_same_questionmark);
 }

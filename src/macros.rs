@@ -21,10 +21,6 @@ pub const DEFAULT_OPS_TABLE_SIZE: usize = 24;
 pub const DEFAULT_BASE: usize = 24;
 pub const BUILTINS_SIZE: usize = 192;
 
-pub const EVAL: crate::Value = crate::Value::Control(crate::VControl::Eval);
-pub const RETURN: crate::Value = crate::Value::Control(crate::VControl::Return);
-pub const GHOST: crate::Value = crate::Value::Control(crate::VControl::Ghost);
-
 #[macro_export]
 macro_rules! get_from_data_formats {
   ($filename:ident,$format:ident,$index:tt,$f:tt,$fail1:block,$fail2:block,$ext_slice:tt,$fail3:block) => {
@@ -481,6 +477,20 @@ macro_rules! get_from_custom_pool {
 }
 
 #[macro_export]
+macro_rules! void {
+  () => {
+    crate::Value::Custom(crate::VCustom{ custom: Box::new(crate::Void{}) })
+  }
+}
+
+#[macro_export]
+macro_rules! ghost {
+  () => {
+    crate::Value::Custom(crate::VCustom{ custom: Box::new(crate::Ghost{}) })
+  }
+}
+
+#[macro_export]
 macro_rules! foreign_vfllib {
   ($state:ident,$lib:ident,$f:ident) => {{
     let mut vfllib = $state.pool.get_vfllib($f);
@@ -509,19 +519,9 @@ macro_rules! build_macro {
     build_macro!($state, $n)
   }};
   // handle recursion
-  (WORD,$state:ident,$lib:ident,$n:expr,EVAL $(,$fi:tt)*) => {{
-    let mut vmacro = build_macro!(WORD,$state,$lib, $n $(,$fi)*);
-    vmacro.macro_stack.push(EVAL);
-    vmacro
-  }};
-  (WORD,$state:ident,$lib:ident,$n:expr,RETURN $(,$fi:tt)*) => {{
-    let mut vmacro = build_macro!(WORD,$state,$lib, $n $(,$fi)*);
-    vmacro.macro_stack.push(RETURN);
-    vmacro
-  }};
   (WORD,$state:ident,$lib:ident,$n:expr,GHOST $(,$fi:tt)*) => {{
     let mut vmacro = build_macro!(WORD,$state,$lib, $n $(,$fi)*);
-    vmacro.macro_stack.push(GHOST);
+    vmacro.macro_stack.push(ghost!());
     vmacro
   }};
   (WORD,$state:ident,$lib:ident,$n:expr,$fn:ident $(,$fi:tt)*) => {{
@@ -542,19 +542,9 @@ macro_rules! build_macro {
     $state.pool.get_vmacro($n)
   };
   // handle recursion
-  ($state:ident,$n:expr,EVAL $(,$fi:tt)*) => {{
-    let mut vmacro = build_macro!($state, $n $(,$fi)*);
-    vmacro.macro_stack.push(EVAL);
-    vmacro
-  }};
-  ($state:ident,$n:expr,RETURN $(,$fi:tt)*) => {{
-    let mut vmacro = build_macro!($state, $n $(,$fi)*);
-    vmacro.macro_stack.push(RETURN);
-    vmacro
-  }};
   ($state:ident,$n:expr,GHOST $(,$fi:tt)*) => {{
     let mut vmacro = build_macro!($state, $n $(,$fi)*);
-    vmacro.macro_stack.push(GHOST);
+    vmacro.macro_stack.push(ghost!());
     vmacro
   }};
   ($state:ident,$n:expr,$fn:ident $(,$fi:tt)*) => {{
@@ -580,14 +570,6 @@ macro_rules! build_macro {
 /// resulting vfllib str_word value is derived from 'name'. Otherwise, they are all nameless.
 #[macro_export]
 macro_rules! add_builtin {
-  ($state:ident,$name:literal,EVAL) => {
-    let vmacro = build_macro!($state, 1, EVAL);
-    $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
-  };
-  ($state:ident,$name:literal,RETURN) => {
-    let vmacro = build_macro!($state, 1, RETURN);
-    $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
-  };
   ($state:ident,$name:literal,GHOST) => {
     let vmacro = build_macro!($state, 1, GHOST);
     $state.def($crate::Value::Macro(vmacro), std::string::String::from($name));
@@ -611,12 +593,6 @@ macro_rules! add_builtin {
 }
 #[macro_export]
 macro_rules! add_word {
-  ($state:ident,$lib:ident,$name:literal,EVAL) => {
-    add_builtin!($state, $name, EVAL);
-  };
-  ($state:ident,$lib:ident,$name:literal,RETURN) => {
-    add_builtin!($state, $name, RETURN);
-  };
   ($state:ident,$lib:ident,$name:literal,GHOST) => {
     add_builtin!($state, $name, GHOST);
   };
@@ -638,7 +614,7 @@ macro_rules! overload_word {
       if let Some(mut wt) = $state.current().word_table.take() {
         if let Some((key, mut wd)) = wt.remove_entry($name) {
           if let Some(v) = std::sync::Arc::<Value>::get_mut(&mut wd) {
-            let vmacro = $state.pool.get_vmacro(4);
+            let vmacro = $state.pool.get_vmacro(3);
             let mut new_v = $crate::Value::Macro(vmacro);
             std::mem::swap(v, &mut new_v);
             v.vmacro_mut().macro_stack.push(new_v);
@@ -646,17 +622,15 @@ macro_rules! overload_word {
             v.vmacro_mut().macro_stack.push($crate::Value::Macro(new_vmacro));
             let vfllib = foreign_vfllib!($state, $lib, $f1);
             v.vmacro_mut().macro_stack.push($crate::Value::FLLib(vfllib));
-            v.vmacro_mut().macro_stack.push(EVAL);
             wt.insert(key, wd);
           } else {
             let mut v = $state.value_copy(&*wd);
-            let mut vmacro = $state.pool.get_vmacro(4);
+            let mut vmacro = $state.pool.get_vmacro(3);
             vmacro.macro_stack.push(v);
             let new_vmacro = build_macro!(WORD, $state, $lib, 0, [$($f2)*]);
             vmacro.macro_stack.push($crate::Value::Macro(new_vmacro));
             let vfllib = foreign_vfllib!($state, $lib, $f1);
             vmacro.macro_stack.push($crate::Value::FLLib(vfllib));
-            vmacro.macro_stack.push(EVAL);
             wt.insert(key, $crate::WordDef::from($crate::Value::Macro(vmacro)));
           }
           $state.current().word_table = Some(wt);

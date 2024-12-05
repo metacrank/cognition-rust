@@ -35,26 +35,26 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 1 crank if
 2crank ing 0 crank
 2crank ing 0 crank #
-2crank ing 0 crank geti getd gets crankbase f d f i endl s
-2crank ing 1 crank compose compose compose compose compose compose compose compose compose
-2crank ing 0 crank drop halt crank s d i
-2crank ing 1 crank compose compose compose compose compose VMACRO cast quote compose
-2crank ing 0 crank halt 1 quote ing 1 quote ing metacrank
-2crank ing 1 crank compose compose compose compose VMACRO cast
+2crank ing 2 crank geti unglue getd unglue gets unglue crankbase unglue 1 quote metacrankbase unglue
+2crank ing 2 crank f unglue d unglue f unglue i unglue endl unglue s unglue
+2crank ing 1 crank compose compose compose compose compose compose compose compose compose compose compose
+2crank ing 2 crank drop unglue 1 quote swap unglue metacrank unglue crank unglue s unglue d unglue i unglue
+2crank ing 1 crank compose compose compose compose compose compose compose
+2crank ing 1 crank VMACRO cast quote compose
+2crank ing 2 crank 0 quote crank unglue 1 quote 1 quote metacrank unglue
+2crank ing 1 crank compose compose compose compose compose VMACRO cast
 2crank ing 1 crank def
 2crank ing 2 crank # singlet # delim
 2crank ing 0 crank
-2crank ing 1 crank # This comment function will be improved in the standard library
-2crank ing 1 crank # Readable definition of (#):
-2crank ing 1 crank #( geti getd gets crankbase '' d '' i '\n' s ( drop halt crank s d i ) halt 1 1 metacrank )
+2crank ing 1 crank # This is a prefix comment function (#)
 2crank ing 1 crank
 2crank ing 1 crank # COGLIB_DIR environment variable
 2crank ing 0 crank coglib-dir
 2crank ing 2 crank COGLIB_DIR quote var unglue
 2crank ing 1 crank compose VMACRO cast def
 2crank ing 1 crank
-2crank ing 1 crank #'crank file2: ['file1 load...']' emulates the behaviour of 'crank -s 2 file1 file2'
-2crank ing 0 crank exec
+2crank ing 1 crank #'crank file2: ['file1 feval...']' emulates the behaviour of 'crank -s 2 file1 file2'
+2crank ing 0 crank feval
 2crank ing 1 crank
 2crank ing 2 crank word? unglue
 2crank ing 1 crank stack quote
@@ -69,17 +69,39 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 2 crank swap unglue quote eval dip unglue swap unglue esize unglue = unglue
 2crank ing 1 crank compose compose compose compose compose compose compose compose compose compose
 2crank ing 1 crank
-2crank ing 2 crank prepose unglue evalstr unglue
+2crank ing 2 crank prepose unglue streval unglue
 2crank ing 1 crank compose quote compose
 2crank ing 2 crank edrop unglue coglib-dir unglue / quote concat unglue
-2crank ing 2 crank swap unglue concat unglue fread unglue prepose unglue evalstr unglue
+2crank ing 2 crank swap unglue concat unglue fread unglue prepose unglue streval unglue
 2crank ing 1 crank compose compose compose compose compose compose compose compose quote
 2crank ing 1 crank
 2crank ing 2 crank if unglue
 2crank ing 1 crank compose compose
 2crank ing 1 crank
 2crank ing 1 crank def
-2crank ing 2 crank
+2crank ing 1 crank
+2crank ing 1 crank # Comment-aware prefix version of feval
+2crank ing 0 crank cog
+2crank ing 1 crank
+2crank ing 2 crank dup unglue # quote = unglue
+2crank ing 1 crank compose compose
+2crank ing 1 crank
+2crank ing 2 crank dup unglue quote eval dip unglue eval unglue
+2crank ing 1 crank compose compose VMACRO cast
+2crank ing 1 crank quote compose
+2crank ing 1 crank
+2crank ing 2 crank swap unglue drop unglue 1 quote crank unglue 1 quote 0 quote metacrank unglue feval unglue
+2crank ing 1 crank compose compose compose compose compose compose compose
+2crank ing 1 crank quote compose
+2crank ing 1 crank
+2crank ing 2 crank if unglue compose eval
+2crank ing 1 crank quote dup compose
+2crank ing 1 crank
+2crank ing 2 crank 0 quote crank unglue 1 quote 1 quote metacrank unglue
+2crank ing 1 crank compose compose compose compose compose VMACRO cast
+2crank ing 1 crank
+2crank ing 1 crank def
+2crank ing 1 crank
 2crank ing 1 crank ### We have applied the following changes to the state:
 2crank ing 1 crank #
 2crank ing 1 crank # ----Parser----
@@ -106,8 +128,13 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 1 crank #      'setd': ( d )
 2crank ing 1 crank #      'seti': ( i )
 2crank ing 1 crank #      'sets': ( s )
-2crank ing 1 crank #         '#': ( geti getd gets crankbase '' d '' i '\n' s ( drop halt crank s d i ) halt 1 1 metacrank )
+2crank ing 1 crank #         '#': ( geti getd gets crankbase [ 1 ] metacrankbase [ '' ] d [ '' ] i [ '\n' ] s
+2crank ing 1 crank #                ( drop [ 1 ] swap metacrank crank s d i )
+2crank ing 1 crank #                [ 0 ] crank [ 1 ] [ 1 ] metacrank )
 2crank ing 1 crank #'coglib-dir': ( [ 'COGLIB_DIR' ] var )
-2crank ing 1 crank #      'exec': ( word? [ ] ( [ 'BAD ARGUMENT TYPE' ] ethrow ) if
+2crank ing 1 crank #     'feval': ( word? [ ] ( [ 'BAD ARGUMENT TYPE' ] ethrow ) if
 2crank ing 1 crank #                esize swap [ 0 ] vat fread ( swap ) dip swap esize =
 2crank ing 1 crank #                ( prepose evalstr ) ( edrop coglib-dir [ '/' ] concat swap concat fread prepose evalstr ) if )
+2crank ing 1 crank #       'cog': ( ( dup [ '#' ] = ( ( dup ) dip eval ) ( swap drop [ 1 ] crank [ 1 ] [ 0 ] metacrank feval ) if )
+2crank ing 1 crank #                ( dup [ '#' ] = ( ( dup ) dip eval ) ( swap drop [ 1 ] crank [ 1 ] [ 0 ] metacrank feval ) if )
+2crank ing 1 crank #                [ 0 ] crank [ 1 ] [ 1 ] metacrank )

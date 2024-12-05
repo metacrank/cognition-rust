@@ -5,7 +5,7 @@
 2crank ing 0 crank
 2crank ing 2 crank cognition> spc
 2crank ing 1 crank concat quote
-2crank ing 2 crank print addon read addon repl quote compose addon evalstr unglue
+2crank ing 2 crank print addon read addon repl quote compose addon streval unglue
 2crank ing 1 crank quote compose compose
 2crank ing 2 crank eval addon ssize addon
 2crank ing 1 crank

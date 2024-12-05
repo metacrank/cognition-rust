@@ -146,86 +146,77 @@ def
   if dup macro swap
   [ 0 ] crank [ 1 ] [ 1 ] metacrank ) def
 
+# Namespacing
+child cd
+
+[ get-keyword ] (
+  unglue swap quote compose cd dup def? ( ( uncd drop ) dip ) dip
+) def
+
 # factor out common definitions
-[ lquote-addon ] ( compose ( dup ) dip swap ) def
-[ lquote-init ] ( crankbase [ 1 ] metacrankbase dup [ 1 ] = ) def
-[ rquote-end1 ] ( drop swap drop swap [ 1 ] swap metacrank swap crank ) def
-[ rquote-end0 ] ( rquote-end1 quote compose ( dup ) dip swap ) def
-[ lquote-prebody ] ( dup dup dup dup dup dup dup dup dup dup dup dup dup dup dup
-                     \ [ = swap \ ( = or swap \ [[ = or swap \ (( = or swap \ { = or swap \ {{ = or swap
-                     \ '[ = or swap \ '( = or swap \ '[[ = or swap \ '(( = or swap \ '{ = or swap \ '{{ = or swap
-                     \ \ = or swap \ # = or swap \ " = or ) def #"
-[ lquote-body ] ( lquote-prebody ( eval ) ( lquote-addon ) if ) def
-[ lquote-ebody ] ( lquote-prebody ( eval ) ( dup def? ( unglue ) ( ) if lquote-addon ) if ) def
-[ lquote-end ] ( swap [ 0 ] crank [ 1 ] [ 1 ] metacrank ) def
+[ addon  ] ( compose ( dup ) dip swap ) def
+[ init   ] ( crankbase [ 1 ] metacrankbase ) def
+[ finish ] ( drop swap drop swap [ 1 ] swap metacrank swap crank ) def
+[ nest   ] ( quote compose ( dup ) dip swap ) def
+[ body   ] ( get-keyword ( eval ) ( addon ) if ) def
+[ ebody  ] ( get-keyword ( eval ) ( dup def? ( unglue ) ( ) if lquote-addon ) if ) def
+[ end    ] ( swap [ 0 ] crank [ 1 ] [ 1 ] metacrank return ) def
 
-\ [  ( lquote-init
-       [ ( dup \ ] = ( rquote-end0 ) ( lquote-body ) if ) ]
-       [ ( dup \ ] = ( rquote-end1 ) ( lquote-body ) if ) ]
-       if dup [ ] lquote-end ) def
+# placeholder:
+\ p[ \ [ unglue def
+\ p( \ ( unglue def
 
-\ (  ( lquote-init
-       [ ( dup \ ) = ( rquote-end0 ) ( lquote-ebody ) if ) ]
-       [ ( dup \ ) = ( rquote-end1 ) ( lquote-ebody ) if ) ]
-       if dup ( ) lquote-end ) def
+\ [  p[ p( init p( dup \ ]  = p( finish ) p( body  ) if ) dup stack end ) eval ing ] def
+\ (  p[ p( init p( dup \ )  = p( finish ) p( ebody ) if ) dup macro end ) eval ing ] def
+\ {  p[ p( init p( dup \ }  = p( finish ) p( body  ) if ) dup child end ) eval ing ] def
+\ [[ p[ p( init p( dup \ ]] = p( finish ) p( ebody ) if ) dup stack end ) eval ing ] def
+\ (( p[ p( init p( dup \ )) = p( finish ) p( body  ) if ) dup macro end ) eval ing ] def
+\ {{ p[ p( init p( dup \ }} = p( finish ) p( ebody ) if ) dup child end ) eval ing ] def
 
-\ [[ ( lquote-init
-       [ ( dup \ ]] = ( rquote-end0 ) ( lquote-ebody ) if ) ]
-       [ ( dup \ ]] = ( rquote-end1 ) ( lquote-ebody ) if ) ]
-       if dup [ ] lquote-end ) def
+\ (  p( ghost init p( dup \ )  = p( finish nest ) p( ebody ) if ) dup macro end )
+\ [[ p( ghost init p( dup \ ]] = p( finish nest ) p( ebody ) if ) dup stack end )
+\ {{ p( ghost init p( dup \ }} = p( finish nest ) p( ebody ) if ) dup child end )
 
-\ (( ( lquote-init
-       [ ( dup \ )) = ( rquote-end0 ) ( lquote-body ) if ) ]
-       [ ( dup \ )) = ( rquote-end1 ) ( lquote-body ) if ) ]
-       if dup ( ) lquote-end ) def
+\ [  p( ghost init p( dup \ ]  = p( finish nest ) p( body ) if ) dup stack end )
+\ {  p( ghost init p( dup \ }  = p( finish nest ) p( body ) if ) dup child end )
+\ (( p( ghost init p( dup \ )) = p( finish nest ) p( body ) if ) dup macro end )
 
-\ {  ( lquote-init
-       [ ( dup \ } = ( rquote-end0 ) ( lquote-body ) if ) ]
-       [ ( dup \ } = ( rquote-end1 ) ( lquote-body ) if ) ]
-       if dup child lquote-end ) def
+qstack \ 3 split
 
-\ {{ ( lquote-init
-       [ ( dup \ }} = ( rquote-end0 ) ( lquote-ebody ) if ) ]
-       [ ( dup \ }} = ( rquote-end1 ) ( lquote-ebody ) if ) ]
-       if dup child lquote-end ) def
+std-quote dup def? \ unglue p( drop stack ) if
+swap compose
+p( cd def def def uncd ) eval
+std-quote swap def
 
-# undefine no-longer-needed factors
-[ lquote-addon ] undef
-[ lquote-init ] undef
-[ rquote-end0 ] undef
-[ rquote-end1 ] undef
-[ lquote-prebody ] undef
-[ lquote-body ] undef
-[ lquote-ebody ] undef
-[ lquote-end ] undef
+std-equote dup def? \ unglue p( drop stack ) if
+swap compose
+p( cd def def def uncd ) eval
+std-equote swap def
 
-# better escape character
-# (different behaviour inside quotes than before: doesn't double-quote)
-\ \
-( [ 1 ] metacrankbase [ 1 ] =
-  [ ( compose ( dup ) dip swap ) ]
-  [ ( halt [ 1 ] crank ) ]
-  if halt [ 1 ] [ 1 ] metacrank ) def
+(
+  uncd ( ( uncd ) dip swap quote compose
+  [ \ [  ] bequeath
+  [ \ (  ] bequeath
+  [ \ {  ] bequeath
+  [ \ [[ ] bequeath
+  [ \ (( ] bequeath
+  [ \ {{ ] bequeath
+  ccd
+)
+eval
 
-# reimplement comment:
-\ #
-( geti getd gets crankbase f d f i endl s
-  [ 1 ] metacrankbase [ 1 ] =
-  [ ( drop crank s d i ( dup ) dip swap ) ]
-  [ ( drop halt crank s d i ) ]
-  if
-  halt [ 1 ] [ 1 ] metacrank )
-def
+\ \ [
 
-# basic string (without escape characters)
-\ "
-( getd gets geti [ \ " ] d [ \ " ] s f i
-  [ 1 ] metacrankbase [ 1 ] =
-  [ ( drop swap i swap s swap d quote compose ( dup ) dip swap ) ]
-  [ ( drop swap i swap s swap d halt [ 1 ] crank ) ]
-  if ( dup [ \ " ] = ( drop f swap f swap eval ) ( swap ) if )
-  halt [ 1 ] [ 1 ] metacrank ) def
-\ " singlet
-
-# reimplement cog:
-\ cog drop
+"PREFIX" dup def? [ dup unglue ] [ stack ] if
+(
+  cd
+  "["  ( ( dup ) dip swap ) ) def
+  "("  ( ( dup ) dip swap ) ) def
+  "{"  ( ( dup ) dip swap ) ) def
+  "[[" ( ( dup ) dip swap ) ) def
+  "((" ( ( dup ) dip swap ) ) def
+  "{{" ( ( dup ) dip swap ) ) def
+  "cog" ( ( dup ) ) def
+  uncd
+)
+eval def

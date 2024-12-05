@@ -18,10 +18,10 @@
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "60719559e00b7d88e5c8e1a8424abeb4d1d44381")))
+           (commit "bcedd8471ed23517ca544fff040bfd00486ea8d7")))
      (sha256
       (base32
-       "17fymcpyyjlwapjpx7h74fy8glb086ijkcpjl7kw8an894070lgj"))))
+       "1la0p1npsqhmrgnw5zk4w92q8g1h7ywyy2fybap591w0ga8fvn6p"))))
    (build-system cargo-build-system)
    (arguments
     `(#:cargo-inputs
@@ -43,10 +43,10 @@
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "4c073843593b8ef9fc8c95e69e55a8a837b9e125")))
+           (commit "bcedd8471ed23517ca544fff040bfd00486ea8d7")))
      (sha256
       (base32
-       "0hqh12v63hw3b9i0slq85bwfbinclgkc6h8iamhh1lybi33xhfwv"))))
+       "1la0p1npsqhmrgnw5zk4w92q8g1h7ywyy2fybap591w0ga8fvn6p"))))
    (build-system cargo-build-system)
    (arguments
     `(#:cargo-inputs
@@ -54,8 +54,7 @@
        ("serde" ,rust-serde-1)
        ("serde_json" ,rust-serde-json-1)
        ("erased-serde" ,rust-erased-serde-0.4)
-       ("cognition-macros" ,cognition-macros-0.1)
-       )
+       ("cognition-macros" ,cognition-macros-0.1))
       #:phases
       (modify-phases %standard-phases
                      (delete 'package))))

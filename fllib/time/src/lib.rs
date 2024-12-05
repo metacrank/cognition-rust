@@ -70,14 +70,14 @@ macro_rules! add_durations {
           }
         }
       };
-      let _ = std::mem::replace(&mut $d2.duration, dsum);
+      $d2.duration = dsum;
     } else {
       let Some(dsum) = $d1.duration.checked_add($d2.duration) else {
         $state.current().stack.push($v1);
         $state.current().stack.push($v2);
         return $state.eval_error("DURATION OVERFLOW", $w)
       };
-      let _ = std::mem::replace(&mut $d2.duration, dsum);
+      $d2.duration = dsum;
     }
   }
 }
@@ -178,14 +178,14 @@ fn add_duration(mut state: CognitionState, w: Option<&Value>, add: bool) -> Cogn
       } else {
         let Some(i) = i.instant.checked_sub(d.duration) else { break 'fail d.neg }; i
       };
-      let _ = std::mem::replace(&mut i.instant, i_new);
+      i.instant = i_new;
     } else if let (Some(i), Some(d)) = (v1custom.downcast_mut::<SystemTimeCustom>(), v2custom.downcast_ref::<DurationCustom>()) {
       let t_new = if add {
         let Some(t) = i.time.checked_add(d.duration) else { break 'fail !d.neg }; t
       } else {
         let Some(t) = i.time.checked_sub(d.duration) else { break 'fail d.neg }; t
       };
-      let _ = std::mem::replace(&mut i.time, t_new);
+      i.time = t_new;
     } else {
       state.current().stack.push(v1);
       state.current().stack.push(v2);

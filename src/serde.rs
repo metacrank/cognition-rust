@@ -327,8 +327,7 @@ impl Serialize for Value {
       Value::Macro(ref vm) => serializer.serialize_newtype_variant("Value", 2, "Macro", vm),
       Value::Error(ref ve) => serializer.serialize_newtype_variant("Value", 3, "Error", ve),
       Value::FLLib(ref vf) => serializer.serialize_newtype_variant("Value", 4, "FLLib", vf),
-      Value::Custom(ref vc) => serializer.serialize_newtype_variant("Value", 5, "Custom", vc),
-      Value::Control(ref vc) => serializer.serialize_newtype_variant("Value", 6, "Control", vc),
+      Value::Custom(ref vc) => serializer.serialize_newtype_variant("Value", 5, "Custom", vc)
     }
   }
 }
@@ -479,7 +478,7 @@ impl<'de> CognitionDeserialize<'de> for Value {
     Self: Sized,
   {
     #[derive(Deserialize)]
-    enum Field { Word, Stack, Macro, Error, FLLib, Custom, Control }
+    enum Field { Word, Stack, Macro, Error, FLLib, Custom }
 
     struct CognitionVisitor<'s> {
       state: &'s mut CognitionState
@@ -516,14 +515,13 @@ impl<'de> CognitionDeserialize<'de> for Value {
           Field::Custom => {
             let seed = CognitionDeserializeSeed::<VCustom>::new(self.state);
             Ok(Value::Custom(variant_data.newtype_variant_seed(seed)?))
-          },
-          Field::Control => Ok(Value::Control(variant_data.newtype_variant()?)),
+          }
         }
       }
     }
 
     let visitor = CognitionVisitor{ state };
-    const FIELDS: &[&str] = &["Word", "Stack", "Macro", "Error", "FLLib", "Custom", "Control"];
+    const FIELDS: &[&str] = &["Word", "Stack", "Macro", "Error", "FLLib", "Custom"];
     deserializer.deserialize_enum("Value", FIELDS, visitor)
   }
 }
