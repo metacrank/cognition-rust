@@ -1,6 +1,6 @@
 #!/usr/bin/env -S crank -s 2 stdbootstrap.cog
-#stdlib.cog exec
-stdquote.cog exec
+#cog stdlib.cog
+cog stdquote.cog
 [ repl ] (
   "cognition> " print read ( evalstr ) eval ssize ( endl print ? ) [ ] if
   \ repl

@@ -52,6 +52,9 @@ cog stdquote.cog
 [ stack? ] ( type "VSTACK" = ) def
 [ empty? ] ( size zero? ) def
 
+# Prefix functions
+[ func ] # do prefix stuff so 'func a ( stuff )' === '[ a ] ( stuff ) def'
+
 # Generating words
 "stdgenlib.cog" load
 

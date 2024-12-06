@@ -110,7 +110,7 @@ fn main() -> ExitCode {
       match w {
         Some(v) => {
           if let Some(f) = &mut logfile { v.fprint(f, "\n", false) }
-          state = state.eval(v)
+          state = state.eval(v, None)
         },
         None => break,
       }
@@ -550,17 +550,17 @@ fn print_end(state: &CognitionState, e: End) {
   if e.cranks {
     if let Some(cranks) = &cur.cranks {
       println!("");
-      if cranks.len() == 0 {
+      if cranks.iter().all(|cr| cr.base == 0) {
         println!("crank 0");
       } else {
         print!("cranks:");
         for (i, crank) in cranks.iter().enumerate() {
-          print!(" {i}:({},{})", crank.modulo, crank.base);
+          if crank.base != 0 { print!(" {i}:({},{})", crank.modulo, crank.base); }
         }
         println!("");
       }
     } else {
-      println!("uninitialized crank");
+      println!("crank 0");
     }
   }
 

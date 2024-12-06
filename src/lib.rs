@@ -648,13 +648,6 @@ impl CognitionControl {
   pub fn is_none(&self) -> bool { if let Self::None = self { true } else { false } }
 }
 
-enum RecurseControl {
-  Evalf(WordDef, Stack),
-  Crank(WordDef, Stack),
-  Def(WordDef, Value),
-  None,
-}
-
 pub struct CognitionState {
   pub chroots: Vec<Stack>, // meta metastack
   pub stack: Stack, // metastack
@@ -669,6 +662,7 @@ pub struct CognitionState {
   pub serde: Serde,
   pub pool: Pool,
 }
+
 
 macro_rules! eval_value_if_cranked {
   ($self:ident,$v:ident,$callword:ident,$local_family:expr,$do_crank:expr) => {
@@ -692,9 +686,12 @@ macro_rules! evalstack_recurse_setup {
         $legacy_family = Some($self.pool.get_family());
       }
       $legacy_family.as_mut().unwrap().push(member);
-      $local_family = local_family_iter.collect();
-      $legacy_family.as_mut().unwrap().append(&mut $local_family);
-    } else { $local_family = local_family_iter.collect() }
+      for f in local_family_iter { $legacy_family.as_mut().unwrap().push(f) }
+      $local_family = $self.pool.get_family();
+    } else {
+      $local_family = $self.pool.get_family();
+      for f in local_family_iter { $local_family.push(f) }
+    }
     $self.pool.add_word_def($wd);
     $wd = $wdn;
     $is_macro = if $wd.is_stack() {
@@ -731,8 +728,10 @@ macro_rules! evalstack_recurse_setup {
 }
 macro_rules! evalstack_recurse {
   ($self:ident,$is_macro:ident,$wd:ident,$wdn:ident,$local_family:ident,$legacy_family:ident,$family_stack_pushes:ident,$new_family_member:ident,$refstack:ident,$i:ident,$destructive:ident,$callword:ident,$crank_first:ident,DESTRUCTIVE,$stack:ident,$retstack:ident,$word_holder:ident,$crnkf:expr,$last_v:ident) => {
-    while let Some(f) = $self.family.pop() { $local_family.push(f) }
+    //while let Some(f) = $self.family.pop() { $local_family.push(f) }
     if $last_v {
+
+      while let Some(f) = $self.family.pop() { $local_family.push(f) }
       evalstack_recurse_setup!($self, $is_macro, $wd, $wdn, $local_family, $legacy_family, $family_stack_pushes, $new_family_member, $refstack, $i, $word_holder);
       $self.pool.add_stack($stack);
       $stack = $retstack;
@@ -1121,236 +1120,69 @@ impl CognitionState {
     true
   }
 
-  fn eval_word(mut self, v: Value, local_family: &mut Family, always_evalf: bool, try_eval: bool, cranking: bool) -> (Self, RecurseControl) {
-    loop {
-      let Some(family_stack) = self.family.pop() else {
-        // Assuming family stack has failed
-        if try_eval {
-          if let Some(ref wt) = self.current_ref().word_table {
-            if let Some(wd) = wt.get(&v.vword_ref().str_word) {
-              let new_word_def = wd.clone();
-              break (self, RecurseControl::Def(new_word_def, v))
-            }
-          }
-        }
-        if self.current().isfalias(&v) {
-          if always_evalf || self.evalf_high_tide() {
-            let (mut new_self, result) = self.get_evalf_val(Some(&v));
-            new_self.pool.add_val(v);
-            let Some((wd, defstack)) = result else { break (new_self, RecurseControl::None) };
-            break (new_self, RecurseControl::Evalf(wd, defstack))
-          }
-          self.pool.add_val(v);
-          break (self, RecurseControl::None)
-        }
-        self.push_quoted(v);
-        if cranking {
-          if try_eval { self.current().inc_crank() }
-          else {
-            let (new_self, result) = self.get_crank_val();
-            let Some((wd, defstack)) = result else { break (new_self, RecurseControl::None) };
-            break (new_self, RecurseControl::Crank(wd, defstack))
-          }
-        }
-
-        break (self, RecurseControl::None)
-      };
-
-      let family_container = &family_stack.vstack_ref().container;
-      if try_eval {
-        if let Some(ref wt) = family_container.word_table {
-          if let Some(wd) = wt.get(&v.vword_ref().str_word) {
-            let new_word_def = wd.clone();
-            self.family.push(family_stack);
-            break (self, RecurseControl::Def(new_word_def, v))
-          }
-        }
-      }
-      if family_container.isfalias(&v) {
-        if always_evalf || self.evalf_high_tide() {
-          let (mut new_self, result) = self.get_evalf_val(Some(&v));
-          new_self.pool.add_val(v);
-          let Some((wd, defstack)) = result else { break (new_self, RecurseControl::None) };
-          break (new_self, RecurseControl::Evalf(wd, defstack))
-        }
-        self.pool.add_val(v);
-        break (self, RecurseControl::None)
-      }
-      local_family.push(family_stack);
-    }
-  }
-
-  fn eval_fllib(mut self, v: Value, callword: Option<&Value>, force_eval: bool, cranking: bool) -> (Self, RecurseControl) {
-    let fllib = v.vfllib_ref().fllib.clone();
-    if self.is_high_tide() || force_eval {
-      self.pool.add_val(v);
-      if cranking { self.current().inc_crank() }
-      self = fllib(self, callword.clone());
-      if self.control.is_eval() {
-        self.control.clear();
-        let (new_self, result) = self.get_evalf_val(callword);
-        let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-        return (new_self, RecurseControl::Evalf(wd, defstack))
-      }
-    } else {
-      self.push_quoted(v);
-      if cranking {
-        let (new_self, result) = self.get_crank_val();
-        let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-        return (new_self, RecurseControl::Crank(wd, defstack))
-      }
-    }
-    (self, RecurseControl::None)
-  }
-
-  fn eval_custom(mut self, v: Value, force_eval: bool, cranking: bool) -> (Self, RecurseControl) {
-    if !v.vcustom_ref().custom.as_any().is::<Ghost>() {
-      self.push_quoted(v);
-      if cranking {
-        if self.is_high_tide() || force_eval { self.current().inc_crank() }
-        else {
-          let (new_self, result) = self.get_crank_val();
-          let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-          return (new_self, RecurseControl::Crank(wd, defstack))
-        }
-      }
-    }
-    (self, RecurseControl::None)
-  }
-
-  fn eval_value(mut self, v: Value, callword: Option<&Value>, local_family: &mut Family, force_eval: bool, cranking: bool) -> (Self, RecurseControl) {
-    match &v {
-      Value::Word(_) => {
-        let high_tide = self.is_high_tide();
-        self.eval_word(v, local_family, force_eval, high_tide || force_eval, cranking)
-      },
-      Value::Error(_) => panic!("VError on stack"),
-      Value::FLLib(_) => self.eval_fllib(v, callword, force_eval, cranking),
-      Value::Custom(_) => self.eval_custom(v, force_eval, cranking),
-      _ => {
-        self.current().stack.push(v);
-        if cranking {
-          if self.is_high_tide() || force_eval { self.current().inc_crank() }
-          else {
-            let (new_self, result) = self.get_crank_val();
-            let Some((wd, defstack)) = result else { return (new_self, RecurseControl::None) };
-            return (new_self, RecurseControl::Crank(wd, defstack))
-          }
-        }
-        (self, RecurseControl::None)
-      },
-    }
-  }
-
-  #[inline(always)]
-  fn evalstack(mut self, mut wd: WordDef, defstack: Option<Stack>, mut callword: Option<&Value>, mut crank_first: bool) -> Self {
-    let mut family_stack_pushes = 0;
-    let mut new_family_member = false;
-    let mut is_macro = if wd.is_stack() {
-      family_stack_pushes += 1;
-      new_family_member = true;
-      self.family.push(wd.clone());
-      false
-    } else { true };
-    let mut local_family = self.pool.get_family();
-    let mut legacy_family: Option<Family> = None;
-    let mut control: RecurseControl;
-    let mut return_mode = true;
-
-    let mut refstack = wd.value_stack_ref();
-    let (mut stack, mut destructive) = if defstack.is_some() {
-      (defstack.unwrap(), true)
-    } else {
-      (self.pool.get_stack(0), false)
-    };
-    let mut word_holder: Option<Value> = None;
-
-    let mut i: usize = 0;
-    loop {
-      if if destructive { stack.len() == 0 } else { i >= refstack.len() } { break }
-      let v = if destructive { stack.pop().unwrap() } else { self.value_copy(&refstack[i]) };
-      let last_v = if destructive { stack.len() == 0 } else { i == refstack.len() - 1 };
-      let cranking = if is_macro { crank_first && i == 0 } else { crank_first || i != 0 };
-      (self, control) = self.eval_value(v, callword!(callword, word_holder), &mut local_family, is_macro || i == 0, cranking);
-
-      match control {
-        RecurseControl::Evalf(wdn, retstack) => {
-          evalstack_recurse!(self, is_macro, wd, wdn, local_family, legacy_family, family_stack_pushes, new_family_member,
-                             refstack, i, destructive, callword, crank_first, DESTRUCTIVE, stack, retstack, word_holder, false, last_v); },
-        RecurseControl::Crank(wdn, retstack) => {
-          evalstack_recurse!(self, is_macro, wd, wdn, local_family, legacy_family, family_stack_pushes, new_family_member,
-                             refstack, i, destructive, callword, crank_first, DESTRUCTIVE, stack, retstack, word_holder, true, last_v); },
-        RecurseControl::Def(wdn, v) => {
-          evalstack_recurse!(self, is_macro, wd, wdn, local_family, legacy_family, family_stack_pushes, new_family_member,
-                             refstack, i, destructive, callword, crank_first, v, word_holder, cranking, last_v, return_mode); },
-        RecurseControl::None => {},
-      }
+  fn evalstack(mut self, mut wd: WordDef, callword: Option<&Value>, crank_first: bool) -> Self {
+    let mut eval = CognitionEval::setup(&mut self, &mut wd, crank_first);
+    while !eval.is_empty() {
+      let (state, recurse) = eval.eval_value(self, callword);
+      (self, eval) = eval.eval_recurse(state, recurse, callword);
       if self.exited { break }
       if self.control.is_return() {
-        if !return_mode { self.control.clear(); }
+        if eval.kill_return() { self.control.clear(); }
         break
       }
-      i = i.wrapping_add(1);
     }
-    if let Some(wh) = word_holder { self.pool.add_val(wh) }
-    self.pool.add_stack(stack);
-    while let Some(f) = local_family.pop() { self.family.push(f) }
-    self.pool.add_family(local_family);
-    if let Some(mut lf) = legacy_family {
-      while let Some(f) = lf.pop() { self.family.push(f) }
-      self.pool.add_family(lf)
-    }
-    for _ in 0..family_stack_pushes {
-      if let Some(wd) = self.family.pop() {
-        self.pool.add_word_def(wd) }}
+    eval.decommission(&mut self);
+    self.pool.add_word_def(wd);
     self
   }
 
-  pub fn get_evalf_val(mut self, alias: Option<&Value>) -> (Self, Option<(WordDef, Stack)>) {
-    let Some(mut needseval) = self.current().stack.pop() else { return (self.eval_error("EMPTY STACK", alias), None) };
-    let mut defstack = self.pool.get_stack(needseval.value_stack_ref().len());
-    while let Some(v) = needseval.value_stack().pop() { defstack.push(v) }
+  pub fn get_evalf_val(&mut self, alias: Option<&Value>) -> Option<WordDef> {
+    let Some(needseval) = self.current().stack.pop() else {
+      self.eval_error_mut("EMPTY STACK", alias);
+      return None
+    };
     let wd = self.pool.get_word_def(needseval);
-    (self, Some((wd, defstack)))
+    Some(wd)
   }
 
-  fn get_crank_val(mut self) -> (Self, Option<(WordDef, Stack)>) {
+  fn get_crank_val(&mut self, w: Option<&Value>) -> Option<WordDef> {
     let cur = self.current();
 
     let cranks = match cur.cranks.as_mut() {
-      None => { return (self, None) },
+      None => { return None },
       Some(c) => c,
     };
     let high_tide = |c: &Crank| c.modulo == 0 && c.base != 0;
     let cindex: Option<usize> = cranks.iter().position(high_tide);
     let Some(cidx) = cindex else {
       cur.inc_crank();
-      return (self, None)
+      return None
     };
     let fixedindex: isize = cur.stack.len() as isize - 1 - cidx as isize;
     if fixedindex < 0 {
       cur.inc_crank();
-      return (self.eval_error("CRANK TOO DEEP", None), None);
+      self.eval_error_mut("CRANK TOO DEEP", w);
+      return None;
     }
-    let mut needseval = cur.stack.remove(fixedindex as usize);
-    let mut defstack = self.pool.get_stack(needseval.value_stack_ref().len());
-    while let Some(v) = needseval.value_stack().pop() { defstack.push(v) }
+    let needseval = cur.stack.remove(fixedindex as usize);
     let wd = self.pool.get_word_def(needseval);
-    (self, Some((wd, defstack)))
+    Some(wd)
   }
 
-  pub fn evalf(self, alias: Option<&Value>) -> Self {
-    let (new_self, result) = self.get_evalf_val(alias);
-    let Some((wd, defstack)) = result else { return new_self };
-    new_self.evalstack(wd, Some(defstack), None, false)
+  pub fn evalf(mut self, alias: Option<&Value>) -> Self {
+    match self.get_evalf_val(alias) {
+      Some(wd) => self.evalstack(wd, None, false),
+      None => self
+    }
   }
-  pub fn crank(self) -> Self {
-    let (new_self, result) = self.get_crank_val();
-    let Some((wd, defstack)) = result else { return new_self };
-    new_self.evalstack(wd, Some(defstack), None, true)
+  pub fn crank(mut self, w: Option<&Value>) -> Self {
+    match self.get_crank_val(w) {
+      Some(wd) => self.evalstack(wd, None, true),
+      None => self
+    }
   }
 
-  pub fn eval(mut self, v: Value) -> Self {
+  pub fn eval(mut self, v: Value, w: Option<&Value>) -> Self {
     let cur = self.current_ref();
     if cur.isfalias(&v) {
       self = match &cur.cranks {
@@ -1366,6 +1198,310 @@ impl CognitionState {
       return self;
     }
     self.push_quoted(v);
-    self.crank()
+    self.crank(w)
+  }
+}
+
+enum EvalStack {
+  Refstack(WordDef, usize),
+  Reverse(Stack)
+}
+
+impl EvalStack {
+  pub fn from(wd: &mut WordDef, state: &mut CognitionState) -> Self {
+    let Some(v_mut) = Arc::get_mut(wd) else {
+      return Self::Refstack(wd.clone(), 0)
+    };
+    let mut stack = state.pool.get_stack(v_mut.value_stack_ref().len());
+    while let Some(v) = v_mut.value_stack().pop() { stack.push(v) }
+    Self::Reverse(stack)
+  }
+  pub fn advance(&mut self, state: &mut CognitionState) {
+    match self {
+      Self::Refstack(_, i) => *i += 1,
+      Self::Reverse(stack) => { stack.pop().map(|v| state.pool.add_val(v)); },
+    }
+  }
+  pub fn get_next(&mut self, state: &mut CognitionState) -> Option<Value> {
+    match self {
+      Self::Refstack(a, i) => {
+        let v = a.value_stack_ref().get(*i);
+        *i += 1;
+        v.map(|v| state.value_copy(v))
+      },
+      Self::Reverse(stack) => stack.pop()
+    }
+  }
+  pub fn peek(&self) -> Option<&Value> {
+    match self {
+      Self::Refstack(a, i) => a.value_stack_ref().get(*i),
+      Self::Reverse(stack) => stack.last()
+    }
+  }
+  pub fn last(&self) -> bool {
+    match self {
+      Self::Refstack(a, i) => i + 1 == a.value_stack_ref().len(),
+      Self::Reverse(stack) => stack.len() <= 1
+    }
+  }
+  pub fn decommission(self, state: &mut CognitionState) {
+    match self {
+      Self::Refstack(w, _) => state.pool.add_word_def(w),
+      Self::Reverse(stack) => state.pool.add_stack(stack)
+    }
+  }
+}
+
+enum EvalRecurse {
+  Def(WordDef),
+  Evalf(WordDef),
+  Crank(WordDef),
+  None
+}
+
+struct CognitionEval {
+  stack: EvalStack,
+  first_v: bool,
+  local_family: Family,
+  legacy_family: Option<Family>,
+  is_macro: bool,
+  callword_owned: Option<Value>,
+  crank_first: bool,
+  kill_return: bool,
+  family_stack_pushes: usize,
+}
+
+impl CognitionEval {
+  pub fn setup(state: &mut CognitionState, wd: &mut WordDef, crank_first: bool) -> CognitionEval {
+    let stack = EvalStack::from(wd, state);
+    let is_macro = wd.is_macro();
+    if !is_macro { state.family.push(wd.clone()) }
+    let family_stack_pushes = if is_macro { 0 } else { 1 };
+    let local_family = state.pool.get_family();
+    Self{ stack, first_v: true, local_family, legacy_family: None, is_macro,
+          callword_owned: None, crank_first, kill_return: false, family_stack_pushes }
+  }
+  fn recurse(mut self, mut wd: WordDef, crank_first: bool, is_def: bool, state: &mut CognitionState) -> Self {
+    let stack = EvalStack::from(&mut wd, state);
+    let is_macro = wd.is_macro();
+    let remove_len = self.local_family.len().min(self.family_stack_pushes);
+    self.family_stack_pushes -= remove_len;
+    for wdef in self.local_family.drain(..remove_len) { state.pool.add_word_def(wdef) }
+    if self.local_family.len() > 0 {
+      if self.legacy_family.is_none() {
+        self.legacy_family = Some(state.pool.get_family())
+      }
+      self.legacy_family.as_mut().unwrap().append(&mut self.local_family);
+    }
+    if !is_macro && state.family.last().map_or(true, |w| !Arc::ptr_eq(&wd, w)) {
+      state.family.push(wd.clone());
+      self.family_stack_pushes += 1;
+    }
+    let callword_owned = if is_def { self.stack.get_next(state) } else { self.callword_owned };
+    self.stack.decommission(state);
+    state.pool.add_word_def(wd);
+    let kill_return = is_def || self.kill_return;
+    Self{ stack, first_v: true, local_family: self.local_family, legacy_family: self.legacy_family,
+          is_macro, callword_owned, crank_first, kill_return, family_stack_pushes: self.family_stack_pushes }
+  }
+  pub fn decommission(mut self, state: &mut CognitionState) {
+    while let Some(f) = self.local_family.pop() { state.family.push(f) }
+    state.pool.add_family(self.local_family);
+    for _ in 0..self.family_stack_pushes {
+      if let Some(wdef) = state.family.pop() { state.pool.add_word_def(wdef) }
+    }
+    if let Some(mut lf) = self.legacy_family {
+      while let Some(f) = lf.pop() { state.family.push(f) }
+      state.pool.add_family(lf)
+    }
+    if let Some(callword) = self.callword_owned {
+      state.pool.add_val(callword)
+    }
+    self.stack.decommission(state);
+  }
+
+  pub fn kill_return(&self) -> bool { self.kill_return }
+  pub fn is_empty(&self) -> bool { self.stack.peek().is_none() }
+
+  fn force_eval(&self) -> bool { self.is_macro || self.first_v }
+  fn cranking(&self) -> bool {
+    if self.is_macro { self.first_v && self.crank_first }
+    else { self.crank_first || !self.first_v }
+  }
+  fn callword<'a>(&'a self, callword: Option<&'a Value>) -> Option<&Value> {
+    if self.callword_owned.is_some() { self.callword_owned.as_ref() }
+    else { callword }
+  }
+
+  fn eval_word_in_current(&mut self, mut state: CognitionState, callword: Option<&Value>) -> (CognitionState, EvalRecurse) {
+    let v = self.stack.peek().unwrap();
+    if state.is_high_tide() || self.force_eval() {
+      if let Some(ref wt) = state.current().word_table {
+        if let Some(wd) = wt.get(&v.vword_ref().str_word) {
+          let new_word_def = wd.clone();
+          return (state, EvalRecurse::Def(new_word_def))
+        }
+      }
+    }
+    if state.current().isfalias(v) {
+      if !self.is_macro && (self.first_v || state.evalf_high_tide()) {
+        if let Some(wd) = state.get_evalf_val(Some(v)) {
+          self.stack.advance(&mut state);
+          return (state, EvalRecurse::Evalf(wd))
+        }
+      }
+      self.stack.advance(&mut state);
+      return (state, EvalRecurse::None)
+    }
+    let v = self.stack.get_next(&mut state).unwrap();
+    state.push_quoted(v);
+    // attempt to crank
+    if self.cranking() {
+      if state.is_high_tide() || self.force_eval() { state.current().inc_crank() }
+      else {
+        // this value was not cranked; get another one
+        if let Some(wd) = state.get_crank_val(self.callword(callword)) {
+          return (state, EvalRecurse::Crank(wd))
+        }
+      }
+    }
+    (state, EvalRecurse::None)
+  }
+
+  fn eval_word(&mut self, mut state: CognitionState, callword: Option<&Value>) -> (CognitionState, EvalRecurse) {
+    let v = self.stack.peek().unwrap();
+    while let Some(family_stack) = state.family.pop() {
+      let family_container = &family_stack.vstack_ref().container;
+      if state.is_high_tide() || self.force_eval() {
+        if let Some(ref wt) = family_container.word_table {
+          if let Some(wd) = wt.get(&v.vword_ref().str_word) {
+            let new_word_def = wd.clone();
+            state.family.push(family_stack);
+            return (state, EvalRecurse::Def(new_word_def))
+          }
+        }
+      }
+      if family_container.isfalias(v) {
+        if !self.is_macro && (self.first_v || state.evalf_high_tide()) {
+          if let Some(wd) = state.get_evalf_val(Some(v)) {
+            self.stack.advance(&mut state);
+            state.family.push(family_stack);
+            return (state, EvalRecurse::Evalf(wd))
+          }
+        }
+        self.stack.advance(&mut state);
+        state.family.push(family_stack);
+        return (state, EvalRecurse::None)
+      }
+      self.local_family.push(family_stack);
+    }
+    self.eval_word_in_current(state, callword)
+  }
+
+  fn eval_fllib(&mut self, mut state: CognitionState, callword: Option<&Value>) -> (CognitionState, EvalRecurse) {
+    let v = self.stack.peek().unwrap();
+    let fllib = v.vfllib_ref().fllib.clone();
+    if state.is_high_tide() || self.force_eval() {
+      if self.cranking() { state.current().inc_crank() }
+      state = fllib(state, self.callword(callword).clone());
+      if state.control.is_eval() {
+        state.control.clear();
+        if let Some(wd) = state.get_evalf_val(self.callword(callword)) {
+          self.stack.advance(&mut state);
+          return (state, EvalRecurse::Evalf(wd))
+        }
+      }
+      self.stack.advance(&mut state);
+    } else {
+      let v = self.stack.get_next(&mut state).unwrap();
+      state.push_quoted(v);
+      if self.cranking() {
+        if let Some(wd) = state.get_crank_val(self.callword(callword)) {
+          return (state, EvalRecurse::Crank(wd))
+        }
+      }
+    }
+    (state, EvalRecurse::None)
+  }
+
+  fn eval_custom(&mut self, mut state: CognitionState, callword: Option<&Value>) -> (CognitionState, EvalRecurse) {
+    let v = self.stack.get_next(&mut state).unwrap();
+    if !v.vcustom_ref().custom.as_any().is::<Ghost>() {
+      state.push_quoted(v);
+      if self.cranking() {
+        if state.is_high_tide() || self.force_eval() {
+          state.current().inc_crank()
+        } else if let Some(wd) = state.get_crank_val(self.callword(callword)) {
+          return (state, EvalRecurse::Crank(wd))
+        }
+      }
+    }
+    (state, EvalRecurse::None)
+  }
+
+  fn eval_push_to_stack(&mut self, mut state: CognitionState, callword: Option<&Value>) -> (CognitionState, EvalRecurse) {
+    let v = self.stack.get_next(&mut state).unwrap();
+    state.current().stack.push(v);
+    if self.cranking() {
+      if state.is_high_tide() || self.force_eval() {
+        state.current().inc_crank()
+      } else if let Some(wd) = state.get_crank_val(self.callword(callword)) {
+        return (state, EvalRecurse::Crank(wd))
+      }
+    }
+    (state, EvalRecurse::None)
+  }
+
+  pub fn eval_value(&mut self, state: CognitionState, callword: Option<&Value>) -> (CognitionState, EvalRecurse) {
+    let Some(v) = self.stack.peek() else { return (state, EvalRecurse::None) };
+    match v {
+      Value::Word(_) => self.eval_word(state, callword),
+      Value::Error(_) => panic!("VError on stack"),
+      Value::FLLib(_) => self.eval_fllib(state, callword),
+      Value::Custom(_) => self.eval_custom(state, callword),
+      _ => self.eval_push_to_stack(state, callword)
+    }
+  }
+  pub fn eval_recurse(mut self, mut state: CognitionState, recurse: EvalRecurse, callword: Option<&Value>) -> (CognitionState, Self) {
+    (state, self) = match recurse {
+      EvalRecurse::Evalf(wdn) => {
+        self.first_v = false;
+        if self.is_empty() {
+          let new_eval = self.recurse(wdn, false, false, &mut state);
+          (state, new_eval)
+        } else {
+          (state.evalstack(wdn, self.callword(callword), false), self)
+        }
+      },
+      EvalRecurse::Crank(wdn) => {
+        self.first_v = false;
+        if self.is_empty() {
+          let new_eval = self.recurse(wdn, true, false, &mut state);
+          (state, new_eval)
+        } else {
+          (state.evalstack(wdn, self.callword(callword), true), self)
+        }
+      },
+      EvalRecurse::Def(wdn) => {
+        if self.stack.last() {
+          let cranking = self.cranking();
+          let new_eval = self.recurse(wdn, cranking, true, &mut state);
+          (state, new_eval)
+        } else {
+          let w = self.stack.peek();
+          state = state.evalstack(wdn, w, self.cranking());
+          while let Some(f) = self.local_family.pop() { state.family.push(f) }
+          self.stack.advance(&mut state);
+          self.first_v = false;
+          (state, self)
+        }
+      },
+      EvalRecurse::None => {
+        self.first_v = false;
+        (state, self)
+      }
+    };
+    while let Some(f) = self.local_family.pop() { state.family.push(f) }
+    (state, self)
   }
 }

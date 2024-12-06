@@ -411,7 +411,7 @@ pub fn cog_streval(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
     ParserLoc{ filename: Some(state.string_copy(filename)), pos: None }
   } else { ParserLoc{ filename: None, pos: None } };
   let val = if let Value::Stack(vstack) = &mut v {
-    let mut new_vstack = state.pool.get_vstack(vstack.container.stack.len());
+    let mut new_vstack = state.pool.get_vstack(0);
     std::mem::swap(&mut new_vstack.container.stack, &mut vstack.container.stack);
     let wd = state.pool.get_word_def(v);
     state.family.push(wd);
@@ -421,9 +421,9 @@ pub fn cog_streval(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   let oldparser = state.parser.take();
   state.parser = Some(Parser::with_loc(Some(state.string_copy(&v.vword_ref().str_word)), parser_loc));
   loop {
-    let w = state.parser_get_next();
-    match w {
-      Some(v) => state = state.eval(v),
+    let vw = state.parser_get_next();
+    match vw {
+      Some(v) => state = state.eval(v, w),
       None => break,
     }
     if state.exited { break }
