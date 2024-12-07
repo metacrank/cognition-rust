@@ -27,7 +27,7 @@ use std::fmt::Display;
 use std::io::{stdout, IsTerminal, Write};
 use std::sync::Arc;
 
-pub const VERSION: &'static str = "0.3.5";
+pub const VERSION: &'static str = "0.3.6";
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library);

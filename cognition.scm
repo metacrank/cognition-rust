@@ -37,7 +37,7 @@
 (define-public cognition-0.3
   (package
    (name "cognition")
-   (version "0.3.5")
+   (version "0.3.6")
    (source
     (origin
      (method git-fetch)
