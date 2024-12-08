@@ -1,0 +1,35 @@
+? 0 exit
+
+"PREFIX" dup def? [ dup unglue ] [ stack ] if
+(
+  cd
+  "" unglue dup def? [[ dup unglue ]] [[ stack ]] if
+  (
+    cd
+    "["  ( ( dup ) dip swap ) ) def
+    "("  ( ( dup ) dip swap ) ) def
+    "{"  ( ( dup ) dip swap ) ) def
+    "[[" ( ( dup ) dip swap ) ) def
+    "((" ( ( dup ) dip swap ) ) def
+    "{{" ( ( dup ) dip swap ) ) def
+    "cog" ( dup ) def
+    uncd
+  )
+  "1" unglue dup def? [[ dup unglue ]] [[ stack ]] if
+  (
+    cd
+    "["  ( compose ( dup ) dip swap ) ) def
+    "("  ( compose ( dup ) dip swap ) ) def
+    "{"  ( compose ( dup ) dip swap ) ) def
+    "[[" ( compose ( dup ) dip swap ) ) def
+    "((" ( compose ( dup ) dip swap ) ) def
+    "{{" ( compose ( dup ) dip swap ) ) def
+    "cog" ( swap eval ) def
+    uncd
+  )
+  eval def
+  uncd
+)
+eval ? def
+
+# define 'func': prefix version of 'def'

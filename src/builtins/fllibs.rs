@@ -18,8 +18,8 @@ pub fn cog_fllib_questionmark(mut state: CognitionState, w: Option<&Value>) -> C
 
 pub fn cog_fllib(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let (v1, v2) = get_2_words!(state, w);
-  let filename = &v1.value_stack_ref().first().unwrap().vword_ref().str_word;
-  let lib_name = &v2.value_stack_ref().first().unwrap().vword_ref().str_word;
+  let lib_name = &v1.value_stack_ref().first().unwrap().vword_ref().str_word;
+  let filename = &v2.value_stack_ref().first().unwrap().vword_ref().str_word;
 
   match unsafe { state.load_fllib(lib_name, filename) } {
     Some(e) => {

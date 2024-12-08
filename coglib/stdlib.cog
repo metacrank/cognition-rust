@@ -1,7 +1,7 @@
 # Cognition Standard Library
 # Apr. 2024
 
-cog stdquote.cog
+cog stdquote
 
 # Parsing aliases
 [ setd ] dup def? ( ) ( ( d ) def [ d ] undef ) if
@@ -56,7 +56,7 @@ cog stdquote.cog
 [ func ] # do prefix stuff so 'func a ( stuff )' === '[ a ] ( stuff ) def'
 
 # Generating words
-"stdgenlib.cog" load
+cog "stdgenlib"
 
 # Stackops extension
 [ drop ] mkopn

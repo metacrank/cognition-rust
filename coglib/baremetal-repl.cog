@@ -1,0 +1,8 @@
+2crank ing 0 crank read streval ? repl
+2crank ing 1 crank compose compose compose
+2crank ing 2 crank VMACRO cast
+2crank ing 2 crank child eval repl quote compose eval
+2crank ing 1 crank swap quote compose cd
+2crank ing 1 crank def uncd
+2crank ing 2 crank repl compose
+2crank ing 0 crank ing

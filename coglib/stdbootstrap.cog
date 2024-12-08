@@ -26,13 +26,9 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 2 crank f unglue
 2crank ing 1 crank def
 2crank ing 0 crank
-2crank ing 2 crank setd dup def? eval seti dup def? eval sets dup def? eval
-2crank ing 2 crank s quote unglue prepose swap compose def compose drop
-2crank ing 1 crank if
-2crank ing 2 crank i quote unglue prepose swap compose def compose drop
-2crank ing 1 crank if
-2crank ing 2 crank d quote unglue prepose swap compose def compose drop
-2crank ing 1 crank if
+2crank ing 3 crank setd d unglue setd set-name ing def
+2crank ing 3 crank seti i unglue seti set-name ing def
+2crank ing 3 crank sets s unglue sets set-name ing def
 2crank ing 0 crank
 2crank ing 0 crank #
 2crank ing 2 crank geti unglue getd unglue gets unglue crankbase unglue 1 quote metacrankbase unglue
@@ -53,30 +49,60 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 2 crank COGLIB_DIR quote var unglue
 2crank ing 1 crank compose VMACRO cast def
 2crank ing 1 crank
+2crank ing 1 crank # Find and read a cognition file by trying '.cog' extension and searching the coglib directory
+2crank ing 0 crank cogfile
+2crank ing 2 crank esize unglue swap unglue fread unglue swap unglue esize unglue = unglue
+2crank ing 1 crank compose compose compose compose compose
+2crank ing 1 crank stack quote compose
+2crank ing 2 crank edrop unglue dup unglue esize unglue swap unglue .cog quote concat unglue
+2crank ing 2 crank fread unglue swap unglue esize unglue = unglue
+2crank ing 1 crank compose compose compose compose compose compose compose compose compose
+2crank ing 2 crank swap unglue drop unglue
+2crank ing 1 crank compose quote compose
+2crank ing 2 crank drop unglue
+2crank ing 1 crank quote compose
+2crank ing 2 crank if unglue
+2crank ing 1 crank compose quote compose
+2crank ing 2 crank if unglue
+2crank ing 1 crank compose def
+2crank ing 1 crank
+2crank ing 0 crank cogfile
+2crank ing 2 crank esize unglue swap unglue cogfile unglue swap unglue esize unglue = unglue
+2crank ing 1 crank compose compose compose compose compose
+2crank ing 1 crank stack quote compose
+2crank ing 2 crank edrop unglue dup unglue esize unglue swap unglue coglib-dir unglue / quote concat unglue
+2crank ing 2 crank swap unglue concat unglue cogfile unglue swap unglue esize unglue = unglue
+2crank ing 1 crank compose compose compose compose compose compose compose compose compose compose compose compose
+2crank ing 2 crank swap unglue drop unglue
+2crank ing 1 crank compose quote compose
+2crank ing 2 crank drop unglue
+2crank ing 1 crank quote compose
+2crank ing 2 crank if unglue
+2crank ing 1 crank compose quote compose
+2crank ing 2 crank if unglue
+2crank ing 1 crank compose def
+2crank ing 1 crank
 2crank ing 1 crank #'crank file2: ['file1 feval...']' emulates the behaviour of 'crank -s 2 file1 file2'
 2crank ing 0 crank feval
 2crank ing 1 crank
 2crank ing 2 crank word? unglue
-2crank ing 1 crank stack quote
+2crank ing 1 crank
+2crank ing 2 crank 0 quote vat unglue esize unglue swap unglue
+2crank ing 2 crank cogfile unglue swap unglue esize unglue = unglue
+2crank ing 1 crank compose compose compose compose compose compose compose
+2crank ing 2 crank prepose unglue streval unglue
+2crank ing 1 crank compose quote compose
+2crank ing 2 crank drop unglue
+2crank ing 1 crank quote compose
+2crank ing 2 crank if unglue compose eval VMACRO cast
+2crank ing 1 crank quote compose
+2crank ing 1 crank
 2crank ing 2 crank BAD spc ARGUMENT spc TYPE
 2crank ing 1 crank concat concat concat concat quote
 2crank ing 2 crank ethrow unglue
-2crank ing 1 crank swap prepose quote
-2crank ing 2 crank if unglue
-2crank ing 1 crank compose compose compose
+2crank ing 1 crank swap prepose quote compose
 2crank ing 1 crank
-2crank ing 2 crank esize unglue swap unglue 0 quote vat unglue fread unglue
-2crank ing 2 crank swap unglue quote eval dip unglue swap unglue esize unglue = unglue
-2crank ing 1 crank compose compose compose compose compose compose compose compose compose compose
-2crank ing 1 crank
-2crank ing 2 crank prepose unglue streval unglue
-2crank ing 1 crank compose quote compose
-2crank ing 2 crank edrop unglue coglib-dir unglue / quote concat unglue
-2crank ing 2 crank swap unglue concat unglue fread unglue prepose unglue streval unglue
-2crank ing 1 crank compose compose compose compose compose compose compose compose quote
-2crank ing 1 crank
-2crank ing 2 crank if unglue
-2crank ing 1 crank compose compose
+2crank ing 2 crank if unglue compose eval
 2crank ing 1 crank
 2crank ing 1 crank def
 2crank ing 1 crank
@@ -128,13 +154,18 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 1 crank #      'setd': ( d )
 2crank ing 1 crank #      'seti': ( i )
 2crank ing 1 crank #      'sets': ( s )
-2crank ing 1 crank #         '#': ( geti getd gets crankbase [ 1 ] metacrankbase [ '' ] d [ '' ] i [ '\n' ] s
-2crank ing 1 crank #                ( drop [ 1 ] swap metacrank crank s d i )
-2crank ing 1 crank #                [ 0 ] crank [ 1 ] [ 1 ] metacrank )
+2crank ing 1 crank #         '#': ( geti getd gets crankbase [ 1 ] metacrankbase [ '' ] setd [ '' ] seti [ '\n' ] sets
+2crank ing 1 crank #                ( drop [ 1 ] swap metacrank crank s d i ) [ 0 ] crank [ 1 ] [ 1 ] metacrank )
 2crank ing 1 crank #'coglib-dir': ( [ 'COGLIB_DIR' ] var )
-2crank ing 1 crank #     'feval': ( word? [ ] ( [ 'BAD ARGUMENT TYPE' ] ethrow ) if
-2crank ing 1 crank #                esize swap [ 0 ] vat fread ( swap ) dip swap esize =
-2crank ing 1 crank #                ( prepose evalstr ) ( edrop coglib-dir [ '/' ] concat swap concat fread prepose evalstr ) if )
+2crank ing 1 crank #   'cogfile': ( esize swap fread swap esize =
+2crank ing 1 crank #                [ ] ( edrop dup esize swap [ '.cog' ] concat fread swap esize = ( swap drop ) ( drop ) if ) if )
+2crank ing 1 crank #   'cogfile': ( esize swap cogfile swap esize =
+2crank ing 1 crank #                [ ] ( edrop dup esize swap coglib-dir [ '/' ] concat swap concat cogfile swap esize =
+2crank ing 1 crank #                      ( swap drop ) ( drop ) if ) if )
+2crank ing 1 crank #     'feval': ( word? ( [ 0 ] vat esize swap cogfile swap esize = ( prepose streval ) ( drop ) if )
+2crank ing 1 crank #                      ( [ 'BAD ARGUMENT TYPE' ] ethrow ) if )
 2crank ing 1 crank #       'cog': ( ( dup [ '#' ] = ( ( dup ) dip eval ) ( swap drop [ 1 ] crank [ 1 ] [ 0 ] metacrank feval ) if )
 2crank ing 1 crank #                ( dup [ '#' ] = ( ( dup ) dip eval ) ( swap drop [ 1 ] crank [ 1 ] [ 0 ] metacrank feval ) if )
 2crank ing 1 crank #                [ 0 ] crank [ 1 ] [ 1 ] metacrank )
+2crank ing 1 crank #
+2crank ing 1 crank # Future versions may undef 'd' 'i' and 's'. Bootstrapped cognition programs should not rely on them.

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S crank -q -s 2 /home/matthew/src/cognition-rust/coglib/script-init.cog
+#!/usr/bin/env -S crank -q -s 2 script-init.cog
 
 cogprogram! 3 cut 7 cut drop swap compose
 

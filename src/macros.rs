@@ -389,6 +389,30 @@ macro_rules! fwrite_check_pretty {
           if $crate::fwrite_check_byte!($f, b"\\", n) { break }
           if $crate::fwrite_check_byte!($f, b"'", n)  { break }
         },
+        b'\\' => {
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"\\", n)  { break }
+        },
+        b'\x07' => {
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"a", n)  { break }
+        },
+        b'\x08' => {
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"b", n)  { break }
+        },
+        b'\x1b' => {
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"e", n)  { break }
+        },
+        b'\x0c' => {
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"f", n)  { break }
+        },
+        b'\x0b' => {
+          if $crate::fwrite_check_byte!($f, b"\\", n) { break }
+          if $crate::fwrite_check_byte!($f, b"v", n)  { break }
+        },
         _ => {
           if $crate::fwrite_check_byte!($f, &s[n..n+1], n) { break }
         },

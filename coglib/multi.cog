@@ -1,0 +1,3 @@
+multithreading /home/matthew/src/cognition-rust/fllib/multithreading/target/debug/libmultithreading.so fllib
+
+process /home/matthew/src/cognition-rust/fllib/process/target/debug/libprocess.so fllib

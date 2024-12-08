@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
+pub const VERSION: &'static str = "0.3.7";
+
 #[macro_use]
 pub mod macros;
 pub mod tree;
@@ -26,8 +28,6 @@ use std::default::Default;
 use std::fmt::Display;
 use std::io::{stdout, IsTerminal, Write};
 use std::sync::Arc;
-
-pub const VERSION: &'static str = "0.3.6";
 
 pub type CognitionFunction = fn(CognitionState, Option<&Value>) -> CognitionState;
 pub type AddWordsFn = unsafe extern fn(&mut CognitionState, &Library);
@@ -112,7 +112,12 @@ pub trait Pretty {
 
 impl Pretty for String {
   fn print_pretty(&self) {
-    self.fprint_pretty(&mut stdout());
+    let mut out = stdout();
+    if out.is_terminal() {
+      fwrite_check_pretty!(out, self.as_bytes());
+    } else {
+      fwrite_check!(out, self.as_bytes());
+    }
   }
   fn fprint_pretty(&self, f: &mut dyn Write) {
     fwrite_check_pretty!(f, self.as_bytes());
@@ -252,7 +257,7 @@ impl Container {
     let stack = Stack::with_capacity(capacity);
     Self::with_stack(stack)
   }
-  fn inc_crank(&mut self) {
+  pub fn inc_crank(&mut self) {
     let Some(cranks) = &mut self.cranks else { return };
     for crank in cranks {
       crank.modulo += 1;
@@ -261,7 +266,7 @@ impl Container {
       }
     }
   }
-  fn dec_crank(&mut self) {
+  pub fn dec_crank(&mut self) {
     let Some(cranks) = &mut self.cranks else { return };
     for crank in cranks {
       crank.modulo -= 1;
@@ -297,18 +302,18 @@ pub struct VMacro {
 }
 #[derive(Serialize, Deserialize)]
 pub struct VErrorLoc {
-  filename: String,
-  line: String,
-  column: String,
+  pub filename: String,
+  pub line: String,
+  pub column: String,
 }
 #[derive(Serialize, Deserialize)]
 pub struct VError {
-  error: String,
-  str_word: Option<String>,
-  loc: Option<VErrorLoc>
+  pub error: String,
+  pub str_word: Option<String>,
+  pub loc: Option<VErrorLoc>
 }
 pub struct VFLLib {
-  fllib: CognitionFunction,
+  pub fllib: CognitionFunction,
   pub str_word: Option<String>,
   pub library: Option<Library>,
   pub key: u32,
@@ -398,11 +403,13 @@ impl Value {
     if let Err(e) = f.flush() {
       let _ = std::io::stderr().write(format!("{e}").as_bytes()); }
   }
+
   pub fn fprint(&self, f: &mut dyn Write, end: &'static str, term: bool) {
     match self {
       Self::Word(vword) => {
         fwrite_check!(f, b"'");
-        vword.str_word.fprint_pretty(f);
+        if term { vword.str_word.fprint_pretty(f); }
+        else { fwrite_check!(f, vword.str_word.as_bytes()); }
         fwrite_check!(f, b"'");
       },
       Self::Stack(vstack) => {
@@ -418,11 +425,14 @@ impl Value {
       Self::Error(verror) => {
         match verror.loc {
           Some(ref loc) => {
-            loc.filename.fprint_pretty(f);
+            if term { loc.filename.fprint_pretty(f); }
+            else { fwrite_check!(f, loc.filename.as_bytes()); }
             fwrite_check!(f, b":");
-            loc.line.fprint_pretty(f);
+            if term { loc.line.fprint_pretty(f); }
+            else { fwrite_check!(f, loc.line.as_bytes()); }
             fwrite_check!(f, b":");
-            loc.column.fprint_pretty(f);
+            if term { loc.column.fprint_pretty(f); }
+            else { fwrite_check!(f, loc.column.as_bytes()); }
             fwrite_check!(f, b":");
           },
           None => {
@@ -432,7 +442,8 @@ impl Value {
         match verror.str_word {
           Some(ref word) => {
             fwrite_check!(f, b"'");
-            word.fprint_pretty(f);
+            if term { word.fprint_pretty(f); }
+            else { fwrite_check!(f, word.as_bytes()); }
             fwrite_check!(f, b"':");
           }
           None => {
@@ -444,13 +455,14 @@ impl Value {
           verror.error.fprint_pretty(f);
           fwrite_check!(f, COLOR_RESET);
         } else {
-          verror.error.fprint_pretty(f);
+          fwrite_check!(f, verror.error.as_bytes());
         }
       },
       Self::FLLib(vfllib) => {
         match &vfllib.str_word {
           Some(s) => {
-            s.fprint_pretty(f);
+            if term { s.fprint_pretty(f); }
+            else { fwrite_check!(f, s.as_bytes()); }
           },
           None => {
             if term {
@@ -612,7 +624,6 @@ impl Parser {
   }
 
   // returns just the next character without delim/ignore/singlet behaviour
-  #[allow(dead_code)]
   pub fn get_next_char(&mut self, state: &mut CognitionState) -> Option<Box<VWord>> {
     let ch = self.c;
     self.next();
@@ -1003,6 +1014,14 @@ impl CognitionState {
     }
   }
 
+  pub fn eval_inside(mut self, mut v: Value, callword: Option<&Value>) -> Self {
+    let mut vstack = self.pool.get_vstack(v.vstack_ref().container.stack.len());
+    std::mem::swap(&mut vstack.container.stack, &mut v.vstack_mut().container.stack);
+    self.stack.push(v);
+    let wd = WordDef::new(Value::Stack(vstack));
+    self.evalstack(wd, callword, true)
+  }
+
   pub fn is_high_tide(&self) -> bool {
     if let Some(ref cranks) = self.current_ref().cranks {
       if let Some(crank) = cranks.first() {
@@ -1018,7 +1037,7 @@ impl CognitionState {
     true
   }
 
-  fn evalstack(mut self, mut wd: WordDef, callword: Option<&Value>, crank_first: bool) -> Self {
+  pub fn evalstack(mut self, mut wd: WordDef, callword: Option<&Value>, crank_first: bool) -> Self {
     let mut eval = CognitionEval::setup(&mut self, &mut wd, crank_first);
     while !eval.is_empty() {
       let (state, recurse) = eval.eval_value(self, callword);
@@ -1043,7 +1062,7 @@ impl CognitionState {
     Some(wd)
   }
 
-  fn get_crank_val(&mut self, w: Option<&Value>) -> Option<WordDef> {
+  pub fn get_crank_val(&mut self, w: Option<&Value>) -> Option<WordDef> {
     let cur = self.current();
 
     let cranks = match cur.cranks.as_mut() {
@@ -1154,7 +1173,8 @@ enum EvalRecurse {
   Def(WordDef),
   Evalf(WordDef),
   Crank(WordDef),
-  None
+  None,
+  Ghost
 }
 
 struct CognitionEval {
@@ -1324,14 +1344,15 @@ impl CognitionEval {
 
   fn eval_custom(&mut self, mut state: CognitionState, callword: Option<&Value>) -> (CognitionState, EvalRecurse) {
     let v = self.stack.get_next(&mut state).unwrap();
-    if !v.vcustom_ref().custom.as_any().is::<Ghost>() {
-      state.push_quoted(v);
-      if self.cranking() {
-        if state.is_high_tide() || self.force_eval() {
-          state.current().inc_crank()
-        } else if let Some(wd) = state.get_crank_val(self.callword(callword)) {
-          return (state, EvalRecurse::Crank(wd))
-        }
+    if v.vcustom_ref().custom.as_any().is::<Ghost>() {
+      return (state, EvalRecurse::Ghost)
+    }
+    state.push_quoted(v);
+    if self.cranking() {
+      if state.is_high_tide() || self.force_eval() {
+        state.current().inc_crank()
+      } else if let Some(wd) = state.get_crank_val(self.callword(callword)) {
+        return (state, EvalRecurse::Crank(wd))
       }
     }
     (state, EvalRecurse::None)
@@ -1397,7 +1418,8 @@ impl CognitionEval {
       EvalRecurse::None => {
         self.first_v = false;
         (state, self)
-      }
+      },
+      EvalRecurse::Ghost => (state, self)
     };
     while let Some(f) = self.local_family.pop() { state.family.push(f) }
     (state, self)

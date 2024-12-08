@@ -1,0 +1,96 @@
+* Demonstration of multithreading in a repl
+
+** Start the repl
+Run 'crank -s 3 stdbootstrap.cog common-fllibs.cog repl.cog'
+Methodically enter the following cognition code snippets into the repl and observe
+
+*** (main):
+'2 crank repl nop'
+'? unglue read compose streval compose repl compose'
+'1 crank def child'
+'2 crank repl compose'
+'1 crank spawn 40 sleep'
+
+*** (thread1):
+'child'
+'2 crank repl compose'
+'1 crank spawn 19 sleep'
+
+*** (thread2):
+'thread2!'
+'exit_thread2 exit'
+
+...wait...
+
+*** (thread1):
+'thread'
+'thread1!'
+'exit_thread1 exit'
+
+...wait...
+
+*** (main):
+'thread'
+'false exit'
+
+** Explanation
+*** The REPL
+'crank -s 3' accepts three files (sources):
+First, we bootstrap ourselves into a familiar syntax (stdbootstrap.cog)
+Then, we load in foreign libraries we will need with common-fllibs.cog.
+(These are the multithreading and process libraries, specifically. Multithreading lets us
+spawn threads, and the process library contains the 'sleep' word.)
+Finally, repl.cog implements a Read Eval Print Loop that we need to run our demonstration.
+
+*** Main thread
+We begin in the main thread. The first line puts us in crank two, pushes 'repl' to the
+stack, and then executes 'nop', the no-operation word. 'nop' is used to put us back at low
+tide for the next line—when working in minimally bootstrapped environments, it is
+recommended to start every line at low tide modcrank 1. Incidentally, the baremetal word
+'2crank' is used to ensure this and allow baremetal code to not be littered with 'nop's.
+
+The second line puts together the code for a simple repl. Since repl.cog does not expose
+the 'repl' word, we have to define our own. Notice how by ungluing the '?' word we get a
+macro rather than a stack-type quote, and so avoid the need for a 'VMACRO cast'.
+
+We then define the word 'repl' that we pushed to the stack originally to be the ( ? 'read'
+'streval' 'repl' ) macro we just built. We use tail recursion to facilitate looping here.
+Also on the third line, we create a child stack. Importantly, this word is executed after
+'def', thus ensuring that our child also contains our 'repl' definition.
+
+We put the 'repl' word inside the child so that it gets executed when we call spawn.
+
+We spawn a new thread with a cognition state containing our newly created child as its
+current stack, and sleep the current thread for 40_c (96_d) seconds.
+
+*** Thread 1
+The spawned thread calls the repl and so gives us an interface into its stack.
+
+Our first line creates a child, and then similarly we insert the 'repl' word and spawn and
+sleep the current thread.
+
+*** Thread 2
+We are put in a repl in yet another thread. Since our timeouts are going to run out soon
+and we want to avoid the undefined behaviour of three repls waiting for input, we decide
+to exit the thread. First we push 'thread2!' to the stack for identification later, and
+exit with code 'exit_thread2'.
+
+Now we wait for our 19_c (33_d) second timeout to expire and return us to our thread 1 repl
+
+*** Thread 1
+Calling 'thread' on the thread object returned by spawn re-threads thread 2 back into the
+thread 1 cognition state by pushing its stack to our stack and absorbing its memory
+allocation pool into our own. The inspiration for this word comes from the idea of
+'threading a needle', since it weaves the data in both threads back together. This word
+returns thread 2's stack, which we can see contains the 'thread2!' string, and also the
+exit code of thread 2, which we verify to be 'exit_thread2'. Finally, it returns a boolean
+encoding whether or not thread 2 panicked. This value should be false, or the empty string.
+
+Similarly as to in thread 2, we push 'thread1!' to the stack and exit with 'exit_thread1'.
+
+*** Main
+Once our 40_c (96_d) second sleep expires, we are back in main, and we can call 'thread' to
+reclaim all of our data and see a record of our multithreading adventure.
+
+The word 'false' is bootstrapped to put an empty string on the stack. In cognition exit
+code convention, the empty string or 'false' bool is interpreted as a successful exit code.

@@ -96,6 +96,7 @@ fn main() -> ExitCode {
         println!("{}: could not open file for reading: {file}: {e}", binary_name());
         return ExitCode::from(4);
       }
+      if filename.is_none() { filename = Some(state.string_copy(file)) }
       (fs_result.unwrap(), filename, false)
     };
 

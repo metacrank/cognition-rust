@@ -7,22 +7,21 @@ pub fn cog_cd(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  state.ensure_quoted(&mut v.vstack_mut().container.stack);
+  state.ensure_quoted(v.value_stack());
   state.stack.push(v);
   state
 }
 
 pub fn cog_ccd(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
-  let mut stack_v = state.stack.pop().expect("Cognition metastack was empty");
-  let stack = &mut stack_v.vstack_mut().container.stack;
+  let mut cur_v = state.pop_cur();
+  let stack = &mut cur_v.metastack_container().stack;
   let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   if !v.is_stack() {
     stack.push(v);
-    state.stack.push(stack_v);
-    return state.eval_error("BAD ARGUMENT TYPE", w)
+    return state.push_cur(cur_v).eval_error("BAD ARGUMENT TYPE", w)
   }
-  state.pool.add_val(stack_v);
-  state.ensure_quoted(&mut v.vstack_mut().container.stack);
+  state.pool.add_val(cur_v);
+  state.ensure_quoted(v.value_stack());
   state.stack.push(v);
   state
 }
@@ -95,11 +94,11 @@ pub fn cog_chroot(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  state.ensure_quoted(&mut v.vstack_mut().container.stack);
   let tmpstack = state.stack;
   state.chroots.push(tmpstack);
   let tmpstack = state.pool.get_stack(DEFAULT_STACK_SIZE);
   state.stack = tmpstack;
+  state.ensure_quoted(v.value_stack());
   state.stack.push(v);
   state
 }

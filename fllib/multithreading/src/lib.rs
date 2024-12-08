@@ -6,8 +6,9 @@ use time::DurationCustom;
 use std::thread;
 use std::sync::{mpsc, mpsc::TryRecvError, mpsc::RecvTimeoutError, Arc};
 
-fn new_cogstate(state: &mut CognitionState, v: Value) -> CognitionState {
+fn new_cogstate(state: &mut CognitionState, mut v: Value) -> CognitionState {
   let mut stack = state.pool.get_stack(DEFAULT_STACK_SIZE);
+  state.ensure_quoted(v.value_stack());
   stack.push(v);
   let mut family = state.pool.get_family();
   for member in state.family.iter() { family.push(member.clone()) }
@@ -50,20 +51,98 @@ fn new_cogstate(state: &mut CognitionState, v: Value) -> CognitionState {
 // Returns a custom thread handler type
 pub fn cog_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
-  let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let Some(v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
   if !v.is_stack() {
     stack.push(v);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   }
-  state.ensure_quoted(&mut v.vstack_mut().container.stack);
   let wrapper = CogStateWrapper(new_cogstate(&mut state, v));
+  let callword = w.map(|v| ValueWrapper(state.value_copy(v)));
   let handle = thread::spawn(move || {
     let copy = wrapper;
-    CogStateWrapper(copy.0.crank())
+    let c = callword;
+    CogStateWrapper(copy.0.crank(c.map(|w| w.0).as_ref()))
   });
   let vcustom = get_thread_custom(&mut state.pool, Some(handle));
   state.push_quoted(Value::Custom(vcustom));
   state
+}
+
+pub fn cog_try_spawn(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let stack = &mut state.current().stack;
+  let Some(v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  if !v.is_stack() {
+    stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let wrapper = CogStateWrapper(new_cogstate(&mut state, v));
+  let callword = w.map(|v| ValueWrapper(state.value_copy(v)));
+  let handle = thread::Builder::new().spawn(move || {
+    let copy = wrapper;
+    let c = callword.map(|w| w.0);
+    CogStateWrapper(copy.0.crank(c.as_ref()))
+  });
+  match handle {
+    Ok(handle) => {
+      let vcustom = get_thread_custom(&mut state.pool, Some(handle));
+      state.push_quoted(Value::Custom(vcustom));
+      state
+    },
+    Err(_) => state.eval_error("FALIED TO SPAWN THREAD (OS ERROR)", w)
+  }
+}
+
+pub fn cog_spawn_named(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let vname = get_word!(state, w);
+  let stack = &mut state.current().stack;
+  let v = stack.pop().unwrap();
+  if !v.is_stack() {
+    stack.push(v);
+    stack.push(vname);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let name = state.string_copy(&vname.value_stack_ref().first().unwrap().vword_ref().str_word);
+  state.pool.add_val(vname);
+  let wrapper = CogStateWrapper(new_cogstate(&mut state, v));
+  let callword = w.map(|v| ValueWrapper(state.value_copy(v)));
+  let handle = thread::Builder::new().name(name).spawn(move || {
+    let copy = wrapper;
+    let c = callword.map(|w| w.0);
+    CogStateWrapper(copy.0.crank(c.as_ref()))
+  }).unwrap();
+  let vcustom = get_thread_custom(&mut state.pool, Some(handle));
+  state.push_quoted(Value::Custom(vcustom));
+  state
+}
+
+pub fn cog_try_spawn_named(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current_ref().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let vname = get_word!(state, w);
+  let stack = &mut state.current().stack;
+  let v = stack.pop().unwrap();
+  if !v.is_stack() {
+    stack.push(v);
+    stack.push(vname);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  }
+  let name = state.string_copy(&vname.value_stack_ref().first().unwrap().vword_ref().str_word);
+  state.pool.add_val(vname);
+  let wrapper = CogStateWrapper(new_cogstate(&mut state, v));
+  let callword = w.map(|v| ValueWrapper(state.value_copy(v)));
+  let handle = thread::Builder::new().name(name).spawn(move || {
+    let copy = wrapper;
+    let c = callword.map(|w| w.0);
+    CogStateWrapper(copy.0.crank(c.as_ref()))
+  });
+  match handle {
+    Ok(handle) => {
+      let vcustom = get_thread_custom(&mut state.pool, Some(handle));
+      state.push_quoted(Value::Custom(vcustom));
+      state
+    },
+    Err(_) => state.eval_error("FALIED TO SPAWN THREAD (OS ERROR)", w)
+  }
 }
 
 fn reclaim_memory(state: &mut CognitionState, mut cogstate: CognitionState) {
@@ -408,8 +487,6 @@ pub fn cog_clear_multithreading_pools(mut state: CognitionState, _: Option<&Valu
   state
 }
 
-// when we can pull in the cognition 'time' library, define "recv-timeout"
-
 #[no_mangle]
 pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
   ensure_foreign_library!(state, lib);
@@ -418,6 +495,9 @@ pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
   register_custom!(state, lib, RecvCustom);
   register_custom!(state, lib, SharedCustom);
   add_word!(state, lib, "spawn", cog_spawn);
+  add_word!(state, lib, "try-spawn", cog_try_spawn);
+  add_word!(state, lib, "spawn-named", cog_spawn_named);
+  add_word!(state, lib, "try-spawn-named", cog_try_spawn_named);
   add_word!(state, lib, "thread", cog_thread);
   add_word!(state, lib, "channel", cog_channel);
   add_word!(state, lib, "send", cog_send);

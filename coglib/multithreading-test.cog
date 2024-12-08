@@ -1,7 +1,0 @@
-fllib/multithreading/target/debug/libmultithreading.so multithreading fllib
-
-stack 3 crank stack 1 crank compose
-
-dup
-
-spawn ? drop
