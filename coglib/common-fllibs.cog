@@ -1,5 +1,15 @@
-coglib-dir "/../fllib/graphemes/target/release/libgraphemes.so" concat "graphemes" fllib
-coglib-dir "/../fllib/multithreading/target/release/libmultithreading.so" concat "multithreading" fllib
-coglib-dir "/../fllib/os/target/release/libos.so" concat "os" fllib
-coglib-dir "/../fllib/process/target/release/libprocess.so" concat "process" fllib
-coglib-dir "/../fllib/time/target/release/libtime.so" concat "time" fllib
+[ loadlib ] (
+  dup fllib-filename
+  coglib-dir "/../fllib/" concat
+  ( ( dup ) dip swap ) dip swap concat
+  "/target/release/" concat
+  swap concat fllib
+) def
+
+"graphemes" loadlib
+"multithreading" loadlib
+"os" loadlib
+"process" loadlib
+"time" loadlib
+
+[ loadlib ] undef
