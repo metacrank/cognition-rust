@@ -3,8 +3,8 @@ pub mod custom;
 pub use crate::custom::*;
 use cognition::{*, builtins::stackops::cog_swap};
 use time::DurationCustom;
-use std::thread;
 use std::sync::{mpsc, mpsc::TryRecvError, mpsc::RecvTimeoutError, Arc};
+use std::thread;
 
 fn new_cogstate(state: &mut CognitionState, mut v: Value) -> CognitionState {
   let mut stack = state.pool.get_stack(DEFAULT_STACK_SIZE);
@@ -187,13 +187,11 @@ fn join_states(state: &mut CognitionState, mut cogstate: CognitionState) {
     exit_code_stack.container.stack.push(Value::Word(code_v));
   }
   state.current().stack.push(Value::Stack(exit_code_stack));
-  let false_v = state.pool.get_vword(0);
-  state.push_quoted(Value::Word(false_v));
 
   reclaim_memory(state, cogstate)
 }
 
-// [ (thread) ] thread -> [ ] [ exit_code? ] [ t/f panic'd? ]
+// [ (thread) ] thread -> [ ] [ exit_code? ]
 pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut v = get_custom!(state, w);
   let custom = &mut v.value_stack().first_mut().unwrap().vcustom_mut().custom;
@@ -204,17 +202,7 @@ pub fn cog_thread(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
         Ok(handle) => {
           if let Some(handle) = handle.take() {
             drop(handle_lock);
-            if let Ok(cogstatewrapper) = handle.join() {
-              join_states(&mut state, cogstatewrapper.0);
-            } else {
-              let empty = state.pool.get_vstack(0);
-              state.current().stack.push(Value::Stack(empty));
-              let empty = state.pool.get_vstack(0);
-              state.current().stack.push(Value::Stack(empty));
-              let mut true_v = state.pool.get_vword(1);
-              true_v.str_word.push('t');
-              state.push_quoted(Value::Word(true_v));
-            }
+            join_states(&mut state, handle.join().expect("Thread panicked").0);
             break 'return_ok true
           } else {
             state = state.eval_error("NULL THREAD", w);
@@ -488,7 +476,7 @@ pub fn cog_clear_multithreading_pools(mut state: CognitionState, _: Option<&Valu
 }
 
 #[no_mangle]
-pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
+pub extern "C-unwind" fn add_words(state: &mut CognitionState, lib: &Library) {
   ensure_foreign_library!(state, lib);
   register_custom!(state, lib, ThreadCustom);
   register_custom!(state, lib, SendCustom);

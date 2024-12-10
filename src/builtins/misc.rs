@@ -1,6 +1,5 @@
 use crate::*;
 
-pub fn cog_panic(_: CognitionState, _: Option<&Value>) -> CognitionState { panic!() }
 pub fn cog_nop(state: CognitionState, _: Option<&Value>) -> CognitionState { state }
 
 pub fn cog_return(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
@@ -231,7 +230,6 @@ pub fn cog_setp(mut state: CognitionState, w: Option<&Value>) -> CognitionState 
 }
 
 pub fn add_builtins(state: &mut CognitionState) {
-  add_builtin!(state, "panic", cog_panic);
   add_builtin!(state, "nothing");
   add_builtin!(state, "nop", cog_nop);
   add_builtin!(state, "return", cog_return);

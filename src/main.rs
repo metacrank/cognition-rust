@@ -9,6 +9,13 @@ use std::io::stdin;
 use cognition::*;
 
 fn main() -> ExitCode {
+  std::panic::set_hook(Box::new(|panic_info| {
+    println!("Internal Cognition or FLLib Error: {}", panic_info);
+    println!("This is a bug. If you can replicate this error, please help improve Cognition");
+    println!("and its foreign language libraries by re-running crank with RUST_BACKTRACE=full,");
+    println!("and posting the output in an issue on https://github.com/metacrank/cognition-rust");
+  }));
+
   let args: Vec<String> = env::args().collect();
   let argc = args.len();
 
@@ -523,14 +530,15 @@ fn print_end(state: &CognitionState, e: End) {
     }
   }
   if e.faliases {
+    print!("\nFaliases:");
     if let Some(faliases) = &cur.faliases {
-      print!("\nFaliases:");
       for alias in faliases.iter() {
         print!(" '");
         alias.print_pretty();
         print!("'");
       }
     }
+    println!("");
   }
   if e.parser {
     println!("");
@@ -561,47 +569,48 @@ fn print_end(state: &CognitionState, e: End) {
         println!("");
       }
     } else {
-      println!("crank 0");
+      println!("\ncrank 0");
     }
   }
 
   if e.math {
-    if let Some(ref math) = cur.math {
-      println!("");
-      println!("Math:");
-      println!("base: {}", math.base());
-      print!("digits: ");
-      for d in math.get_digits() {
+    let math = cur.math.as_ref();
+    println!("");
+    println!("Math:");
+    println!("base: {}", math.map_or(0, |m| m.base()));
+    print!("digits: ");
+    if math.map_or(0, |m| m.get_digits().len()) > 0 {
+      for d in math.unwrap().get_digits() {
         print!("{d}");
       }
       println!("");
-      print!("negc: ");
-      match math.get_negc() {
-        Some(c) => println!("'{}\u{00A0}'", c),
-        None => println!("(none)"),
-      }
-      print!("radix: ");
-      match math.get_radix() {
-        Some(c) => println!("'{c}'"),
-        None => println!("(none)"),
-      }
-      print!("delim: ");
-      match math.get_delim() {
-        Some(c) => println!("'{c}'"),
-        None => println!("(none)"),
-      }
-      print!("meta-radix: ");
-      match math.get_meta_radix() {
-        Some(c) => println!("'{c}'"),
-        None => println!("(none)"),
-      }
-      print!("meta-delim: ");
-      match math.get_meta_delim() {
-        Some(c) => println!("'{c}'"),
-        None => println!("(none)"),
-      }
     } else {
-      println!("uninitialized math");
+      println!("(none)")
+    }
+    print!("negc: ");
+    match math.map_or(None, |m| m.get_negc()) {
+      Some(c) => println!("'{}\u{00A0}'", c),
+      None => println!("(none)"),
+    }
+    print!("radix: ");
+    match math.map_or(None, |m| m.get_radix()) {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
+    }
+    print!("delim: ");
+    match math.map_or(None, |m| m.get_delim()) {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
+    }
+    print!("meta-radix: ");
+    match math.map_or(None, |m| m.get_meta_radix()) {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
+    }
+    print!("meta-delim: ");
+    match math.map_or(None, |m| m.get_meta_delim()) {
+      Some(c) => println!("'{c}'"),
+      None => println!("(none)"),
     }
   }
 

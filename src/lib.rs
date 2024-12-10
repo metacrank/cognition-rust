@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
-pub const VERSION: &'static str = "0.3.7";
+pub const VERSION: &'static str = "0.3.8";
 
 #[macro_use]
 pub mod macros;
@@ -285,7 +285,6 @@ impl Container {
   pub fn default_faliases() -> Option<Faliases> {
     let mut f = Faliases::with_capacity(DEFAULT_FALIASES_SIZE);
     f.insert(String::from("f"));
-    f.insert(String::from("ing"));
     Some(f)
   }
 }
@@ -1321,7 +1320,7 @@ impl CognitionEval {
     let fllib = v.vfllib_ref().fllib.clone();
     if state.is_high_tide() || self.force_eval() {
       if self.cranking() { state.current().inc_crank() }
-      state = fllib(state, self.callword(callword).clone());
+      state = fllib(state, self.callword(callword));
       if state.control.is_eval() {
         state.control.clear();
         if let Some(wd) = state.get_evalf_val(self.callword(callword)) {

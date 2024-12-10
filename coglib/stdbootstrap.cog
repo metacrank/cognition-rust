@@ -2,7 +2,7 @@ ldfgldftgldfdtgl
 df 
  
 dfiff0123456789↊↋🜘 digits f ̅ negc f . radix f , cd-delim f : meta-radix f ; meta-delim f
-a b compose f base f 1 crank ing 11000 base
+a b compose f base f 1 crank f ing setf 11000 base
 
 5 crank 2crank 2 crank
 1 crank unglue swap quote prepose def
@@ -18,13 +18,9 @@ a b compose f base f 1 crank ing 11000 base
 2crank ing 0 crank
 2crank ing 1 crank tab delim tab ignore
 2crank ing 0 crank
-2crank ing 0 crank false ff 1
-2crank ing 1 crank cut unaliasf
-2crank ing 0 crank 0
-2crank ing 1 crank cut swap quote
-2crank ing 1 crank def
-2crank ing 2 crank f unglue
-2crank ing 1 crank def
+2crank ing 3 crank false f dup
+2crank ing 2 crank 1 cut quote ing ?
+2crank ing 1 crank def unglue def
 2crank ing 0 crank
 2crank ing 3 crank setd d unglue setd set-name ing def
 2crank ing 3 crank seti i unglue seti set-name ing def
