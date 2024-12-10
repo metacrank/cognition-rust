@@ -5,7 +5,7 @@ use cognition::*;
 
 macro_rules! duration_from {
   ($state:ident,$w:ident,$from:expr) => {
-    let i = get_int!($state, $w, isize, ACTIVE, "DURATION UNDERFLOW");
+    let i = get_int!($state, $w, isize, ACTIVE, "DURATION OVERFLOW");
     let neg = i < 0;
     let i = if neg { -i } else { i } as usize;
     if i > u64::MAX as usize { return $state.eval_error("DURATION OVERFLOW", $w) }
@@ -39,7 +39,8 @@ macro_rules! duration_as {
       $state.current().stack.push(v);
       return $state.eval_error("INTEGER OVERFLOW", $w)
     }
-    let mut s = match math.math().itos(i as isize, &mut $state) {
+    let i = if duration_custom.neg { (i as isize) * -1 } else { i as isize };
+    let mut s = match math.math().itos(i, &mut $state) {
       Ok(s) => s,
       Err(e) => {
         $state.set_math(math);
@@ -119,6 +120,7 @@ pub fn cog_add_duration(mut state: CognitionState, w: Option<&Value>) -> Cogniti
     state.current().stack.push(v2);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
+  println!("about to add durations");
   add_durations!(state, w, v1, v2, d1, d2);
   state.pool.add_val(v1);
   state.current().stack.push(v2);
@@ -154,15 +156,19 @@ pub fn cog_duration_sum_overload(mut state: CognitionState, w: Option<&Value>) -
       let v1isduration = vcustom1.custom.as_any().downcast_ref::<DurationCustom>().is_some();
       let v2isduration = vcustom2.custom.as_any().downcast_ref::<DurationCustom>().is_some();
       if v1isduration && v2isduration {
-        state.current().stack.push(v4);
+        println!("duration add");
         state.pool.add_val(v3);
-        return state
+        state.current().stack.push(v2);
+        let wd = WordDef::from(v4);
+        return state.evalstack(wd, w, false)
       }
     }
   }
-  state.current().stack.push(v3);
+  println!("non-duration add");
   state.pool.add_val(v4);
-  state
+  state.current().stack.push(v2);
+  let wd = WordDef::from(v3);
+  state.evalstack(wd, w, false)
 }
 
 fn add_duration(mut state: CognitionState, w: Option<&Value>, add: bool) -> CognitionState {

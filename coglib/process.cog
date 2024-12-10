@@ -1,0 +1,3 @@
+[ msleep ] ( as-millis sleep ) def
+[ µsleep ] ( as-micros sleep ) def
+[ nsleep ] ( as-nanos sleep ) def

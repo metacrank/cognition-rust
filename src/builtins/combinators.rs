@@ -147,7 +147,9 @@ pub fn cog_dip(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let vdip = state.current().stack.pop().unwrap();
   let v = state.current().stack.pop().unwrap();
   state.current().stack.push(vdip);
-  state = state.evalf(w);
+  if let Some(wd) = state.get_evalf_val(w) {
+    state = state.evalstack(wd, w, false)
+  }
   state.current().stack.push(v);
   state
 }
