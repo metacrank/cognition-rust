@@ -19,7 +19,7 @@ a b compose f base f 1 crank f ing setf 11000 base
 2crank ing 1 crank tab delim tab ignore
 2crank ing 0 crank
 2crank ing 3 crank false f dup
-2crank ing 2 crank 1 cut quote ing ?
+2crank ing 2 crank 1 cut quote ing
 2crank ing 1 crank def unglue def
 2crank ing 0 crank
 2crank ing 3 crank setd d unglue setd set-name ing def
