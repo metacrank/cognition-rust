@@ -7,7 +7,7 @@ We still call it a cognition because it has all the characteristics that a cogni
 the ability to interpret arbitrary text input with an arbitrarily complicated, dynamically re-programmable rule,
 and Turing completeness.
 
-## Install
+## Installation
 Here we provide the installation instructions for supported operating systems and distributions.
 ### NixOS
 ```sh
