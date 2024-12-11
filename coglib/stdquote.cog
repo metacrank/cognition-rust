@@ -162,7 +162,7 @@ child cd
 [ rqdrop ] ( drop swap drop ) def
 [ finish ] ( swap [ 1 ] swap metacrank swap crank ) def
 [ nest   ] ( compose ( dup ) dip swap ) def
-[ body   ] ( get-keyword ? ( eval ) ( addon ) if ) def
+[ body   ] ( get-keyword ( eval ) ( addon ) if ) def
 [ ebody  ] ( get-keyword ( eval ) ( dup def? ( unglue ) ( ) if addon ) if ) def
 [ end    ] ( [ 0 ] crank [ 1 ] [ 1 ] metacrank ) def
 
