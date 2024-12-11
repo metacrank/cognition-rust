@@ -174,6 +174,42 @@ pub fn cog_stgl(mut state: CognitionState, _: Option<&Value>) -> CognitionState 
   state
 }
 
+pub fn cog_dflag(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let vword = if state.current_ref().dflag {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('w');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
+pub fn cog_iflag(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let vword = if state.current_ref().iflag {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('w');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
+pub fn cog_sflag(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+  let vword = if state.current_ref().sflag {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('w');
+    vword
+  } else {
+    state.pool.get_vword(0)
+  };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
 pub fn cog_getd(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let v = if let Some(delims) = state.current().delims.take() {
     let mut v = state.pool.get_vword(delims.len());
@@ -480,6 +516,9 @@ pub fn add_builtins(state: &mut CognitionState) {
   add_builtin!(state, "dtgl", cog_dtgl);
   add_builtin!(state, "itgl", cog_itgl);
   add_builtin!(state, "stgl", cog_stgl);
+  add_builtin!(state, "dflag", cog_dflag);
+  add_builtin!(state, "iflag", cog_iflag);
+  add_builtin!(state, "sflag", cog_sflag);
   add_builtin!(state, "getd", cog_getd);
   add_builtin!(state, "geti", cog_geti);
   add_builtin!(state, "gets", cog_gets);

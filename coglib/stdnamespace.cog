@@ -1,0 +1,118 @@
+# Namespacing is achieved via the :: word. :: is an infix word that
+# evaluates the definition of the following word as found in the
+# stack at the top of the current stack
+
+# TODO: implement :: for quotes
+# TODO: implement :: for cog
+# TODO: generalize to arbitrary crank states
+
+# Proto namespacing
+child cd
+
+[ crank-eval ] ( modcrank [ ] ( eval ) if ) def
+[ ensure-vstack ] ( type "VSTACK" != ( "BAD ARGUMENT TYPE" ethrow return ) [ ] if ) def
+[ recrank ] ( swap [ 1 ] swap metacrank swap crank ) def
+[ operation ] (
+  swap quote compose cd dup def? swap unglue
+  ( ( uncd ) dip swap drop ) dip swap
+) def
+
+":" undelim \ : unsinglet
+
+\ :: (
+  ssize [ 1 ] ==
+  ( eval ) ( swap ensure-vstack operation ( eval ) [ ] if ) if
+) def
+
+[ infix-namespace ] (
+  crankbase [ 1 ] metacrankbase
+  ( recrank \ :: )
+  [ 0 ] crank [ 1 ] [ 1 ] metacrank
+) def
+
+\ : (
+  ":" singlet crankbase [ 1 ] metacrankbase
+  ( recrank ":" unsinglet dup ":" =
+    ( drop infix-namespace ) ( ":" swap concat crank-eval ) if )
+  [ 0 ] crank [ 1 ] [ 1 ] metacrank
+) def
+
+# Finally, we manipulate the parser to detect the double colon (::)
+# This is accomplished through the use of the null prefix ('')
+
+"" dup unglue (
+  cd drop ":" (
+    len
+    ( [ 1 ] cut swap dup ":" =
+      ( len (( :: )) ( infix-namespace ) if )
+      ( ":" swap concat swap concat crank-eval )
+      if )
+    ( drop ":" crank-eval )
+    if
+  ) def uncd
+) eval false compose def
+
+# Implement namespacing for quotes
+[ nest ] ( compose ( dup ) dip swap ) def
+[ namespace-nest ] ( quote compose "::" nest ) def
+[ qldisplc ] ( stack swap dup [ 1 ] - swap displace ) def
+[ qlast ] ( size dup ( qldisplc ) ( drop f ) if ) def
+[ is-stack ] ( custom? ( fllib? ) dip or ( word? ) dip or not ) def
+[ is-vstack ] ( is-stack ( eval type "VSTACK" = ) ( f ) if ) def
+
+[ q-definition ] (
+  ( dup ":" =
+    ( drop ( namespace-nest ) )
+    ( ( qlast ) dip ":" swap concat concat nest ) if
+  )
+) def
+
+[ eq-definition ] (
+  ( dup ":" =
+    ( drop ( swap size dup ?
+      ( qldisplc is-vstack
+        ( ( swap ) dip swap quote compose cd unglue ( uncd ) dip swap drop compose ( dup ) dip swap )
+        ( compose swap namespace-nest ) if )
+      ( drop swap namespace-nest ) if ) )
+    ( ( qlast ) dip ":" swap concat concat nest ) if
+  )
+) def
+
+[ qprefix-namespace ] (
+  dup unglue
+  [ ":" ( q-definition ) ] [ 0 ] [ 1 ] displace
+  swap cd def uncd swap compose def
+) def
+
+[ eqprefix-namespace ] (
+  dup unglue
+  [ ":" ( eq-definition ) ] [ 0 ] [ 1 ] displace
+  swap cd def uncd swap compose def
+) def
+
+\ [  qprefix-namespace
+\ (  eqprefix-namespace
+\ {  qprefix-namespace
+\ [[ eqprefix-namespace
+\ (( qprefix-namespace
+\ {{ eqprefix-namespace
+
+# Invert proto namespace
+( uncd ( ( uncd ) dip swap quote compose )
+       root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
+       eval ) eval
+
+# Bequeath definitions
+"" bequeath
+\ : bequeath
+\ :: bequeath
+\ [ bequeath
+\ ( bequeath
+\ { bequeath
+\ [[ bequeath
+\ (( bequeath
+\ {{ bequeath
+
+ccd
+
+":" singlet ":" delim

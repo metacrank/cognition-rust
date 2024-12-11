@@ -156,12 +156,13 @@ child cd
 ) def
 
 # Factor out common definitions
+[ nllc ] [ 0 ] itoc quote def
 [ addon  ] ( compose ( dup ) dip swap ) def
 [ init   ] ( crankbase [ 1 ] metacrankbase ) def
 [ rqdrop ] ( drop swap drop ) def
 [ finish ] ( swap [ 1 ] swap metacrank swap crank ) def
 [ nest   ] ( compose ( dup ) dip swap ) def
-[ body   ] ( get-keyword ( eval ) ( addon ) if ) def
+[ body   ] ( get-keyword ? ( eval ) ( addon ) if ) def
 [ ebody  ] ( get-keyword ( eval ) ( dup def? ( unglue ) ( ) if addon ) if ) def
 [ end    ] ( [ 0 ] crank [ 1 ] [ 1 ] metacrank ) def
 
@@ -175,8 +176,8 @@ child cd
 ) def
 
 [ defquote ]
-f quote quote
-( swap quote compose cd def bequeath-quote-prefix uncd f compose )
+nllc quote quote
+( swap quote compose cd def bequeath-quote-prefix uncd nllc compose )
 swap prepose def
 \ [  ( init ( dup \ ]  = ( rqdrop finish ) ( \ [  body  ) if ) dup stack swap end ) defquote
 \ (  ( init ( dup \ )  = ( rqdrop finish ) ( \ (  ebody ) if ) dup macro swap end ) defquote
@@ -188,9 +189,12 @@ def def def def def def
 
 # Better escape character
 # (different behaviour inside quotes than before: doesn't double-quote)
-\ \ ( init ( finish ) end ) def
+\ \ [ 0 ] itoc dup quote [ (
+  init ( dup f = ( drop ( finish ) ) ( finish ) if ) end
+) ] compose ( cd def uncd ) eval swap compose def
+
 [ qprefix-escape ] (
-  dup unglue [ [ \ ] ( ghost ( nest ) ) ]
+  dup unglue [ [ \ ] ( ghost ( dup f = ( drop ( nest ) ) ( nest ) if ) ) ]
   [ 0 ] [ 1 ] displace
   swap cd def uncd swap compose def
 ) def
@@ -205,11 +209,11 @@ def def def def def def
 # Define comment behaviour inside quotes:
 [ qprefix-comment ] (
   dup unglue
-  [ [ # ] ( ghost
+  [ [ \ # ] ( ghost
     geti getd gets f setd f seti endl sets
     ( drop sets setd seti ( dup ) dip swap )
-  ) ] [ 0 ] [ 1 ] displace
-  swap cd def uncd swap compose def
+  ) ] [ 0 ] [ 1 ] displace swap
+  cd def uncd swap compose def
 ) def
 
 \ [  qprefix-comment
@@ -264,6 +268,7 @@ def def def def def def
 
 \ " [[
   f ( string-init init ( string-macro ) dup f swap end )
+  [ 0 ] ( ghost nllc string-addesc )
   [ a ] ( ghost alrt string-addesc )
   [ b ] ( ghost bspc string-addesc )
   [ e ] ( ghost esc  string-addesc )
@@ -274,9 +279,9 @@ def def def def def def
   [ v ] ( ghost vtab string-addesc )
   [ \ \ ] ( ghost [ \ \ ] string-addesc )
   [ \ " ] ( ghost [ \ " ] string-addesc )
-]] ( cd def def def def def def def def def def def uncd ) eval
+]] ( cd def def def def def def def def def def def def uncd ) eval
 f compose def
-\ " singlet \ " delim
+\ " singlet
 
 [ qprefix-string ] (
   dup unglue
@@ -293,14 +298,14 @@ f compose def
 \ {{ qprefix-string
 
 # Reimplement cog:
-[ [cog-finish]  ] [ "cog" ( swap drop finish feval ) ] ( cd def uncd ) eval "cog" compose quote def
-[ (cog-qfinish) ] ( ( swap drop quote compose [ feval ] addon ) ) def
+[ [cog-finish]   ] [ "cog" ( swap drop finish feval ) ] ( cd def uncd ) eval "cog" compose quote def
+[ (cog-qfinish)  ] ( ( swap drop quote compose [ feval ] addon ) ) def
 [ (cog-eqfinish) ] ( ( swap drop quote compose [[ feval ]] addon ) ) def
 
 \ cog [[
-  f ( init ( "cog" get-keyword ( [cog-finish] swap eval ) [cog-finish] if ) dup end )
+  nllc ( init ( "cog" get-keyword ( [cog-finish] swap eval ) [cog-finish] if ) dup end )
   "#"  ( ghost geti getd gets f setd f seti endl sets ( drop sets setd seti drop dup ) )
-  "\\" ( ghost ( swap eval ) )
+  "\\" ( ghost ( dup "" = ( drop ( swap eval ) ) ( swap eval ) if ) )
   "\"" ( ghost string-init ( string-cmacro ) dup f swap end )
   "["  ( ghost ( dup "]"  = ( rqdrop swap eval ) ( "["  body  ) if ) dup stack swap )
   "("  ( ghost ( dup ")"  = ( rqdrop swap eval ) ( "("  ebody ) if ) dup macro swap )
@@ -309,7 +314,7 @@ f compose def
   "((" ( ghost ( dup "))" = ( rqdrop swap eval ) ( "((" body  ) if ) dup macro swap )
   "{{" ( ghost ( dup "}}" = ( rqdrop swap eval ) ( "{{" ebody ) if ) dup child swap )
 ]] ( cd def def def def def def def def def def uncd ) eval
-f compose def
+nllc compose def
 
 [ qprefix-cog ] (
   dup unglue
@@ -350,4 +355,4 @@ f compose def
 
 ccd # Now we're back in the original container
 
-\ " singlet \ " delim
+\ " singlet

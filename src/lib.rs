@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
-pub const VERSION: &'static str = "0.3.8";
+pub const VERSION: &'static str = "0.3.9";
 
 #[macro_use]
 pub mod macros;
@@ -604,20 +604,16 @@ impl Parser {
   fn parse_word(&mut self, skipped: bool, state: &mut CognitionState) -> Option<Value> {
     let Some(c) = self.c else { return None };
     let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-    if state.issinglet(c) {
-      v.str_word.push(c);
-      self.next();
-      return Some(Value::Word(v));
-    }
     if !skipped {
       v.str_word.push(c);
       self.next();
+      if state.issinglet(c) { return Some(Value::Word(v)) }
     }
     while let Some(c) = self.c {
       if state.isdelim(c) { break };
       v.str_word.push(c);
       self.next();
-      if state.issinglet(c) { return Some(Value::Word(v)) };
+      if state.issinglet(c) { break }
     }
     Some(Value::Word(v))
   }

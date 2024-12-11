@@ -1,35 +1,89 @@
-? 0 exit
+# Namespacing
+child cd
 
-"PREFIX" dup def? [ dup unglue ] [ stack ] if
-(
-  cd
-  "" unglue dup def? [[ dup unglue ]] [[ stack ]] if
-  (
-    cd
-    "["  ( ( dup ) dip swap ) ) def
-    "("  ( ( dup ) dip swap ) ) def
-    "{"  ( ( dup ) dip swap ) ) def
-    "[[" ( ( dup ) dip swap ) ) def
-    "((" ( ( dup ) dip swap ) ) def
-    "{{" ( ( dup ) dip swap ) ) def
-    "cog" ( dup ) def
-    uncd
-  )
-  "1" unglue dup def? [[ dup unglue ]] [[ stack ]] if
-  (
-    cd
-    "["  ( compose ( dup ) dip swap ) ) def
-    "("  ( compose ( dup ) dip swap ) ) def
-    "{"  ( compose ( dup ) dip swap ) ) def
-    "[[" ( compose ( dup ) dip swap ) ) def
-    "((" ( compose ( dup ) dip swap ) ) def
-    "{{" ( compose ( dup ) dip swap ) ) def
-    "cog" ( swap eval ) def
-    uncd
-  )
-  eval def
-  uncd
-)
-eval ? def
+# Useful generic words from stdquote.cog
+[ get-keyword ] (
+  unglue swap quote compose cd dup def? dup
+  ( swap unglue swap ) [ ] if
+  ( ( uncd drop ) dip ) dip
+) def
+[ init   ] ( crankbase [ 1 ] metacrankbase ) def
+[ finish ] ( swap [ 1 ] swap metacrank swap crank ) def
+[ end    ] ( [ 0 ] crank [ 1 ] [ 1 ] metacrank ) def
+
+# Define the null prefix (empty word)
+#[ null-concat ] ( swap concat f swap modcrank [ ] ( eval ) if ) def
+#[ null-error? ] ( epop drop word? ( f = ) ( drop f ) if ) def
+#[ null-cut    ] ( [ 1 ] cut null-error? ( drop drop f return ) ( drop ) if ) def
+#[ null-body   ] ( null-cut swap f get-keyword ( eval ) ( null-concat ) if ) def
+#false [[
+#  f ( init getf ( swap setf finish null-body ) [ ] setf end )
+#]] ( cd def uncd ) eval f compose def
+
+## Words to define for the null prefix (and the null prefix inside quotes):
+# string literal
+# comment (in quotes)
+
+#"PREFIX" dup def? [ dup unglue ] [ stack ] if
+#(
+#  cd
+#  "" unglue dup def? [[ dup unglue ]] [[ stack ]] if
+#  (
+#   cd
+#    "["  ( ( dup ) dip swap ) ) def
+#    "("  ( ( dup ) dip swap ) ) def
+#    "{"  ( ( dup ) dip swap ) ) def
+#    "[[" ( ( dup ) dip swap ) ) def
+#    "((" ( ( dup ) dip swap ) ) def
+#    "{{" ( ( dup ) dip swap ) ) def
+#    "cog" ( dup ) def
+#    uncd
+#  )
+#  "1" unglue dup def? [[ dup unglue ]] [[ stack ]] if
+#  (
+#    cd
+#    "["  ( compose ( dup ) dip swap ) ) def
+#    "("  ( compose ( dup ) dip swap ) ) def
+#    "{"  ( compose ( dup ) dip swap ) ) def
+#    "[[" ( compose ( dup ) dip swap ) ) def
+#    "((" ( compose ( dup ) dip swap ) ) def
+#    "{{" ( compose ( dup ) dip swap ) ) def
+#    "cog" ( swap eval ) def
+#    uncd
+#  )
+#  eval def
+#  uncd
+#)
+#eval ? def
+
+[ addon  ] ( compose ( dup ) dip swap ) def
+[ rqdrop ] ( drop swap drop ) def
 
 # define 'func': prefix version of 'def'
+[ [func-finish]   ] [ "func" ( swap drop finish def ) ] ( cd def uncd ) eval "func" compose quote def
+[ (func-qfinish)  ] ( ( swap drop quote compose [ def ] addon ) ) def
+[ (func-eqfinish) ] ( ( swap drop quote compose [[ def ]] addon ) ) def
+
+[ func ] [[
+  f ( init ( "func" get-keyword ( [func-finish] swap eval ) [func-finish] if ) dup end )
+  "#"  ( ghost geti getd gets f setd f seti endl sets ( drop sets setd seti drop dup ) )
+  "\\" ( ghost ( dup "" = ( drop ( swap eval ) ) ( swap eval ) if ) )
+  "["  ( ghost ( dup "]"  = ( rqdrop swap eval ) ( "["  body  ) if ) dup stack swap )
+  "("  ( ghost ( dup ")"  = ( rqdrop swap eval ) ( "("  ebody ) if ) dup macro swap )
+  "{"  ( ghost ( dup "}"  = ( rqdrop swap eval ) ( "{"  body  ) if ) dup child swap )
+  "[[" ( ghost ( dup "]]" = ( rqdrop swap eval ) ( "[[" ebody ) if ) dup stack swap )
+  "((" ( ghost ( dup "))" = ( rqdrop swap eval ) ( "((" body  ) if ) dup macro swap )
+  "{{" ( ghost ( dup "}}" = ( rqdrop swap eval ) ( "{{" ebody ) if ) dup child swap )
+]] ( cd def def def def def def def def def uncd ) eval
+f compose def
+
+# Invert namespace
+( uncd ( ( uncd ) dip swap quote compose )
+       root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
+       eval ) eval
+
+# Bequeath definitions
+false bequeath
+\ func bequeath
+
+ccd # Now we're back in the original container
