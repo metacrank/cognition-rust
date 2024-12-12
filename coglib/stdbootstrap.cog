@@ -40,65 +40,31 @@ a b compose f base f 1 crank f ing setf 11000 base
 2crank ing 0 crank
 2crank ing 1 crank # This is a prefix comment function (#)
 2crank ing 1 crank
-2crank ing 1 crank # Now we implement the null prefix ('')
-2crank ing 0 crank get-keyword
-2crank ing 2 crank unglue unglue swap unglue quote unglue compose unglue cd unglue dup unglue def? unglue dup unglue
-2crank ing 1 crank compose compose compose compose compose compose compose
-2crank ing 2 crank swap unglue unglue unglue swap unglue
-2crank ing 1 crank compose compose quote compose
-2crank ing 1 crank stack quote compose
-2crank ing 2 crank if unglue compose eval
-2crank ing 2 crank uncd unglue drop unglue
-2crank ing 1 crank compose quote
-2crank ing 2 crank dip unglue
-2crank ing 1 crank swap prepose quote
-2crank ing 2 crank dip unglue
-2crank ing 1 crank swap prepose compose
-2crank ing 1 crank def
+2crank ing 1 crank # Now we implement a comment-aware version of the null prefix ('')
+2crank ing 1 crank f
 2crank ing 1 crank
-2crank ing 1 crank f f f f
+2crank ing 2 crank crankbase unglue 1 quote metacrankbase unglue
+2crank ing 1 crank compose compose
 2crank ing 1 crank
-2crank ing 2 crank crankbase unglue 1 quote metacrankbase unglue getf unglue
-2crank ing 1 crank compose compose compose
-2crank ing 2 crank swap unglue setf unglue swap unglue 1 quote swap unglue metacrank unglue swap unglue crank unglue
-2crank ing 1 crank compose compose compose compose compose compose compose
-2crank ing 2 crank 1 quote cut unglue epop unglue drop unglue word? unglue
+2crank ing 2 crank swap unglue 1 quote swap unglue metacrank unglue swap unglue crank unglue
 2crank ing 1 crank compose compose compose compose compose
-2crank ing 2 crank f unglue = unglue compose eval VMACRO cast
-2crank ing 1 crank quote compose
-2crank ing 2 crank drop unglue f unglue compose eval
-2crank ing 1 crank quote compose
-2crank ing 2 crank if unglue compose eval
-2crank ing 2 crank drop unglue drop unglue f unglue return unglue
-2crank ing 1 crank compose compose compose quote compose
-2crank ing 2 crank drop unglue quote ing compose
-2crank ing 2 crank if unglue compose eval
-2crank ing 2 crank swap unglue f unglue get-keyword unglue
+2crank ing 2 crank # quote compose eval
+2crank ing 2 crank eval unglue quote ing compose
+2crank ing 2 crank f unglue swap unglue modcrank unglue stack ing quote
 2crank ing 1 crank compose compose compose
 2crank ing 2 crank eval unglue quote ing compose
-2crank ing 2 crank swap unglue concat unglue f unglue swap unglue modcrank unglue stack ing quote
-2crank ing 1 crank compose compose compose compose compose
-2crank ing 2 crank eval unglue quote ing compose if unglue compose eval
+2crank ing 2 crank if unglue compose eval
 2crank ing 1 crank quote compose
 2crank ing 2 crank if unglue compose eval
 2crank ing 1 crank quote compose
-2crank ing 1 crank stack quote compose
-2crank ing 2 crank setf unglue 0 quote crank unglue 1 quote 1 quote metacrank unglue
-2crank ing 1 crank compose compose compose compose compose compose
-2crank ing 1 crank def bequeath
 2crank ing 1 crank
-2crank ing 2 crank # quote # unglue
-2crank ing 2 crank drop unglue swap ing compose
-2crank ing 1 crank quote compose
-2crank ing 3 crank 0 1 displace swap ing
-2crank ing 1 crank
-2crank ing 2 crank cd unglue def unglue uncd unglue
-2crank ing 1 crank compose compose eval swap compose
+2crank ing 2 crank 0 quote crank unglue 1 quote 1 quote metacrank unglue
+2crank ing 1 crank compose compose compose compose compose
 2crank ing 1 crank
 2crank ing 1 crank def
 2crank ing 1 crank
+2crank ing 1 crank # The null prefix allows us to make (#) a delimiter
 2crank ing 2 crank # delim
-2crank ing 2 crank get-keyword undef
 2crank ing 1 crank
 2crank ing 1 crank # COGLIB_DIR environment variable
 2crank ing 0 crank coglib-dir
@@ -212,6 +178,9 @@ a b compose f base f 1 crank f ing setf 11000 base
 2crank ing 1 crank #      'sets': ( s )
 2crank ing 1 crank #         '#': ( geti getd gets crankbase [ 1 ] metacrankbase [ '' ] setd [ '' ] seti [ '\n' ] sets
 2crank ing 1 crank #                ( drop [ 1 ] swap metacrank crank sets setd seti ) [ 0 ] crank [ 1 ] [ 1 ] metacrank )
+2crank ing 1 crank #          '': ( crankbase [ 1 ] metacrankbase
+2crank ing 1 crank #                ( swap [ 1 ] swap metacrank swap crank dup [ '#' ] = ( eval ) ( f swap modcrank [ ] ( eval ) if ) if )
+2crank ing 1 crank #                [ 0 ] crank [ 1 ] [ 1 ] metacrank )
 2crank ing 1 crank #'coglib-dir': ( [ 'COGLIB_DIR' ] var )
 2crank ing 1 crank #   'cogfile': ( esize swap fread swap esize =
 2crank ing 1 crank #                [ ] ( edrop dup esize swap [ '.cog' ] concat fread swap esize = ( swap drop ) ( drop ) if ) if )
@@ -220,14 +189,9 @@ a b compose f base f 1 crank f ing setf 11000 base
 2crank ing 1 crank #                      ( swap drop ) ( drop ) if ) if )
 2crank ing 1 crank #     'feval': ( word? ( [ 0 ] vat esize swap cogfile swap esize = ( prepose streval ) ( drop ) if )
 2crank ing 1 crank #                      ( [ 'BAD ARGUMENT TYPE' ] ethrow ) if )
-2crank ing 1 crank #       'cog': ( ( dup [ '#' ] = ( ( dup ) dip eval ) ( swap drop [ 1 ] crank [ 1 ] [ 0 ] metacrank feval ) if )
-2crank ing 1 crank #                ( dup [ '#' ] = ( ( dup ) dip eval ) ( swap drop [ 1 ] crank [ 1 ] [ 0 ] metacrank feval ) if )
-2crank ing 1 crank #                [ 0 ] crank [ 1 ] [ 1 ] metacrank )
-2crank ing 1 crank #          '': ( crankbase [ 1 ] metacrankbase getf
-2crank ing 1 crank #                ( swap setf swap [ 1 ] swap metacrank swap crank [ 1 ] cut epop drop word? ( "" = ) ( drop "" ) if
-2crank ing 1 crank #                  ( drop drop "" return ) ( drop ) if swap "" unglue swap quote compose cd dup def?
-2crank ing 1 crank #                  dup ( swap unglue swap ) [ ] if ( ( uncd drop ) dip ) dip
-2crank ing 1 crank #                  ( eval ) ( swap concat f swap modcrank [ ] ( eval ) if ) if )
-2crank ing 1 crank #                [ ] setf [ 0 ] crank [ 1 ] [ 1 ] metacrank )
+2crank ing 1 crank #       'cog': ( ( dup [ '' ] = ( drop dup )
+2crank ing 1 crank #                  ( dup [ '#' ] = ( ( dup ) dip eval ) 
+2crank ing 1 crank #                                  ( swap drop [ 1 ] crank [ 1 ] [ 0 ] metacrank feval ) if ) if )
+2crank ing 1 crank #                dup [ 0 ] crank [ 1 ] [ 1 ] metacrank )
 2crank ing 1 crank #
 2crank ing 1 crank # Future versions may undef 'd' 'i' and 's'. Bootstrapped cognition programs should not rely on them.

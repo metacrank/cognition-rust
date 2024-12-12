@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
-pub const VERSION: &'static str = "0.3.9";
+pub const VERSION: &'static str = "0.3.10";
 
 #[macro_use]
 pub mod macros;
@@ -223,11 +223,7 @@ pub struct Container {
   pub word_table: Option<WordTable>,
   pub faliases: Option<Faliases>,
   pub delims: Option<String>,
-  pub ignored: Option<String>,
-  pub singlets: Option<String>,
   pub dflag: bool,
-  pub iflag: bool,
-  pub sflag: bool,
 }
 
 impl Default for Container {
@@ -240,11 +236,7 @@ impl Default for Container {
       word_table: None,
       faliases: None,
       delims: None,
-      ignored: None,
-      singlets: None,
       dflag: false,
-      iflag: true,
-      sflag: true,
     }
   }
 }
@@ -284,7 +276,7 @@ impl Container {
 
   pub fn default_faliases() -> Option<Faliases> {
     let mut f = Faliases::with_capacity(DEFAULT_FALIASES_SIZE);
-    f.insert(String::from("f"));
+    f.insert(String::from(""));
     Some(f)
   }
 }
@@ -547,6 +539,7 @@ pub struct Parser {
   c: Option<char>,
   line: usize,
   column: usize,
+  parse_delim: bool
 }
 
 impl Parser {
@@ -554,10 +547,10 @@ impl Parser {
     Self::with_loc(source, ParserLoc{ filename, pos: None })
   }
   pub fn with_loc(source: Option<String>, loc: ParserLoc) -> Parser {
-    if source.is_none() { return Parser{ source: None, filename: None, i: 0, c: None, line: 1, column: 0 } }
+    if source.is_none() { return Parser{ source: None, filename: None, i: 0, c: None, line: 1, column: 0, parse_delim: false } }
     let c = match source.as_ref().unwrap().get(..) { Some(st) => st.chars().next(), None => None };
     let (line, column) = if let Some(pos) = loc.pos { (pos.0, pos.1) } else { (1, 0) };
-    Parser{ source, filename: loc.filename, i: 0, c, line, column }
+    Parser{ source, filename: loc.filename, i: 0, c, line, column, parse_delim: false }
   }
   pub fn next(&mut self) {
     if self.c.is_none() || self.source.is_none() { return }
@@ -580,6 +573,7 @@ impl Parser {
     self.i = 0;
     self.source = Some(source);
     self.filename = filename;
+    self.parse_delim = false;
   }
 
   pub fn source(&mut self) -> Option<String> {
@@ -591,34 +585,36 @@ impl Parser {
   pub fn line(&self) -> usize { self.line }
   pub fn column(&self) -> usize { self.column }
 
-  fn skip_ignored(&mut self, state: &CognitionState) -> bool {
-    let mut skipped = false;
-    while let Some(c) = self.c {
-      if !state.isignore(c) { break };
-      skipped = true;
-      self.next();
-    }
-    skipped
-  }
+  // fn skip_ignored(&mut self, state: &CognitionState) -> bool {
+  //   let mut skipped = false;
+  //   while let Some(c) = self.c {
+  //     if !state.isignore(c) { break };
+  //     skipped = true;
+  //     self.next();
+  //   }
+  //   skipped
+  // }
 
-  fn parse_word(&mut self, skipped: bool, state: &mut CognitionState) -> Option<Value> {
+  pub fn parse_word(&mut self, state: &mut CognitionState) -> Option<Value> {
     let Some(c) = self.c else { return None };
-    let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-    if !skipped {
-      v.str_word.push(c);
-      self.next();
-      if state.issinglet(c) { return Some(Value::Word(v)) }
+    if self.parse_delim {
+      self.parse_delim = false;
+      return Some(Value::Word(state.pool.get_vword(0)))
     }
+    let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
+    self.parse_delim = true;
+    v.str_word.push(c);
+    self.next();
     while let Some(c) = self.c {
-      if state.isdelim(c) { break };
+      if state.isdelim(c) { break }
+      self.parse_delim = state.isdelim(c);
       v.str_word.push(c);
       self.next();
-      if state.issinglet(c) { break }
     }
     Some(Value::Word(v))
   }
 
-  // returns just the next character without delim/ignore/singlet behaviour
+  // returns just the next character
   pub fn get_next_char(&mut self, state: &mut CognitionState) -> Option<Box<VWord>> {
     let ch = self.c;
     self.next();
@@ -631,11 +627,6 @@ impl Parser {
         Some(v)
       },
     }
-  }
-  /// Parse next token and return it as a word value option
-  pub fn get_next(&mut self, state: &mut CognitionState) -> Option<Value> {
-    let skipped = self.skip_ignored(&state);
-    self.parse_word(skipped, state)
   }
 }
 
@@ -751,26 +742,10 @@ impl CognitionState {
     };
     (found && cur.dflag) || (!found && !cur.dflag)
   }
-  pub fn isignore(&self, c: char) -> bool {
-    let cur = self.current_ref();
-    let found = match &cur.ignored {
-      None => false,
-      Some(s) => s.chars().any(|x| x == c),
-    };
-    (found && cur.iflag) || (!found && !cur.iflag)
-  }
-  pub fn issinglet(&self, c: char) -> bool {
-    let cur = self.current_ref();
-    let found = match &cur.singlets {
-      None => false,
-      Some(s) => s.chars().any(|x| x == c),
-    };
-    (found && cur.sflag) || (!found && !cur.sflag)
-  }
 
   pub fn parser_get_next(&mut self) -> Option<Value> {
     let Some(mut parser) = self.parser.take() else { return None };
-    let retval = parser.get_next(self);
+    let retval = parser.parse_word(self);
     self.parser = Some(parser);
     retval
   }
@@ -818,15 +793,7 @@ impl CognitionState {
     if let Some(ref delims) = old.delims {
       new.delims = Some(self.string_copy(delims));
     }
-    if let Some(ref ignored) = old.ignored {
-      new.ignored = Some(self.string_copy(ignored));
-    }
-    if let Some(ref singlets) = old.singlets {
-      new.singlets = Some(self.string_copy(singlets))
-    }
     new.dflag = old.dflag;
-    new.iflag = old.iflag;
-    new.sflag = old.sflag;
 
     if let Some(ref word_table) = old.word_table {
       new.word_table = Some(self.pool.get_word_table(word_table.capacity()));
@@ -884,7 +851,6 @@ impl CognitionState {
       Value::Custom(vcustom) => Value::Custom({
         VCustom::with_custom(vcustom.custom.copyfunc(self))
       })
-      //Value::Control(vcontrol) => Value::Control(vcontrol.clone()),
     }
   }
 
@@ -900,8 +866,7 @@ impl CognitionState {
 
   pub fn default_faliases(&mut self) -> Option<Faliases> {
     let mut f = self.pool.get_faliases(DEFAULT_FALIASES_SIZE);
-    f.insert(String::from("f"));
-    f.insert(String::from("ing"));
+    f.insert(String::from(""));
     Some(f)
   }
 

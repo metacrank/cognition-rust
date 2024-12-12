@@ -9,7 +9,6 @@
 # Proto namespacing
 child cd
 
-[ crank-eval ] ( modcrank [ ] ( eval ) if ) def
 [ ensure-vstack ] ( type "VSTACK" != ( "BAD ARGUMENT TYPE" ethrow return ) [ ] if ) def
 [ recrank ] ( swap [ 1 ] swap metacrank swap crank ) def
 [ operation ] (
@@ -17,7 +16,7 @@ child cd
   ( ( uncd ) dip swap drop ) dip swap
 ) def
 
-":" undelim \ : unsinglet
+":" undelim ":" unsinglet
 
 \ :: (
   ssize [ 1 ] ==
@@ -31,26 +30,27 @@ child cd
 ) def
 
 \ : (
-  ":" singlet crankbase [ 1 ] metacrankbase
-  ( recrank ":" unsinglet dup ":" =
-    ( drop infix-namespace ) ( ":" swap concat crank-eval ) if )
+  crankbase [ 1 ] metacrankbase
+  ( recrank dup ":" =
+    ( drop infix-namespace ) ( ":" swap concat concat eval ) if )
   [ 0 ] crank [ 1 ] [ 1 ] metacrank
 ) def
 
 # Finally, we manipulate the parser to detect the double colon (::)
 # This is accomplished through the use of the null prefix ('')
 
-"" dup unglue (
-  cd drop ":" (
+"" dup unglue [
+  ":" (
     len
     ( [ 1 ] cut swap dup ":" =
       ( len (( :: )) ( infix-namespace ) if )
-      ( ":" swap concat swap concat crank-eval )
+      ( ":" swap concat swap concat )
       if )
-    ( drop ":" crank-eval )
+    ( drop ":" )
     if
-  ) def uncd
-) eval false compose def
+  )
+] [ 0 ] [ 1 ] displace swap
+( cd def uncd ) eval swap compose def
 
 # Implement namespacing for quotes
 [ nest ] ( compose ( dup ) dip swap ) def
@@ -60,28 +60,44 @@ child cd
 [ is-stack ] ( custom? ( fllib? ) dip or ( word? ) dip or not ) def
 [ is-vstack ] ( is-stack ( eval type "VSTACK" = ) ( f ) if ) def
 
-[ q-definition ] (
-  ( dup ":" =
-    ( drop ( namespace-nest ) )
-    ( ( qlast ) dip ":" swap concat concat nest ) if
-  )
+[ q-definition ] ( ( dup ":" =
+                   ( drop ( namespace-nest ) )
+                   ( ( qlast ) dip ":" swap concat concat nest ) if ) ) def
+
+[ eq-nest ] (
+  drop
+  ( swap size dup ?
+    ( qldisplc is-vstack
+      ( ( swap ) dip swap quote compose cd unglue ( uncd ) dip swap drop compose ( dup ) dip swap )
+      ( compose swap namespace-nest ) if )
+    ( drop swap namespace-nest ) if )
 ) def
 
 [ eq-definition ] (
   ( dup ":" =
-    ( drop ( swap size dup ?
-      ( qldisplc is-vstack
-        ( ( swap ) dip swap quote compose cd unglue ( uncd ) dip swap drop compose ( dup ) dip swap )
-        ( compose swap namespace-nest ) if )
-      ( drop swap namespace-nest ) if ) )
-    ( ( qlast ) dip ":" swap concat concat nest ) if
-  )
+    ( eq-nest )
+    ( ( qlast ) dip ":" swap concat concat dup def? ( unglue ) [ ] if nest ) if )
 ) def
+
+[ [q-null-definition] ] [ [
+  ":" ( ( dup ":" =
+          ( drop ( namespace-nest ) )
+          ( ":" swap concat nest ) if ) )
+] ] def
+
+[ [eq-null-definition] ] [ [
+  ":" ( ( dup ":" =
+          ( eq-nest )
+          ( ":" swap concat nest ) if ) )
+] ] def
 
 [ qprefix-namespace ] (
   dup unglue
   [ ":" ( q-definition ) ] [ 0 ] [ 1 ] displace
-  swap cd def uncd swap compose def
+  swap cd def
+  "" dup unglue ( uncd ) dip [q-null-definition] [ 0 ] [ 1 ] displace
+  swap cd def uncd swap compose def quote compose cd def
+  uncd swap compose def
 ) def
 
 [ eqprefix-namespace ] (

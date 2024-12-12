@@ -11,18 +11,18 @@ child cd
 [ finish ] ( swap [ 1 ] swap metacrank swap crank ) def
 [ end    ] ( [ 0 ] crank [ 1 ] [ 1 ] metacrank ) def
 
-# Define the null prefix (empty word)
-#[ null-concat ] ( swap concat f swap modcrank [ ] ( eval ) if ) def
-#[ null-error? ] ( epop drop word? ( f = ) ( drop f ) if ) def
-#[ null-cut    ] ( [ 1 ] cut null-error? ( drop drop f return ) ( drop ) if ) def
-#[ null-body   ] ( null-cut swap f get-keyword ( eval ) ( null-concat ) if ) def
-#false [[
-#  f ( init getf ( swap setf finish null-body ) [ ] setf end )
-#]] ( cd def uncd ) eval f compose def
 
-## Words to define for the null prefix (and the null prefix inside quotes):
-# string literal
-# comment (in quotes)
+
+[ qprefix-null ] (
+  dup dup unglue swap quote [ 0 ] [ 1 ] displace swap cd
+  ( ghost ) swap ( "" ) swap quote compose ( null-qbody ) compose quote compose
+  [[ f ]] swap quote compose
+  [ \ # ] dup unglue quote swap quote prepose compose
+  [ \ " ] dup unglue quote swap quote prepose compose
+  cd def def def uncd "" compose dup
+  def uncd swap compose def
+) def
+
 
 #"PREFIX" dup def? [ dup unglue ] [ stack ] if
 #(
@@ -64,7 +64,7 @@ child cd
 [ (func-qfinish)  ] ( ( swap drop quote compose [ def ] addon ) ) def
 [ (func-eqfinish) ] ( ( swap drop quote compose [[ def ]] addon ) ) def
 
-[ func ] [[
+\ func [[
   f ( init ( "func" get-keyword ( [func-finish] swap eval ) [func-finish] if ) dup end )
   "#"  ( ghost geti getd gets f setd f seti endl sets ( drop sets setd seti drop dup ) )
   "\\" ( ghost ( dup "" = ( drop ( swap eval ) ) ( swap eval ) if ) )
@@ -77,6 +77,29 @@ child cd
 ]] ( cd def def def def def def def def def uncd ) eval
 f compose def
 
+\ func qprefix-null
+
+[ qprefix-func ] (
+  dup unglue
+  [ "func" ( ghost ( "func" get-keyword ( (func-qfinish) swap eval ) (func-qfinish) if ) dup ) ]
+  [ 0 ] [ 1 ] displace
+  swap cd def uncd swap compose def
+) def
+
+[ eqprefix-cog ] (
+  dup unglue
+  [ "func" ( ghost ( "func" get-keyword ( (func-eqfinish) swap eval ) (func-eqfinish) if ) dup ) ]
+  [ 0 ] [ 1 ] displace
+  swap cd def uncd swap compose def
+) def
+
+\ [  qprefix-func
+\ (  eqprefix-func
+\ {  qprefix-func
+\ [[ eqprefix-func
+\ (( qprefix-func
+\ {{ eqprefix-func
+
 # Invert namespace
 ( uncd ( ( uncd ) dip swap quote compose )
        root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
@@ -85,5 +108,11 @@ f compose def
 # Bequeath definitions
 false bequeath
 \ func bequeath
+\ [ bequeath
+\ ( bequeath
+\ { bequeath
+\ [[ bequeath
+\ (( bequeath
+\ {{ bequeath
 
 ccd # Now we're back in the original container

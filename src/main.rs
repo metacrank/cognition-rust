@@ -531,28 +531,22 @@ fn print_end(state: &CognitionState, e: End) {
   }
   if e.faliases {
     print!("\nFaliases:");
-    if let Some(faliases) = &cur.faliases {
-      for alias in faliases.iter() {
+    if cur.faliases.as_ref().map_or(false, |f| f.len() > 0) {
+      for alias in cur.faliases.as_ref().unwrap().iter() {
         print!(" '");
         alias.print_pretty();
         print!("'");
       }
+      println!("");
+    } else {
+      println!("(none)");
     }
-    println!("");
   }
   if e.parser {
     println!("");
     print!("delims: '");
     if let Some(delims) = &cur.delims { delims.print_pretty(); }
     if cur.dflag { println!("' (whitelist)"); }
-    else         { println!("' (blacklist)"); }
-    print!("ignored: '");
-    if let Some(ignored) = &cur.ignored { ignored.print_pretty(); }
-    if cur.iflag { println!("' (whitelist)"); }
-    else         { println!("' (blacklist)"); }
-    print!("singlets: '");
-    if let Some(singlets) = &cur.singlets { singlets.print_pretty(); }
-    if cur.sflag { println!("' (whitelist)"); }
     else         { println!("' (blacklist)"); }
   }
 

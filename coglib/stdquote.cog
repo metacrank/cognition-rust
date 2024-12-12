@@ -149,14 +149,15 @@ def
 # Namespacing
 child cd
 
-[ get-keyword ] (
-  unglue swap quote compose cd dup def? dup
+# Factor out common definitions
+[ get-keyword-in ] (
+  swap quote compose cd dup def? dup
   ( swap unglue swap ) [ ] if
   ( ( uncd drop ) dip ) dip
 ) def
+[ get-keyword ] ( unglue get-keyword-in ) def
 
-# Factor out common definitions
-[ nllc ] [ 0 ] itoc quote def
+[ nllc   ] [ 0 ] itoc quote def
 [ addon  ] ( compose ( dup ) dip swap ) def
 [ init   ] ( crankbase [ 1 ] metacrankbase ) def
 [ rqdrop ] ( drop swap drop ) def
@@ -297,6 +298,41 @@ f compose def
 \ (( qprefix-string
 \ {{ qprefix-string
 
+# Reimplement the null prefix ('')
+[ null-eval  ] ( f swap modcrank [ ] ( eval ) if ) def
+[ null-body  ] ( f get-keyword ( eval ) ( null-eval ) if ) def
+[ null-qbody ] ( get-keyword drop get-keyword-in ( eval ) ( nest ) if ) def
+"" [[
+  f ( init ( finish null-body ) end )
+  [ \ # ] ( \ # )
+  [ \ " ] ( \ " )
+]] ( cd def def def uncd ) eval "" compose def
+
+# So far, the null prefix in quotes simply acts as a deferral to the next token.
+# The complexity of the approach here is justified because it will make it simpler
+# to define multi-character singlet behaviour later on
+
+[ qprefix-null ] (
+  dup dup unglue swap quote [ 0 ] [ 1 ] displace swap cd
+  ( ghost ) swap ( "" ) swap quote compose ( null-qbody ) compose quote compose
+  [[ f ]] swap quote compose
+  [ \ # ] dup unglue quote swap quote prepose compose
+  [ \ " ] dup unglue quote swap quote prepose compose
+  cd def def def uncd "" compose dup
+  def uncd swap compose def
+) def
+
+\ [  qprefix-null
+\ (  qprefix-null
+\ {  qprefix-null
+\ [[ qprefix-null
+\ (( qprefix-null
+\ {{ qprefix-null
+
+# Now that the null prefix is defined, we can make the string literal character a delim
+
+\ " delim
+
 # Reimplement cog:
 [ [cog-finish]   ] [ "cog" ( swap drop finish feval ) ] ( cd def uncd ) eval "cog" compose quote def
 [ (cog-qfinish)  ] ( ( swap drop quote compose [ feval ] addon ) ) def
@@ -315,6 +351,8 @@ f compose def
   "{{" ( ghost ( dup "}}" = ( rqdrop swap eval ) ( "{{" ebody ) if ) dup child swap )
 ]] ( cd def def def def def def def def def def uncd ) eval
 nllc compose def
+
+\ cog qprefix-null
 
 [ qprefix-cog ] (
   dup unglue
@@ -352,6 +390,7 @@ nllc compose def
 \ \   bequeath
 \ "   bequeath
 \ cog bequeath
+"" bequeath
 
 ccd # Now we're back in the original container
 
