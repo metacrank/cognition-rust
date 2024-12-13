@@ -167,6 +167,8 @@ z undef ing 1 crank ing 11000 base
 2crank ing 1 crank # Set the negc to U0305 (Combining Overline)
 2crank ing 1 crank # Set the radix point to be the period (.)
 2crank ing 1 crank # Set the Cayley-Dickson delimiter to the comma (,)
+2crank ing 1 crank # Set the meta radix character to be the colon (:)
+2crank ing 1 crank # Set the meta delimiter to the semicolon (;)
 2crank ing 1 crank # Set the base to twenty-four (chronimal)
 2crank ing 1 crank #
 2crank ing 1 crank # ----Definitions----
