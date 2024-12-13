@@ -747,7 +747,15 @@ impl Pool {
       if container.delims.is_some() {
         self.add_string(container.delims.take().unwrap());
       }
+      if container.ignored.is_some() {
+        self.add_string(container.ignored.take().unwrap());
+      }
+      if container.singlets.is_some() {
+        self.add_string(container.singlets.take().unwrap());
+      }
       container.dflag = false;
+      container.iflag = true;
+      container.sflag = false;
       if container.word_table.is_some() {
         self.add_word_table(container.word_table.take().unwrap());
       }

@@ -223,7 +223,11 @@ pub struct Container {
   pub word_table: Option<WordTable>,
   pub faliases: Option<Faliases>,
   pub delims: Option<String>,
+  pub ignored: Option<String>,
+  pub singlets: Option<String>,
   pub dflag: bool,
+  pub iflag: bool,
+  pub sflag: bool,
 }
 
 impl Default for Container {
@@ -236,7 +240,11 @@ impl Default for Container {
       word_table: None,
       faliases: None,
       delims: None,
+      ignored: None,
+      singlets: None,
       dflag: false,
+      iflag: true,
+      sflag: false,
     }
   }
 }
@@ -585,36 +593,39 @@ impl Parser {
   pub fn line(&self) -> usize { self.line }
   pub fn column(&self) -> usize { self.column }
 
-  // fn skip_ignored(&mut self, state: &CognitionState) -> bool {
-  //   let mut skipped = false;
-  //   while let Some(c) = self.c {
-  //     if !state.isignore(c) { break };
-  //     skipped = true;
-  //     self.next();
-  //   }
-  //   skipped
-  // }
-
-  pub fn parse_word(&mut self, state: &mut CognitionState) -> Option<Value> {
-    let Some(c) = self.c else { return None };
-    if self.parse_delim {
-      self.parse_delim = false;
-      return Some(Value::Word(state.pool.get_vword(0)))
-    }
-    let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
-    self.parse_delim = true;
-    v.str_word.push(c);
-    self.next();
+  fn skip_ignored(&mut self, state: &CognitionState) -> bool {
+    let mut skipped = false;
     while let Some(c) = self.c {
-      if state.isdelim(c) { break }
-      self.parse_delim = state.isdelim(c);
+      if !state.isignore(c) { break };
+      skipped = true;
+      self.next();
+    }
+    skipped
+  }
+
+  fn parse_word(&mut self, skipped: bool, state: &mut CognitionState) -> Option<Value> {
+    let Some(c) = self.c else { return None };
+    let mut v = state.pool.get_vword(DEFAULT_STRING_LENGTH);
+    if !skipped && !self.parse_delim {
       v.str_word.push(c);
       self.next();
+      self.parse_delim = state.issinglet(c);
+      if state.issinglet(c) { return Some(Value::Word(v)) }
+    } else {
+      self.parse_delim = false;
+    }
+    while let Some(c) = self.c {
+      if state.isdelim(c) { break }
+      v.str_word.push(c);
+      self.next();
+      if state.issinglet(c) {
+        self.parse_delim = true;
+        break
+      }
     }
     Some(Value::Word(v))
   }
 
-  // returns just the next character
   pub fn get_next_char(&mut self, state: &mut CognitionState) -> Option<Box<VWord>> {
     let ch = self.c;
     self.next();
@@ -627,6 +638,11 @@ impl Parser {
         Some(v)
       },
     }
+  }
+
+  pub fn get_next(&mut self, state: &mut CognitionState) -> Option<Value> {
+    let skipped = self.skip_ignored(&state);
+    self.parse_word(skipped, state)
   }
 }
 
@@ -742,10 +758,26 @@ impl CognitionState {
     };
     (found && cur.dflag) || (!found && !cur.dflag)
   }
+  pub fn isignore(&self, c: char) -> bool {
+    let cur = self.current_ref();
+    let found = match &cur.ignored {
+      None => false,
+      Some(s) => s.chars().any(|x| x == c),
+    };
+    (found && cur.iflag) || (!found && !cur.iflag)
+  }
+  pub fn issinglet(&self, c: char) -> bool {
+    let cur = self.current_ref();
+    let found = match &cur.singlets {
+      None => false,
+      Some(s) => s.chars().any(|x| x == c),
+    };
+    (found && cur.sflag) || (!found && !cur.sflag)
+  }
 
   pub fn parser_get_next(&mut self) -> Option<Value> {
     let Some(mut parser) = self.parser.take() else { return None };
-    let retval = parser.parse_word(self);
+    let retval = parser.get_next(self);
     self.parser = Some(parser);
     retval
   }

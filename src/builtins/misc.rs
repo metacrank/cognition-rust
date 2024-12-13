@@ -37,11 +37,22 @@ pub fn cog_reset(mut state: CognitionState, _: Option<&Value>) -> CognitionState
     state.pool.add_math(math)
   }
   if let Some(faliases) = state.current().faliases.take() {
-    state.pool.add_faliases(faliases);
+    state.pool.add_faliases(faliases)
+  }
+  if let Some(delims) = state.current().delims.take() {
+    state.pool.add_string(delims)
+  }
+  if let Some(ignored) = state.current().ignored.take() {
+    state.pool.add_string(ignored)
+  }
+  if let Some(singlets) = state.current().singlets.take() {
+    state.pool.add_string(singlets)
   }
   state.current().faliases = state.default_faliases();
   let cur = state.current();
   cur.dflag = false;
+  cur.iflag = true;
+  cur.sflag = false;
   state
 }
 

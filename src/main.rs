@@ -548,6 +548,14 @@ fn print_end(state: &CognitionState, e: End) {
     if let Some(delims) = &cur.delims { delims.print_pretty(); }
     if cur.dflag { println!("' (whitelist)"); }
     else         { println!("' (blacklist)"); }
+    print!("ignored: '");
+    if let Some(ignored) = &cur.ignored { ignored.print_pretty(); }
+    if cur.iflag { println!("' (whitelist)"); }
+    else         { println!("' (blacklist)"); }
+    print!("singlets: '");
+    if let Some(singlets) = &cur.singlets { singlets.print_pretty(); }
+    if cur.sflag { println!("' (whitelist)"); }
+    else         { println!("' (blacklist)"); }
   }
 
   if e.cranks {

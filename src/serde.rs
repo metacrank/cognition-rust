@@ -374,14 +374,18 @@ impl Serialize for Container {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where S: Serializer
   {
-    let mut ser = serializer.serialize_struct("Container", 8)?;
+    let mut ser = serializer.serialize_struct("Container", 12)?;
     ser.serialize_field("stack", &self.stack)?;
     ser.serialize_field("err_stack", &self.err_stack)?;
     ser.serialize_field("cranks", &self.cranks)?;
     ser.serialize_field("math", &self.math)?;
     ser.serialize_field("faliases", &self.faliases)?;
     ser.serialize_field("delims", &self.delims)?;
+    ser.serialize_field("ignored", &self.ignored)?;
+    ser.serialize_field("singlets", &self.singlets)?;
     ser.serialize_field("dflag", &self.dflag)?;
+    ser.serialize_field("iflag", &self.iflag)?;
+    ser.serialize_field("sflag", &self.sflag)?;
     let word_table = match self.word_table {
       Some(ref wtable) => Some(WordTableWrap(wtable)),
       None => None
@@ -972,7 +976,11 @@ impl_cognition_deserialize_struct! {
     container.math = math;
     container.faliases = faliases;
     container.delims = delims;
+    container.ignored = ignored;
+    container.singlets = singlets;
     container.dflag = dflag;
+    container.iflag = iflag;
+    container.sflag = sflag;
     container.word_table = word_table;
     Ok(container)
   }
@@ -982,7 +990,11 @@ impl_cognition_deserialize_struct! {
   [Math, math, "math", Option<Math>],
   [Faliases, faliases, "faliases", Option<Faliases>],
   [Delims, delims, "delims", Option<String>],
+  [Ignored, ignored, "ignored", Option<String>],
+  [Singlets, singlets, "singlets", Option<String>],
   [Dflag, dflag, "dflag", bool],
+  [Iflag, iflag, "iflag", bool],
+  [Sflag, sflag, "sflag", bool],
   [WordTable, word_table, "word_table", Option<WordTable>]
 }
 
