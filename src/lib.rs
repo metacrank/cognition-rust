@@ -828,7 +828,7 @@ impl CognitionState {
     if let Some(ref ignored) = old.ignored {
       new.ignored = Some(self.string_copy(ignored));
     }
-    if let Some(ref delims) = old.singlets {
+    if let Some(ref singlets) = old.singlets {
       new.singlets = Some(self.string_copy(singlets));
     }
     new.dflag = old.dflag;
