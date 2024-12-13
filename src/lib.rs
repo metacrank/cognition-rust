@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
-pub const VERSION: &'static str = "0.3.10";
+pub const VERSION: &'static str = "0.3.10 only-delims";
 
 #[macro_use]
 pub mod macros;
