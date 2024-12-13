@@ -825,7 +825,15 @@ impl CognitionState {
     if let Some(ref delims) = old.delims {
       new.delims = Some(self.string_copy(delims));
     }
+    if let Some(ref ignored) = old.ignored {
+      new.ignored = Some(self.string_copy(ignored));
+    }
+    if let Some(ref delims) = old.singlets {
+      new.singlets = Some(self.string_copy(singlets));
+    }
     new.dflag = old.dflag;
+    new.iflag = old.iflag;
+    new.sflag = old.sflag;
 
     if let Some(ref word_table) = old.word_table {
       new.word_table = Some(self.pool.get_word_table(word_table.capacity()));
