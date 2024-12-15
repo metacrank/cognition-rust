@@ -382,8 +382,6 @@ f compose def
 \ (( dup qprefix-string qprefix-streval
 \ {{ dup qprefix-string eqprefix-streval
 
-# TODO: implement the (') eval word, based on the string literal
-
 # Reimplement the null prefix ('')
 [ null-eval  ] ( f swap modcrank [ ] ( eval ) if ) def
 [ null-body  ] ( f get-keyword ( eval ) ( null-eval ) if ) def
@@ -463,7 +461,7 @@ nllc compose def
 \ (( qprefix-cog
 \ {{ eqprefix-cog
 
-# Invert namespace
+# Invert containers
 ( uncd ( ( uncd ) dip swap quote compose )
        root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
        eval ) eval
@@ -481,6 +479,53 @@ nllc compose def
 \ cog bequeath
 ""    bequeath
 
+# Initialize namespace
+stack
+
+[ get-keyword-in ] bequeath
+[ get-keyword    ] bequeath
+[ nllc   ] bequeath
+[ addon  ] bequeath
+[ init   ] bequeath
+[ rqdrop ] bequeath
+[ finish ] bequeath
+[ nest   ] bequeath
+[ body   ] bequeath
+[ ebody  ] bequeath
+[ end    ]  bequeath
+[ string-init    ] bequeath
+[ streval-init   ] bequeath
+[ string-finish  ] bequeath
+[ string-concat  ] bequeath
+[ string-addesc  ] bequeath
+[ streval-addesc ] bequeath
+[ string-error   ] bequeath
+[ string-gen-quote-die    ] bequeath
+[ string-gen-quote-killer ] bequeath
+[ string-gen-quote-ekeywd ] bequeath
+[ string-gen-quote-escape ] bequeath
+[ string-gen-quote-body   ] bequeath
+[ string-death-2-body     ] bequeath
+[ alrt ] bequeath
+[ bspc ] bequeath
+[ esc  ] bequeath
+[ form ] bequeath
+[ newl ] bequeath
+[ retc ] bequeath
+[ tab  ] bequeath
+[ vtab ] bequeath
+[ [cog-finish]   ] bequeath
+[ (cog-qfinish)  ] bequeath
+[ (cog-eqfinish) ] bequeath
+
+push
+
 ccd # Now we're back in the original container
 
-\ " singlet
+\ " singlet \ ' singlet
+
+# Define std::quote namespace
+"std" dup def? ( dup unglue ) ( stack ) if (
+  ( swap ) dip swap quote compose cd
+  "quote" swap def uncd
+) eval quote def

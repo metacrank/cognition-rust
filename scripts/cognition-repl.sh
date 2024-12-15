@@ -1,4 +1,4 @@
 #!/bin/sh
 term=alacritty
 
-nohup $term -e sh -c "$(printf 'exec crank -s 6 stdbootstrap.cog stdquote.cog stdprefix.cog stdnamespace.cog common-fllibs.cog repl.cog %s' "$@")" &>/dev/null &
+nohup $term -e sh -c "$(printf 'exec crank -s 6 std/bootstrap.cog std/quote.cog std/prefix.cog std/namespace.cog examples/common-fllibs.cog utils/repl.cog %s' "$@")" &>/dev/null &

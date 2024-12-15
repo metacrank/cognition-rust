@@ -1,4 +1,4 @@
-#!/usr/bin/env -S crank -q -s 2 stdbootstrap.cog
+#!/usr/bin/env -S crank -q -s 2 std/bootstrap.cog
 2crank ing 0 crank addon
 2crank ing 2 crank unglue unglue compose compose
 2crank ing 1 crank def

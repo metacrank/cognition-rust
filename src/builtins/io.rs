@@ -393,7 +393,6 @@ pub fn cog_print(mut state: CognitionState, w: Option<&Value>) -> CognitionState
   state
 }
 
-
 pub fn cog_wprint(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let stack = &mut state.current().stack;
   let Some(v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
@@ -524,6 +523,9 @@ pub fn cog_reader(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   };
   let custom = &mut vcustom.custom;
   if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+    if file.file.as_ref().unwrap().metadata().is_err() {
+      return state.eval_error("INVALID FILE", w)
+    }
     let boxed: Box<dyn ReadAny> = Box::new(file.file.take().unwrap());
     let reader = Some(boxed);
     vcustom.custom = Box::new(ReadCustom{ reader });
@@ -546,6 +548,9 @@ pub fn cog_writer(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   };
   let custom = &mut vcustom.custom;
   if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+    if file.file.as_ref().unwrap().metadata().map_or(false, |m| m.permissions().readonly()) {
+      return state.eval_error("INSUFFICIENT FILE PERMISSIONS", w)
+    }
     let boxed: Box<dyn WriteAny> = Box::new(file.file.take().unwrap());
     let writer = Some(boxed);
     vcustom.custom = Box::new(WriteCustom{ writer });
@@ -568,6 +573,9 @@ pub fn cog_bufreader(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   };
   let custom = &mut vcustom.custom;
   let boxed: Box<dyn ReadAny> = if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+    if file.file.as_ref().unwrap().metadata().is_err() {
+      return state.eval_error("INVALID FILE", w)
+    }
     Box::new(file.file.take().unwrap())
   } else if let Some(reader) = custom.as_any_mut().downcast_mut::<ReadCustom>() {
     reader.reader.take().unwrap()
@@ -588,6 +596,9 @@ pub fn cog_bufwriter(mut state: CognitionState, w: Option<&Value>) -> CognitionS
   };
   let custom = &mut vcustom.custom;
   let boxed: Box<dyn WriteAny> = if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+    if file.file.as_ref().unwrap().metadata().map_or(false, |m| m.permissions().readonly()) {
+      return state.eval_error("INSUFFICIENT FILE PERMISSIONS", w)
+    }
     Box::new(file.file.take().unwrap())
   } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
     writer.writer.take().unwrap()
@@ -635,6 +646,9 @@ pub fn cog_stream(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
   };
   let custom = &mut vcustom.custom;
   if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
+    if file.file.as_ref().unwrap().metadata().map_or(false, |m| m.permissions().readonly()) {
+      return state.eval_error("INSUFFICIENT FILE PERMISSIONS", w)
+    }
     let boxed: Box<dyn ReadWriteAny> = Box::new(file.file.take().unwrap());
     let stream = Some(boxed);
     vcustom.custom = Box::new(ReadWriteCustom{ stream });
@@ -656,6 +670,10 @@ pub fn cog_fquestionmark(mut state: CognitionState, w: Option<&Value>) -> Cognit
       let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let file = file.file.as_mut().unwrap();
+        if file.metadata().map_or(false, |m| m.permissions().readonly()) {
+          stack.push(v);
+          return state.eval_error("INSUFFICIENT FILE PERMISSIONS", w)
+        }
         let is_terminal = file.is_terminal();
         questionmark(&state, file, is_terminal);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
@@ -706,6 +724,10 @@ pub fn cog_fperiod(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
         let file = file.file.as_mut().unwrap();
+        if file.metadata().map_or(false, |m| m.permissions().readonly()) {
+          stack.push(v);
+          return state.eval_error("INSUFFICIENT FILE PERMISSIONS", w)
+        }
         let is_terminal = file.is_terminal();
         print_v.fprint(file, "\n", is_terminal);
         flush!(file);
@@ -777,8 +799,13 @@ pub fn cog_fwrite(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
       let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
-        fwrite_check!(file.file.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
-        flush!(file.file.as_mut().unwrap());
+        let file = file.file.as_mut().unwrap();
+        if file.metadata().map_or(false, |m| m.permissions().readonly()) {
+          stack.push(v);
+          return state.eval_error("INSUFFICIENT FILE PERMISSIONS", w)
+        }
+        fwrite_check!(file, &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(file);
         state.pool.add_val(print_v);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
         let print_v = stack.pop().unwrap();
@@ -840,8 +867,13 @@ pub fn cog_fprint(mut state: CognitionState, w: Option<&Value>) -> CognitionStat
       let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
         let print_v = stack.pop().unwrap();
-        fwrite_check!(file.file.as_mut().unwrap(), &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
-        flush!(file.file.as_mut().unwrap());
+        let file = file.file.as_mut().unwrap();
+        if file.metadata().map_or(false, |m| m.permissions().readonly()) {
+          stack.push(v);
+          return state.eval_error("INSUFFICIENT FILE PERMISSIONS", w)
+        }
+        fwrite_check!(file, &print_v.value_stack_ref().first().unwrap().vword_ref().str_word.as_bytes());
+        flush!(file);
         state.pool.add_val(print_v);
       } else if let Some(writer) = custom.as_any_mut().downcast_mut::<WriteCustom>() {
         let print_v = stack.pop().unwrap();
@@ -896,11 +928,12 @@ pub fn cog_fread(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     Value::Custom(vcustom) => {
       let custom = &mut vcustom.custom;
       if let Some(file) = custom.as_any_mut().downcast_mut::<FileCustom>() {
-        let mut vword = if let Ok(metadata) = file.file.as_mut().unwrap().metadata() {
-          state.pool.get_vword(metadata.len() as usize)
-        } else {
+        let mut vword = 'word: {
+          if let Ok(metadata) = file.file.as_mut().unwrap().metadata() {
+            if metadata.is_file() {
+              break 'word state.pool.get_vword(metadata.len() as usize) }}
           stack.push(v);
-          return state.eval_error("NO FILE METADATA", w)
+          return state.eval_error("INVALID FILE", w)
         };
         if let Err(e) = file.file.as_mut().unwrap().read_to_string(&mut vword.str_word) {
           let _ = io::stderr().write(format!("{e}").as_bytes());
@@ -932,11 +965,12 @@ pub fn cog_fread(mut state: CognitionState, w: Option<&Value>) -> CognitionState
     },
     Value::Word(vword) => {
       if let Ok(mut file) = File::open(&vword.str_word) {
-        let mut vword = if let Ok(metadata) = file.metadata() {
-          state.pool.get_vword(metadata.len() as usize)
-        } else {
+        let mut vword = 'word: {
+          if let Ok(metadata) = file.metadata() {
+            if metadata.is_file() {
+              break 'word state.pool.get_vword(metadata.len() as usize) }}
           stack.push(v);
-          return state.eval_error("NO FILE METADATA", w)
+          return state.eval_error("INVALID FILE", w)
         };
         if let Err(e) = file.read_to_string(&mut vword.str_word) {
           let _ = io::stderr().write(format!("{e}").as_bytes());

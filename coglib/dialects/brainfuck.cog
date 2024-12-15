@@ -1,4 +1,4 @@
-cog stdquote
+cog std/quote
 
 [ ] [ ] ""
 

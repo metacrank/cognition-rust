@@ -1,0 +1,20 @@
+#!/usr/bin/env -S crank -s 2 std/bootstrap.cog
+cog std
+
+# temporary, until the standard library is ported
+[ when ] ( [ ] if ) def
+[ tmploop ] ( dup dip swap [ tmploop ] [ drop ] if ) def
+[ apply-next ] ( quote ( 1 split ) prepose ( dip t ) compose ) def
+[ each-iter ] (
+  apply-next quote
+  ( size ) prepose
+  ( ( f ) if ) compose
+) def
+[ each ] ( each-iter tmploop drop ) def
+
+getargs [ feval ] each
+[ repl ] (
+  "cognition> " print read ( streval ) eval ssize ( endl print ? ) [ ] if
+  \ repl
+) def
+[ repl ] dup bequeath dup undef eval

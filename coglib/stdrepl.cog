@@ -1,8 +1,0 @@
-#!/usr/bin/env -S crank -s 2 stdbootstrap.cog
-#cog stdlib
-cog stdquote
-[ repl ] (
-  "cognition> " print read ( evalstr ) eval ssize ( endl print ? ) [ ] if
-  \ repl
-) def
-[ repl ] dup bequeath dup undef eval
