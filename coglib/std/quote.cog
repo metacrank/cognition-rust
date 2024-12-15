@@ -461,10 +461,10 @@ nllc compose def
 \ (( qprefix-cog
 \ {{ eqprefix-cog
 
-# Invert containers
+# Invert namespace
 ( uncd ( ( uncd ) dip swap quote compose )
-       root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
-       eval ) eval
+  root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
+  eval ) eval
 
 # Bequeath definitions
 \ [   bequeath
@@ -492,7 +492,7 @@ stack
 [ nest   ] bequeath
 [ body   ] bequeath
 [ ebody  ] bequeath
-[ end    ]  bequeath
+[ end    ] bequeath
 [ string-init    ] bequeath
 [ streval-init   ] bequeath
 [ string-finish  ] bequeath

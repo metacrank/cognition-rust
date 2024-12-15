@@ -1,4 +1,15 @@
-"process" dup fllib-filename "/../fllib/process/target/release/" swap concat fllib
+std::namespace::begin process
+
+"process" std::fllib::load
 [ msleep ] ( as-millis sleep ) def
 [ µsleep ] ( as-micros sleep ) def
 [ nsleep ] ( as-nanos sleep ) def
+
+std::namespace::invert
+
+[ sleep ] bequeath
+[ msleep ] bequeath
+[ µsleep ] bequeath
+[ nsleep ] bequeath
+
+std::namespace::end

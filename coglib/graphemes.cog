@@ -1,0 +1,18 @@
+std::namespace::begin graphemes
+
+"graphemes" std::fllib::load
+
+std::namespace::invert
+
+[ gunconcat ] bequeath
+[ gcut ] bequeath
+[ gsubstr ] bequeath
+[ glen ] bequeath
+[ gat ] bequeath
+[ gnth ] bequeath
+[ greplace ] bequeath
+[ gslice ] bequeath
+[ greverse ] bequeath
+[ gtoi ] bequeath
+
+std::namespace::end

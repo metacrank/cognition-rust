@@ -113,22 +113,70 @@ child cd
 \ (( qprefix-namespace
 \ {{ eqprefix-namespace
 
+# Namespace manipulation words
+
+[ new-namespace ] ( # "name" -- "name" [container]
+  dup def? ( dup unglue ) ( stack ) if
+) def
+[ recurse-down ] ( # "name_1" [cont_1] ... "name_n" [cont_n] n "name" -- ... n+1 "name_n+1" [cont_n+1]
+  swap dup [ 0 ] == swap
+  ( ( new-namespace )
+    ( quote compose cd new-namespace ( ( uncd ) dip ) dip ) if ) dip
+  [ 1 ] +
+) def
+
+[ begin ] (
+  halt [ 1 ] [ 1 ] metacrank "\n" unignore [ 0 ]
+  ( [ 1 ] crank dup "\n" =
+    ( drop drop "\n" ignore child cd )
+    ( dup dup ":" = swap "" = or
+      ( drop dup )
+      ( swap ( recurse-down ) dip dup ) if ) if ) dup
+) def
+
+[ invert ] (
+  uncd ( dup [ 0 ] == ) dip swap ( [ [ ] ] compose ) ( ( swap ) dip swap quote compose ) if
+  ( ( uncd ) dip swap quote compose )
+  root? [ [[ ccd ]] ] [ [[ cd ]] ] if compose eval stack
+) def
+
+[ [end-recurse] ] [[ "" (
+  dup [ 0 ] == ( drop quote def return ) [ ] if
+  ( quote swap quote compose compose cd quote def uncd ) dip
+  [ 1 ] -
+) "" ]] ( cd compose def uncd ) eval "" compose def
+
+[ end ] (
+  quote compose ccd swap
+  dup [ 0 ] == ( drop drop ) ( [end-recurse] eval ) if
+) def
+
 # Invert proto namespace
-( uncd ( ( uncd ) dip swap quote compose )
-       root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
-       eval ) eval
+namespace-invert
+
+[ begin ] bequeath
+[ invert ] bequeath
+[ end ] bequeath
+
+swap
 
 # Bequeath definitions
-"" bequeath
-\ : bequeath
+""   bequeath
+\ :  bequeath
 \ :: bequeath
-\ [ bequeath
-\ ( bequeath
-\ { bequeath
+\ [  bequeath
+\ (  bequeath
+\ {  bequeath
 \ [[ bequeath
 \ (( bequeath
 \ {{ bequeath
 
-ccd
+swap quote compose ccd # return to original container
 
 ":" singlet ":" delim
+
+# Define std::namespace namespace
+"std" dup def? ( dup unglue ) ( stack ) if (
+  ( swap ) dip swap quote compose cd
+  "namespace" swap def uncd
+) eval quote def

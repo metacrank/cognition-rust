@@ -1,0 +1,10 @@
+std::namespace::begin os
+
+"os" std::fllib::load
+
+std::namespace::invert
+
+[ set-var ] bequeath
+[ remove-var ] bequeath
+
+std::namespace::end

@@ -102,8 +102,8 @@ f compose def
 
 # Invert namespace
 ( uncd ( ( uncd ) dip swap quote compose )
-       root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
-       eval ) eval
+  root? [ [ ccd ] ] [ [ cd ] ] if unglue compose
+  eval ) eval
 
 # Bequeath definitions
 false bequeath

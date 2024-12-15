@@ -1,0 +1,26 @@
+std::namespace::begin multithreading
+
+"multithreading" std::fllib::load
+
+std::namespace::invert
+
+[ spawn ] bequeath
+[ try-spawn ] bequeath
+[ spawn-named ] bequeath
+[ try-spawn-named ] bequeath
+[ thread ] bequeath
+[ channel ] bequeath
+[ send ] bequeath
+[ recv ] bequeath
+[ try-recv ] bequeath
+[ recv-timeout ] bequeath
+[ share ] bequeath
+[ steal ] bequeath
+[ give ] bequeath
+[ stolen? ] bequeath
+[ poisoned? ] bequeath
+[ clear-poison ] bequeath
+[ eval-shared ] bequeath
+[ clear-multithreading-pools ] bequeath
+
+std::namespace::end

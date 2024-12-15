@@ -1,6 +1,0 @@
-# Cognition Standard Library
-# Apr. 2024
-
-cog std/quote
-#cog std/prefix
-#cog std/namespace

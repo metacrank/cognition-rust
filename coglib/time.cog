@@ -1,0 +1,39 @@
+std::namespace::begin time
+
+"time" std::fllib::load
+
+std::namespace::invert
+
+[ nanos ] bequeath
+[ micros ] bequeath
+[ millis ] bequeath
+[ secs ] bequeath
+[ as-nanos ] bequeath
+[ as-micros ] bequeath
+[ as-millis ] bequeath
+[ as-secs ] bequeath
+[ later ] bequeath
+[ earlier ] bequeath
+[ duration ] bequeath
+[ elapsed ] bequeath
+[ now ] bequeath
+[ system-time ] bequeath
+[ duration? ] bequeath
+[ instant? ] bequeath
+[ system-time? ] bequeath
+[ later? ] bequeath
+[ earlier? ] bequeath
+[ clear-time-pools ] bequeath
+
+[ ZERO_DURATION ] bequeath
+[ MIN_DURATION ] bequeath
+[ MAX_DURATION ] bequeath
+[ NANOSECOND ] bequeath
+[ MICROSECOND ] bequeath
+[ MILLISECOND ] bequeath
+[ SECOND ] bequeath
+[ UNIX_EPOCH ] bequeath
+
+[ "+" bequeath "-" bequeath ] dip
+
+std::namespace::end
