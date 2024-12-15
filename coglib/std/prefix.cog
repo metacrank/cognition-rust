@@ -12,18 +12,6 @@ child cd
 [ end    ] ( [ 0 ] crank [ 1 ] [ 1 ] metacrank ) def
 
 
-
-[ qprefix-null ] (
-  dup dup unglue swap quote [ 0 ] [ 1 ] displace swap cd
-  ( ghost ) swap ( "" ) swap quote compose ( null-qbody ) compose quote compose
-  [[ f ]] swap quote compose
-  [ \ # ] dup unglue quote swap quote prepose compose
-  [ \ " ] dup unglue quote swap quote prepose compose
-  cd def def def uncd "" compose dup
-  def uncd swap compose def
-) def
-
-
 #"PREFIX" dup def? [ dup unglue ] [ stack ] if
 #(
 #  cd
@@ -77,7 +65,7 @@ child cd
 ]] ( cd def def def def def def def def def uncd ) eval
 f compose def
 
-\ func qprefix-null
+#\ func qprefix-null
 
 [ qprefix-func ] (
   dup unglue

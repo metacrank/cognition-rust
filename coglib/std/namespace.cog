@@ -7,20 +7,17 @@
 # TODO: generalize to arbitrary crank states
 
 # Proto namespacing
-child cd
+"std" dup def? ( dup eval ) ( stack ) if "namespace" [ ] [ 2 ] { } cd
 
 [ ensure-vstack ] ( type "VSTACK" != ( "BAD ARGUMENT TYPE" ethrow return ) [ ] if ) def
 [ recrank ] ( swap [ 1 ] swap metacrank swap crank ) def
-[ operation ] (
-  swap quote compose cd dup def? swap unglue
-  ( ( uncd ) dip swap drop ) dip swap
-) def
+[ operation ] ( swap quote compose cd dup def? ( ( uncd ) dip ) dip ) def
 
 ":" undelim ":" unsinglet
 
 \ :: (
-  ssize [ 1 ] ==
-  ( eval ) ( swap ensure-vstack operation ( eval ) [ ] if ) if
+  ghost ssize [ 1 ] ==
+  ( eval ) ( swap ensure-vstack operation ( compose eval ) ( swap drop ) if ) if
 ) def
 
 [ infix-namespace ] (
@@ -31,8 +28,9 @@ child cd
 
 \ : (
   crankbase [ 1 ] metacrankbase
-  ( recrank dup ":" =
-    ( drop infix-namespace ) ( ":" swap concat concat eval ) if )
+  ( dup "" =
+    ( drop ( recrank dup ":" = ( drop infix-namespace ) ( ":" swap concat concat eval ) if ) )
+    ( recrank ":" swap concat concat eval ) if )
   [ 0 ] crank [ 1 ] [ 1 ] metacrank
 ) def
 
@@ -40,23 +38,17 @@ child cd
 # This is accomplished through the use of the null prefix ('')
 
 "" dup unglue [
-  ":" (
-    len
-    ( [ 1 ] cut swap dup ":" =
-      ( len (( :: )) ( infix-namespace ) if )
-      ( ":" swap concat swap concat )
-      if )
-    ( drop ":" )
-    if
-  )
-] [ 0 ] [ 1 ] displace swap
-( cd def uncd ) eval swap compose def
+  ":" ( ':' )
+] [ 0 ] [ 1 ] displace
+( cd def uncd ) dip compose def
+
+#TODO: Fix quote implementation
 
 # Implement namespacing for quotes
 [ nest ] ( compose ( dup ) dip swap ) def
 [ namespace-nest ] ( quote compose "::" nest ) def
 [ qldisplc ] ( stack swap dup [ 1 ] - swap displace ) def
-[ qlast ] ( size dup ( qldisplc ) ( drop f ) if ) def
+[ qlast ] ( size dup ( qldisplc ) [ ] if ) def
 [ is-stack ] ( custom? ( fllib? ) dip or ( word? ) dip or not ) def
 [ is-vstack ] ( is-stack ( eval type "VSTACK" = ) ( f ) if ) def
 
@@ -66,7 +58,7 @@ child cd
 
 [ eq-nest ] (
   drop
-  ( swap size dup ?
+  ( swap size dup
     ( qldisplc is-vstack
       ( ( swap ) dip swap quote compose cd unglue ( uncd ) dip swap drop compose ( dup ) dip swap )
       ( compose swap namespace-nest ) if )
@@ -82,7 +74,7 @@ child cd
 [ [q-null-definition] ] [ [
   ":" ( ( dup ":" =
           ( drop ( namespace-nest ) )
-          ( ":" swap concat nest ) if ) )
+          ( ":" swap concat nest ) if ) ? )
 ] ] def
 
 [ [eq-null-definition] ] [ [
@@ -116,8 +108,9 @@ child cd
 # Namespace manipulation words
 
 [ new-namespace ] ( # "name" -- "name" [container]
-  dup def? ( dup unglue ) ( stack ) if
+  dup def? ( dup eval ) ( stack ) if
 ) def
+
 [ recurse-down ] ( # "name_1" [cont_1] ... "name_n" [cont_n] n "name" -- ... n+1 "name_n+1" [cont_n+1]
   swap dup [ 0 ] == swap
   ( ( new-namespace )
@@ -127,36 +120,54 @@ child cd
 
 [ begin ] (
   halt [ 1 ] [ 1 ] metacrank "\n" unignore [ 0 ]
-  ( [ 1 ] crank dup "\n" =
-    ( drop drop "\n" ignore child cd )
+  ( dup "\n" =
+    ( halt [ 1 ] crank drop drop "\n" ignore child cd )
     ( dup dup ":" = swap "" = or
       ( drop dup )
       ( swap ( recurse-down ) dip dup ) if ) if ) dup
 ) def
 
 [ invert ] (
-  uncd ( dup [ 0 ] == ) dip swap ( [ [ ] ] compose ) ( ( swap ) dip swap quote compose ) if
+  uncd ( dup [ 0 ] == ) dip swap [ [ ] ] ( ( swap ) dip swap ) if quote compose
   ( ( uncd ) dip swap quote compose )
-  root? [ [[ ccd ]] ] [ [[ cd ]] ] if compose eval stack
+  root? [ [[ ccd ]] ] [ [[ cd ]] ] if compose eval swap
 ) def
 
 [ [end-recurse] ] [[ "" (
   dup [ 0 ] == ( drop quote def return ) [ ] if
-  ( quote swap quote compose compose cd quote def uncd ) dip
+  ( quote swap quote swap compose compose cd quote def uncd ) dip
   [ 1 ] -
-) "" ]] ( cd compose def uncd ) eval "" compose def
+) "" ]] ( cd compose def uncd ) eval "" compose quote def
 
 [ end ] (
   quote compose ccd swap
-  dup [ 0 ] == ( drop drop ) ( [end-recurse] eval ) if
+  dup [ 0 ] == ( drop drop ) ( [ 1 ] - [end-recurse] eval ) if
+) def
+
+# Needs fixing
+[ use ] (
+  halt [ 1 ] [ 1 ] metacrank "\n" unignore
+  ( ? dup "\n" =
+    ( ? halt [ 1 ] crank ignore drop swap quote def )
+    ( dup dup ":" = swap "" = or
+      ( drop dup )
+      ( ? swap ( ? swap drop dup ( :: ) ? dip ) dip ? dup ) if ) if )
+  ( ? dup "\n" =
+    ( halt [ 1 ] crank ignore drop )
+    ( dup dup ":" = swap "" = or ?
+      ( drop dup ) ( dup ( dip ) dip swap dup ) if ) if ) ?
 ) def
 
 # Invert proto namespace
-namespace-invert
+invert
 
+[ hello ] ( "hello world!\n" print ) def
+
+[ hello ] bequeath
 [ begin ] bequeath
 [ invert ] bequeath
 [ end ] bequeath
+#[ use ] bequeath
 
 swap
 
@@ -171,12 +182,6 @@ swap
 \ (( bequeath
 \ {{ bequeath
 
-swap quote compose ccd # return to original container
+swap end # return to original container
 
 ":" singlet ":" delim
-
-# Define std::namespace namespace
-"std" dup def? ( dup unglue ) ( stack ) if (
-  ( swap ) dip swap quote compose cd
-  "namespace" swap def uncd
-) eval quote def

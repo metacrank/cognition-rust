@@ -946,7 +946,7 @@ macro_rules! get_2_words {
 
 #[macro_export]
 macro_rules! get_custom {
-  ($state:ident,$w:ident,$state_token:tt,$state_pat:pat,$fail:block,ACTIVE) => {
+  ($state:ident,$w:ident,$state_token:tt,$state_pat:pat,$fail:block,ACTIVE) => {{
     let Some(v) = $state.current_ref().stack.last() else {
       let $state_pat = $state;
       $fail;
@@ -962,13 +962,13 @@ macro_rules! get_custom {
       $fail;
       return $state_token.eval_error("BAD ARGUMENT TYPE", $w)
     };
-  };
+  }};
   ($state:ident,$w:ident,$state_token:tt,$state_pat:pat,$fail:block) => {{
     get_custom!($state,$w,$state_token,$state_pat,$fail,ACTIVE);
     $state.current().stack.pop().unwrap()
   }};
   ($state:ident,$w:ident,$fail:block$(,$t:tt)?) => {
-    get_custom!($state,$w,$state,mut $state,$fail $(,$t:tt)?)
+    get_custom!($state,$w,$state,mut $state,$fail $(,$t:tt)?);
   };
   ($state:ident,$w:ident$(,$t:tt)?) => {
     get_custom!($state, $w, $state, $state, {} $(,$t)?)

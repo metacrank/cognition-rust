@@ -1,0 +1,15 @@
+[ loadlib ] (
+  dup fllib-filename
+  coglib-dir "/../fllib/" concat
+  ( ( dup ) dip swap ) dip swap concat
+  "/target/release/" concat
+  swap concat fllib
+) def
+
+"graphemes" loadlib
+"multithreading" loadlib
+"os" loadlib
+"process" loadlib
+"time" loadlib
+
+[ loadlib ] undef

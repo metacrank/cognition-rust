@@ -390,7 +390,8 @@ f compose def
   f ( init ( finish null-body ) end )
   [ \ # ] ( \ # )
   [ \ " ] ( \ " )
-]] ( cd def def def uncd ) eval "" compose def
+  [ \ ' ] ( \ ' )
+]] ( cd def def def def uncd ) eval "" compose def
 
 # So far, the null prefix in quotes simply acts as a deferral to the next token.
 # The complexity of the approach here is justified because it will make it simpler
@@ -428,7 +429,7 @@ f compose def
   "#"  ( ghost geti getd gets f setd f seti endl sets ( drop sets setd seti drop dup ) )
   "\\" ( ghost ( dup "" = ( drop ( swap eval ) ) ( swap eval ) if ) )
   "\"" ( ghost string-init ( string-cmacro ) dup f swap end )
-  "\'" ( ghost streval-init ( streval-cmacro ) dup f swap end )
+  "'" ( ghost streval-init ( streval-cmacro ) dup f swap end )
   "["  ( ghost ( dup "]"  = ( rqdrop swap eval ) ( "["  body  ) if ) dup stack swap )
   "("  ( ghost ( dup ")"  = ( rqdrop swap eval ) ( "("  ebody ) if ) dup macro swap )
   "{"  ( ghost ( dup "}"  = ( rqdrop swap eval ) ( "{"  body  ) if ) dup child swap )
@@ -525,7 +526,7 @@ ccd # Now we're back in the original container
 \ " singlet \ ' singlet
 
 # Define std::quote namespace
-"std" dup def? ( dup unglue ) ( stack ) if (
+"std" dup def? ( dup eval ) ( stack ) if (
   ( swap ) dip swap quote compose cd
-  "quote" swap def uncd
+  "quote" swap quote def uncd
 ) eval quote def

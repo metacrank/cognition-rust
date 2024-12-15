@@ -8,13 +8,9 @@ std::namespace::invert
 [ micros ] bequeath
 [ millis ] bequeath
 [ secs ] bequeath
-[ as-nanos ] bequeath
-[ as-micros ] bequeath
-[ as-millis ] bequeath
-[ as-secs ] bequeath
 [ later ] bequeath
 [ earlier ] bequeath
-[ duration ] bequeath
+[ duration-since ] bequeath
 [ elapsed ] bequeath
 [ now ] bequeath
 [ system-time ] bequeath
@@ -25,15 +21,12 @@ std::namespace::invert
 [ earlier? ] bequeath
 [ clear-time-pools ] bequeath
 
-[ ZERO_DURATION ] bequeath
-[ MIN_DURATION ] bequeath
-[ MAX_DURATION ] bequeath
-[ NANOSECOND ] bequeath
-[ MICROSECOND ] bequeath
-[ MILLISECOND ] bequeath
-[ SECOND ] bequeath
+[ "+" bequeath "-" bequeath ] dip
+
 [ UNIX_EPOCH ] bequeath
 
-[ "+" bequeath "-" bequeath ] dip
+[ Duration ] bequeath
+[ Instant ] bequeath
+[ SystemTime ] bequeath
 
 std::namespace::end

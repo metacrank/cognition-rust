@@ -1,11 +1,11 @@
-std::namespace::begin fllib
+std::namespace::begin std::fllib
 
 # Later versions will support recursive directory searching for the binary
 [ DEFAULT_FLLIB_PATH ] "HOME" var "/.cognition/fllib" concat quote def
 [ load ] (
   dup fllib-filename
   "FLLIB_PATH" def? ( "FLLIB_PATH" unglue ) [[ DEFAULT_FLLIB_PATH ]] if
-  swap concat fllib
+  "/" concat swap concat fllib
 ) def
 
 std::namespace::invert

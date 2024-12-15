@@ -109,6 +109,20 @@ pub fn cog_as_secs(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   duration_as!{state, w, as_secs}
 }
 
+pub fn cog_duration_zero_questionmark(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  get_custom!(state, w, ACTIVE);
+  let vcustom = state.current().stack.last().unwrap().value_stack_ref().first().unwrap().vcustom_ref();
+  let Some(d) = vcustom.custom.as_any().downcast_ref::<DurationCustom>() else {
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let vword = if d.duration.is_zero() {
+    let mut vword = state.pool.get_vword(1);
+    vword.str_word.push('t'); vword
+  } else { state.pool.get_vword(0) };
+  state.push_quoted(Value::Word(vword));
+  state
+}
+
 pub fn cog_add_duration(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   if state.current().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
   let mut v2 = get_custom!(state, w);
@@ -120,7 +134,6 @@ pub fn cog_add_duration(mut state: CognitionState, w: Option<&Value>) -> Cogniti
     state.current().stack.push(v2);
     return state.eval_error("BAD ARGUMENT TYPE", w)
   };
-  println!("about to add durations");
   add_durations!(state, w, v1, v2, d1, d2);
   state.pool.add_val(v1);
   state.current().stack.push(v2);
@@ -156,7 +169,6 @@ pub fn cog_duration_sum_overload(mut state: CognitionState, w: Option<&Value>) -
       let v1isduration = vcustom1.custom.as_any().downcast_ref::<DurationCustom>().is_some();
       let v2isduration = vcustom2.custom.as_any().downcast_ref::<DurationCustom>().is_some();
       if v1isduration && v2isduration {
-        println!("duration add");
         state.pool.add_val(v3);
         state.current().stack.push(v2);
         let wd = WordDef::from(v4);
@@ -164,7 +176,6 @@ pub fn cog_duration_sum_overload(mut state: CognitionState, w: Option<&Value>) -
       }
     }
   }
-  println!("non-duration add");
   state.pool.add_val(v4);
   state.current().stack.push(v2);
   let wd = WordDef::from(v3);
@@ -217,7 +228,7 @@ pub fn cog_earlier(state: CognitionState, w: Option<&Value>) -> CognitionState {
   add_duration(state, w, false)
 }
 
-pub fn cog_duration(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+pub fn cog_duration_since(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   if state.current().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
   let v2 = get_custom!(state, w);
   let v1 = get_custom!(state, w, { state.current().stack.push(v2) });
@@ -227,18 +238,72 @@ pub fn cog_duration(mut state: CognitionState, w: Option<&Value>) -> CognitionSt
   let duration = if let (Some(i1), Some(i2)) = (v1custom.downcast_ref::<InstantCustom>(), v2custom.downcast_ref::<InstantCustom>()) {
     match i2.instant.checked_duration_since(i1.instant) {
       Some(d) => d,
-      None => {
-        neg = true;
-        match i1.instant.checked_duration_since(i2.instant) {
-          Some(d) => d,
-          None => Duration::ZERO
-        }
+      None => match i1.instant.checked_duration_since(i2.instant) {
+        Some(d) => { neg = true; d },
+        None => Duration::ZERO
       }
     }
   } else if let (Some(i1), Some(i2)) = (v1custom.downcast_ref::<SystemTimeCustom>(), v2custom.downcast_ref::<SystemTimeCustom>()) {
     match i2.time.duration_since(i1.time) {
       Ok(d) => d,
-      Err(e) => e.duration()
+      Err(e) => {
+        neg = true;
+        e.duration()
+      }
+    }
+  } else {
+    state.current().stack.push(v1);
+    state.current().stack.push(v2);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let vcustom = get_duration_custom(&mut state.pool, duration, neg);
+  state.push_quoted(Value::Custom(vcustom));
+  state.pool.add_val(v1);
+  state.pool.add_val(v2);
+  state
+}
+
+pub fn cog_instant_duration_since(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let v2 = get_custom!(state, w);
+  let v1 = get_custom!(state, w, { state.current().stack.push(v2) });
+  let v2custom = v2.value_stack_ref().first().unwrap().vcustom_ref().custom.as_any();
+  let v1custom = v1.value_stack_ref().first().unwrap().vcustom_ref().custom.as_any();
+  let mut neg = false;
+  let duration = if let (Some(i1), Some(i2)) = (v1custom.downcast_ref::<InstantCustom>(), v2custom.downcast_ref::<InstantCustom>()) {
+    match i2.instant.checked_duration_since(i1.instant) {
+      Some(d) => d,
+      None => match i1.instant.checked_duration_since(i2.instant) {
+        Some(d) => { neg = true; d },
+        None => Duration::ZERO
+      }
+    }
+  } else {
+    state.current().stack.push(v1);
+    state.current().stack.push(v2);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  let vcustom = get_duration_custom(&mut state.pool, duration, neg);
+  state.push_quoted(Value::Custom(vcustom));
+  state.pool.add_val(v1);
+  state.pool.add_val(v2);
+  state
+}
+
+pub fn cog_system_time_duration_since(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  if state.current().stack.len() < 2 { return state.eval_error("TOO FEW ARGUMENTS", w) }
+  let v2 = get_custom!(state, w);
+  let v1 = get_custom!(state, w, { state.current().stack.push(v2) });
+  let v2custom = v2.value_stack_ref().first().unwrap().vcustom_ref().custom.as_any();
+  let v1custom = v1.value_stack_ref().first().unwrap().vcustom_ref().custom.as_any();
+  let mut neg = false;
+  let duration = if let (Some(i1), Some(i2)) = (v1custom.downcast_ref::<SystemTimeCustom>(), v2custom.downcast_ref::<SystemTimeCustom>()) {
+    match i2.time.duration_since(i1.time) {
+      Ok(d) => d,
+      Err(e) => {
+        neg = true;
+        e.duration()
+      }
     }
   } else {
     state.current().stack.push(v1);
@@ -271,13 +336,44 @@ pub fn cog_elapsed(mut state: CognitionState, w: Option<&Value>) -> CognitionSta
   state
 }
 
-pub fn cog_now(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+pub fn cog_instant_elapsed(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let v = get_custom!(state, w);
+  let custom = v.value_stack_ref().first().unwrap().vcustom_ref().custom.as_any();
+  let vcustom = if let Some(instant) = custom.downcast_ref::<InstantCustom>() {
+    get_duration_custom(&mut state.pool, instant.instant.elapsed(), false)
+  } else {
+    state.current().stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  state.pool.add_val(v);
+  state.push_quoted(Value::Custom(vcustom));
+  state
+}
+
+pub fn cog_system_time_elapsed(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
+  let v = get_custom!(state, w);
+  let custom = v.value_stack_ref().first().unwrap().vcustom_ref().custom.as_any();
+  let vcustom = if let Some(system_time) = custom.downcast_ref::<SystemTimeCustom>() {
+    match system_time.time.elapsed() {
+      Ok(duration) => get_duration_custom(&mut state.pool, duration, false),
+      Err(e) => get_duration_custom(&mut state.pool, e.duration(), true)
+    }
+  } else {
+    state.current().stack.push(v);
+    return state.eval_error("BAD ARGUMENT TYPE", w)
+  };
+  state.pool.add_val(v);
+  state.push_quoted(Value::Custom(vcustom));
+  state
+}
+
+pub fn cog_instant_now(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let vcustom = get_instant_custom(&mut state.pool, Instant::now());
   state.push_quoted(Value::Custom(vcustom));
   state
 }
 
-pub fn cog_system_time(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+pub fn cog_system_time_now(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   let vcustom = get_system_time_custom(&mut state.pool, SystemTime::now());
   state.push_quoted(Value::Custom(vcustom));
   state
@@ -381,6 +477,57 @@ pub fn cog_clear_time_pools(mut state: CognitionState, _: Option<&Value>) -> Cog
   state
 }
 
+pub fn add_duration_module(state: &mut CognitionState, lib: &Library) {
+  let vstack = state.pool.get_vstack(0);
+  state.stack.push(Value::Stack(vstack));
+
+  add_word!(state, lib, "from-nanos", cog_nanos);
+  add_word!(state, lib, "from-micros", cog_micros);
+  add_word!(state, lib, "from-millis", cog_millis);
+  add_word!(state, lib, "from-secs", cog_secs);
+  add_word!(state, lib, "as-nanos", cog_as_nanos);
+  add_word!(state, lib, "as-micros", cog_as_micros);
+  add_word!(state, lib, "as-millis", cog_as_millis);
+  add_word!(state, lib, "as-secs", cog_as_secs);
+  add_word!(state, lib, "zero?", cog_duration_zero_questionmark);
+
+  state.add_const_custom("ZERO", Box::new(DurationCustom{ duration: Duration::ZERO, neg: false }));
+  state.add_const_custom("MAX", Box::new(DurationCustom{ duration: Duration::MAX, neg: false }));
+  state.add_const_custom("MIN", Box::new(DurationCustom{ duration: Duration::MAX, neg: true }));
+  state.add_const_custom("NANOSECOND", Box::new(DurationCustom{ duration: Duration::from_nanos(1), neg: false }));
+  state.add_const_custom("MICROSECOND", Box::new(DurationCustom{ duration: Duration::from_micros(1), neg: false }));
+  state.add_const_custom("MILLISECOND", Box::new(DurationCustom{ duration: Duration::from_millis(1), neg: false }));
+  state.add_const_custom("SECOND", Box::new(DurationCustom{ duration: Duration::from_secs(1), neg: false }));
+
+  let v = state.pop_cur();
+  state.add_constant("Duration", v);
+}
+
+pub fn add_instant_module(state: &mut CognitionState, lib: &Library) {
+  let vstack = state.pool.get_vstack(0);
+  state.stack.push(Value::Stack(vstack));
+
+  add_word!(state, lib, "now", cog_instant_now);
+  add_word!(state, lib, "duration-since", cog_instant_duration_since);
+  add_word!(state, lib, "elapsed", cog_instant_elapsed);
+
+  let v = state.pop_cur();
+  state.add_constant("Instant", v);
+}
+
+pub fn add_system_time_module(state: &mut CognitionState, lib: &Library) {
+  let vstack = state.pool.get_vstack(0);
+  state.stack.push(Value::Stack(vstack));
+
+  add_word!(state, lib, "now", cog_system_time_now);
+  add_word!(state, lib, "duration-since", cog_system_time_duration_since);
+  add_word!(state, lib, "elapsed", cog_system_time_elapsed);
+  state.add_const_custom("UNIX_EPOCH", Box::new(SystemTimeCustom{ time: SystemTime::UNIX_EPOCH }));
+
+  let v = state.pop_cur();
+  state.add_constant("SystemTime", v);
+}
+
 #[no_mangle]
 pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
   ensure_foreign_library!(state, lib);
@@ -388,16 +535,12 @@ pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
   add_word!(state, lib, "micros", cog_micros);
   add_word!(state, lib, "millis", cog_millis);
   add_word!(state, lib, "secs", cog_secs);
-  add_word!(state, lib, "as-nanos", cog_as_nanos);
-  add_word!(state, lib, "as-micros", cog_as_micros);
-  add_word!(state, lib, "as-millis", cog_as_millis);
-  add_word!(state, lib, "as-secs", cog_as_secs);
   add_word!(state, lib, "later", cog_later);
   add_word!(state, lib, "earlier", cog_earlier);
-  add_word!(state, lib, "duration", cog_duration);
+  add_word!(state, lib, "duration-since", cog_duration_since);
   add_word!(state, lib, "elapsed", cog_elapsed);
-  add_word!(state, lib, "now", cog_now);
-  add_word!(state, lib, "system-time", cog_system_time);
+  add_word!(state, lib, "now", cog_instant_now);
+  add_word!(state, lib, "system-time", cog_system_time_now);
   add_word!(state, lib, "duration?", cog_duration_questionmark);
   add_word!(state, lib, "instant?", cog_instant_questionmark);
   add_word!(state, lib, "system-time?", cog_system_time_questionmark);
@@ -408,12 +551,9 @@ pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
   overload_word!(state, lib, "+", cog_duration_sum_overload, cog_add_duration);
   overload_word!(state, lib, "-", cog_duration_sum_overload, cog_sub_duration);
 
-  state.add_const_custom("ZERO_DURATION", Box::new(DurationCustom{ duration: Duration::ZERO, neg: false }));
-  state.add_const_custom("MAX_DURATION", Box::new(DurationCustom{ duration: Duration::MAX, neg: false }));
-  state.add_const_custom("MIN_DURATION", Box::new(DurationCustom{ duration: Duration::MAX, neg: true }));
-  state.add_const_custom("NANOSECOND", Box::new(DurationCustom{ duration: Duration::from_nanos(1), neg: false }));
-  state.add_const_custom("MICROSECOND", Box::new(DurationCustom{ duration: Duration::from_micros(1), neg: false }));
-  state.add_const_custom("MILLISECOND", Box::new(DurationCustom{ duration: Duration::from_millis(1), neg: false }));
-  state.add_const_custom("SECOND", Box::new(DurationCustom{ duration: Duration::from_secs(1), neg: false }));
   state.add_const_custom("UNIX_EPOCH", Box::new(SystemTimeCustom{ time: SystemTime::UNIX_EPOCH }));
+
+  add_duration_module(state, lib);
+  add_instant_module(state, lib);
+  add_system_time_module(state, lib);
 }

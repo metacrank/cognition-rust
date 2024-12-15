@@ -4,15 +4,15 @@ std::namespace::begin graphemes
 
 std::namespace::invert
 
-[ gunconcat ] bequeath
+[ unconcat ] bequeath
 [ gcut ] bequeath
-[ gsubstr ] bequeath
-[ glen ] bequeath
+[ substr ] bequeath
+[ len ] bequeath
 [ gat ] bequeath
-[ gnth ] bequeath
-[ greplace ] bequeath
-[ gslice ] bequeath
-[ greverse ] bequeath
+[ nth ] bequeath
+[ replace ] bequeath
+[ slice ] bequeath
+[ reverse ] bequeath
 [ gtoi ] bequeath
 
 std::namespace::end
