@@ -224,39 +224,92 @@ def def def def def def
 \ (( qprefix-comment
 \ {{ qprefix-comment
 
+# Temporarily remove the delim property of the comment character until the null prefix exists
+\ # undelim
+
 # String literal with escape sequences
 
 \ " unsinglet \ " undelim
+\ [ unsinglet \ ] undelim
 
-[ string-init   ] ( getd gets geti [ \ "\ ] setd [ \ "\ ] sets f seti ) def
-[ string-finish ] ( swap seti swap sets swap setd ) def
-[ string-concat ] ( concat ( dup ) dip swap ) def
-[ string-addesc ] ( [ \ "\ ] setd [ \ "\ ] sets stgl string-concat ) def
-[ string-error  ] [ INVALID ] spc [ ESCAPE ] spc [ CHARACTER ] concat concat concat concat quote def
+[ push ] ( quote compose ) def
+[ take ] ( swap push ) def
+[ curry ] ( swap quote prepose ) def
 
-[ string-death  ] ( drop drop drop drop [ 1 ] swap metacrank crank seti sets setd string-error ethrow stack ) def
-[ [string-die]  ] [ \ " ( string-death ) ] ( cd def uncd ) eval \ " compose quote def
-[ string-killer ] ( [ \ " ] sets f setd stgl [string-die] ) def
-[ string-ekeywd ] ( [ \ " ] get-keyword ( eval ) ( string-killer ) if ) def
-[ string-escape ] ( drop f setd f sets stgl ( string-ekeywd ) ) def
-[ string-body   ] ( dup [ \ \ ] = ( string-escape ) ( string-concat ) if ) def
+[ string-init    ] ( getd gets geti [ \ "\ ] setd [ \ "\ ] sets f seti ) def
+[ streval-init   ] ( getd gets geti [ \ '\ ] setd [ \ '\ ] sets f seti ) def
+[ string-finish  ] ( swap seti swap sets swap setd ) def
+[ string-concat  ] ( concat ( dup ) dip swap ) def
+[ string-addesc  ] ( [ \ "\ ] setd [ \ "\ ] sets stgl string-concat ) def
+[ streval-addesc ] ( [ \ '\ ] setd [ \ '\ ] sets stgl string-concat ) def
+[ string-error   ] [ INVALID ] spc [ ESCAPE ] spc [ CHARACTER ] concat concat concat concat quote def
+
+[ string-gen-quote-die ] ( # (string-death) -- [string-die]
+  dup ( take cd def uncd ) dip compose
+) def
+
+[ string-gen-quote-killer ] ( # [string-die] -- (string-killer)
+  ( sets f setd stgl ) curry take
+) def
+
+[ string-gen-quote-ekeywd ] ( # (string-killer) -- (string-ekeywd)
+  ( get-keyword ( eval ) ) curry take ( if ) compose
+) def
+
+[ string-gen-quote-escape ] ( # (string-ekeywd) -- (string-escape)
+  ( drop f setd f sets stgl ) take
+) def
+
+[ string-gen-quote-body ] ( # (string-escape) -- (string-body)
+  ( dup [ \ \ ] = ) take ( ( string-concat ) if ) compose
+) def
+
+[ string-death-2-body ] ( # "string-body" "literal" [string-death] --
+  swap [ \ current-litchar ] swap quote def
+  ( drop drop drop drop ) prepose
+  \ current-litchar string-gen-quote-die
+  \ current-litchar string-gen-quote-killer
+  \ current-litchar string-gen-quote-ekeywd
+  string-gen-quote-escape
+  string-gen-quote-body
+  def
+) def
+
+[ string-body ] [ \ " ] (
+  [ 1 ] swap metacrank crank seti sets setd string-error ethrow stack
+) string-death-2-body
 [ string-macro  ] ( dup [ \ " ] = ( rqdrop finish string-finish ) ( string-body ) if ) def
 
-[ string-qdeath ] ( drop drop drop drop seti sets setd string-error ethrow [ [ ] ] compose ( dup ) dip swap ) def
-[ [string-qdie] ] [ \ " ( string-qdeath ) ] ( cd def uncd ) eval \ " compose quote def
-[ string-qiller ] ( [ \ " ] sets f setd stgl [string-qdie] ) def
-[ string-qkeywd ] ( [ \ " ] get-keyword ( eval ) ( string-qiller ) if ) def
-[ string-qscape ] ( drop f setd f sets stgl ( string-qkeywd ) ) def
-[ string-qbody  ] ( dup [ \ \ ] = ( string-qscape ) ( string-concat ) if ) def
+[ streval-body ] [ \ ' ] (
+  [ 1 ] swap metacrank crank seti sets setd string-error ethrow stack
+) string-death-2-body
+[ streval-macro ] ( dup [ \ ' ] = ( rqdrop finish string-finish eval ) ( streval-body ) if ) def
+
+[ string-qbody ] [ \ " ] (
+  seti sets setd string-error ethrow [ [ ] ] compose ( dup ) dip swap
+) string-death-2-body
 [ string-qmacro ] ( dup [ \ " ] = ( rqdrop string-finish quote nest ) ( string-qbody ) if ) def
 
-[ string-cdeath ] ( drop drop drop drop seti sets setd string-error ethrow stack swap eval ) def
-[ [string-cdie] ] [ \ " ( string-cdeath ) ] ( cd def uncd ) eval \ " compose quote def
-[ string-ciller ] ( [ \ " ] sets f setd stgl [string-cdie] ) def
-[ string-ckeywd ] ( [ \ " ] get-keyword ( eval ) ( string-ciller ) if ) def
-[ string-cscape ] ( drop f setd f sets stgl ( string-ckeywd ) ) def
-[ string-cbody  ] ( dup [ \ \ ] = ( string-cscape ) ( string-concat ) if ) def
+[ streval-qbody ] [ \ ' ] (
+  seti sets setd string-error ethrow ( dup ) dip swap
+) string-death-2-body
+[ streval-qmacro ] ( dup [ \ ' ] = ( rqdrop string-finish nest ) ( streval-qbody ) if ) def
+[ streval-eqmacro ] (
+  dup [ \ ' ] =
+  ( rqdrop string-finish dup def? ( unglue ) [ ] if nest )
+  ( streval-qbody )
+  if
+) def
+
+[ string-cbody ] [ \ " ] (
+  seti sets setd string-error ethrow stack swap eval
+) string-death-2-body
 [ string-cmacro ] ( dup [ \ " ] = ( rqdrop string-finish swap eval ) ( string-cbody ) if ) def
+
+[ streval-cbody ] [ \ ' ] (
+  seti sets setd string-error ethrow stack swap eval
+) string-death-2-body
+[ streval-cmacro ] ( dup [ \ ' ] = ( rqdrop string-finish swap eval ) ( string-cbody ) if ) def
 
 [ alrt ] [ 7 ] itoc quote def
 [ bspc ] [ 8 ] itoc quote def
@@ -284,6 +337,23 @@ def def def def def def
 f compose def
 \ " singlet
 
+\ ' [[
+  f ( streval-init init ( streval-macro ) dup f swap end )
+  [ 0 ] ( ghost nllc streval-addesc )
+  [ a ] ( ghost alrt streval-addesc )
+  [ b ] ( ghost bspc streval-addesc )
+  [ e ] ( ghost esc  streval-addesc )
+  [ f ] ( ghost form streval-addesc )
+  [ n ] ( ghost newl streval-addesc )
+  [ r ] ( ghost retc streval-addesc )
+  [ t ] ( ghost tab  streval-addesc )
+  [ v ] ( ghost vtab streval-addesc )
+  [ \ \ ] ( ghost [ \ \ ] streval-addesc )
+  [ \ ' ] ( ghost [ \ ' ] streval-addesc )
+]] ( cd def def def def def def def def def def def def uncd ) eval
+f compose def
+\ ' singlet
+
 [ qprefix-string ] (
   dup unglue
   [ [ \ " ] ( ghost string-init ( string-qmacro ) dup f swap ) ]
@@ -291,12 +361,28 @@ f compose def
   swap cd def uncd swap compose def
 ) def
 
-\ [  qprefix-string
-\ (  qprefix-string
-\ {  qprefix-string
-\ [[ qprefix-string
-\ (( qprefix-string
-\ {{ qprefix-string
+[ qprefix-streval ] (
+  dup unglue
+  [ [ \ ' ] ( ghost streval-init ( streval-qmacro ) dup f swap ) ]
+  [ 0 ] [ 1 ] displace
+  swap cd def uncd swap compose def
+) def
+
+[ eqprefix-streval ] (
+  dup unglue
+  [ [ \ ' ] ( ghost streval-init ( streval-eqmacro ) dup f swap ) ]
+  [ 0 ] [ 1 ] displace
+  swap cd def uncd swap compose def
+) def
+
+\ [  dup qprefix-string qprefix-streval
+\ (  dup qprefix-string eqprefix-streval
+\ {  dup qprefix-string qprefix-streval
+\ [[ dup qprefix-string eqprefix-streval
+\ (( dup qprefix-string qprefix-streval
+\ {{ dup qprefix-string eqprefix-streval
+
+# TODO: implement the (') eval word, based on the string literal
 
 # Reimplement the null prefix ('')
 [ null-eval  ] ( f swap modcrank [ ] ( eval ) if ) def
@@ -318,7 +404,8 @@ f compose def
   [[ f ]] swap quote compose
   [ \ # ] dup unglue quote swap quote prepose compose
   [ \ " ] dup unglue quote swap quote prepose compose
-  cd def def def uncd "" compose dup
+  [ \ ' ] dup unglue quote swap quote prepose compose
+  cd def def def def uncd "" compose dup
   def uncd swap compose def
 ) def
 
@@ -329,9 +416,9 @@ f compose def
 \ (( qprefix-null
 \ {{ qprefix-null
 
-# Now that the null prefix is defined, we can make the string literal character a delim
+# Now that the null prefix is defined, we can make the comment and string literal characters delims
 
-\ " delim
+\ # delim \ " delim
 
 # Reimplement cog:
 [ [cog-finish]   ] [ "cog" ( swap drop finish feval ) ] ( cd def uncd ) eval "cog" compose quote def
@@ -343,13 +430,14 @@ f compose def
   "#"  ( ghost geti getd gets f setd f seti endl sets ( drop sets setd seti drop dup ) )
   "\\" ( ghost ( dup "" = ( drop ( swap eval ) ) ( swap eval ) if ) )
   "\"" ( ghost string-init ( string-cmacro ) dup f swap end )
+  "\'" ( ghost streval-init ( streval-cmacro ) dup f swap end )
   "["  ( ghost ( dup "]"  = ( rqdrop swap eval ) ( "["  body  ) if ) dup stack swap )
   "("  ( ghost ( dup ")"  = ( rqdrop swap eval ) ( "("  ebody ) if ) dup macro swap )
   "{"  ( ghost ( dup "}"  = ( rqdrop swap eval ) ( "{"  body  ) if ) dup child swap )
   "[[" ( ghost ( dup "]]" = ( rqdrop swap eval ) ( "[[" ebody ) if ) dup stack swap )
   "((" ( ghost ( dup "))" = ( rqdrop swap eval ) ( "((" body  ) if ) dup macro swap )
   "{{" ( ghost ( dup "}}" = ( rqdrop swap eval ) ( "{{" ebody ) if ) dup child swap )
-]] ( cd def def def def def def def def def def uncd ) eval
+]] ( cd def def def def def def def def def def def uncd ) eval
 nllc compose def
 
 \ cog qprefix-null
@@ -389,8 +477,9 @@ nllc compose def
 \ {{  bequeath
 \ \   bequeath
 \ "   bequeath
+\ '   bequeath
 \ cog bequeath
-"" bequeath
+""    bequeath
 
 ccd # Now we're back in the original container
 
