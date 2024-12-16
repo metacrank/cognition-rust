@@ -24,26 +24,48 @@ To install Cognition from source, use the cargo commands:
 cargo build --release
 cargo install
 ```
-Alternatively, to run cognition without installing,
+Alternatively, to run the Cognition interpreter without installing it,
 
 ```sh
 cargo run
 ```
 
-## Usage
-
-### The REPL
-To get a fully fledged cognition repl, first run 'cargo build --release' in each of the ```./fllib``` subdirectories.
-
-Then set the ```COGLIB_DIR``` envvar (for instance, ```COGLIB_DIR=/home/user/src/cognition-rust/coglib```).
-
-Now you can use the following command:
+### Installing libraries
+It is recommended to keep a local copy of the coglib and associated fllibs in a ```~/.cognition``` directory.
+Until the build system is modified to automate the creation and population of this directory, this step must be performed manually.
 
 ```sh
-crank -s 4 stdbootstrap.cog stdquote.cog common-fllibs.cog repl.cog
+cd cognition-rust
+mkdir ~/.cognition
+cp -r coglib ~/.cognition
+mkdir ~/.cognition/fllib
+for d in fllib/*/; do; cargo build --release && cp $d/target/release/*.so ~/.cognition/fllib; done
 ```
 
-Alternatively, you can specify the path to each cog file or run the command in the coglib subdirectory.
+## Usage
+Since most Cognition applications will rely on the std/bootstrap.cog file or other parts of the standard library,
+it is recommended to set the ```COGLIB_DIR``` environment variable before running any of the examples below
+(for instance, ```COGLIB_DIR=/home/user/.cognition/coglib``` or ```COGLIB_DIR=/home/user/src/cognition-rust/coglib```).
+The ```crank``` executable will search this directory if a source file is not found in the current directory.
+Alternatively, full file paths can be supplied for each source file, or the following examples can be run in the
+```coglib``` subdirectory.
+
+### The REPL
+A repl with just the standard library loaded can be accessed with the following command:
+
+```sh
+crank -s 2 std/bootstrap.cog std/repl.cog
+```
+
+As an alternative to setting ```COGLIB_DIR```, you can specify the full path to each cog file or run the command in the coglib subdirectory.
+
+To get a fully fledged Cognition repl, first install all foreign language libraries (fllibs) as described in 'Installing libraries'.
+
+Now you can use this command:
+
+```sh
+crank -s 4 std/bootstrap.cog std.cog examples/common-fllibs.cog utils/repl.cog
+```
 
 To open a new terminal emulator with the cognition repl, consider modifying the shell script ```cognition-repl.sh``` in ```./scripts``` to use your favourite emulator.
 This will require you to set the ```COGLIB_DIR``` envvar globally for your user.
