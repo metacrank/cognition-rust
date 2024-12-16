@@ -39,7 +39,7 @@ cd cognition-rust
 mkdir ~/.cognition
 cp -r coglib ~/.cognition
 mkdir ~/.cognition/fllib
-for d in fllib/*/; do; cargo build --release && cp $d/target/release/*.so ~/.cognition/fllib; done
+for d in fllib/*/; do; (cd $d && cargo build --release && cp target/release/*.so ~/.cognition/fllib); done
 ```
 
 ## Usage
@@ -47,6 +47,7 @@ Since most Cognition applications will rely on the std/bootstrap.cog file or oth
 it is recommended to set the ```COGLIB_DIR``` environment variable before running any of the examples below
 (for instance, ```COGLIB_DIR=/home/user/.cognition/coglib``` or ```COGLIB_DIR=/home/user/src/cognition-rust/coglib```).
 The ```crank``` executable will search this directory if a source file is not found in the current directory.
+
 Alternatively, full file paths can be supplied for each source file, or the following examples can be run in the
 ```coglib``` subdirectory.
 
@@ -56,8 +57,6 @@ A repl with just the standard library loaded can be accessed with the following 
 ```sh
 crank -s 2 std/bootstrap.cog std/repl.cog
 ```
-
-As an alternative to setting ```COGLIB_DIR```, you can specify the full path to each cog file or run the command in the coglib subdirectory.
 
 To get a fully fledged Cognition repl, first install all foreign language libraries (fllibs) as described in 'Installing libraries'.
 
