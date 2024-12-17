@@ -1,4 +1,4 @@
-#!/usr/bin/env -S crank -q -s 2 std/bootstrap.cog
+#!/usr/bin/env -S crank -e E -s 2 std/bootstrap.cog
 cog std
 cog env
 cog process
