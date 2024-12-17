@@ -470,7 +470,7 @@ pub fn cog_eval_shared(mut state: CognitionState, w: Option<&Value>) -> Cognitio
   }
 }
 
-pub fn cog_clear_multithreading_pools(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+pub fn cog_clear_pools(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   clear_pools(&mut state.pool);
   state
 }
@@ -499,5 +499,5 @@ pub extern "C-unwind" fn add_words(state: &mut CognitionState, lib: &Library) {
   add_word!(state, lib, "poisoned?", cog_poisoned_questionmark);
   add_word!(state, lib, "clear-poison", cog_clear_poison);
   add_word!(state, lib, "eval-shared", cog_eval_shared);
-  add_word!(state, lib, "clear-multithreading-pools", cog_clear_multithreading_pools);
+  add_word!(state, lib, "clear-pools", cog_clear_pools);
 }

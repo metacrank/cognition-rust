@@ -257,10 +257,10 @@ impl Custom for ReadCustom {
 #[cognition_macros::custom(option_serde)]
 impl Custom for WriteCustom {
   fn printfunc(&self, f: &mut dyn io::Write) {
-    let read_any = (**self.writer.as_ref().unwrap()).as_any();
-    if read_any.downcast_ref::<io::Stdout>().is_some() {
+    let write_any = (**self.writer.as_ref().unwrap()).as_any();
+    if write_any.downcast_ref::<io::Stdout>().is_some() {
       fwrite_check!(f, b"(stdout)");
-    } else if read_any.downcast_ref::<io::Stderr>().is_some() {
+    } else if write_any.downcast_ref::<io::Stderr>().is_some() {
       fwrite_check!(f, b"(stderr)");
     } else {
       fwrite_check!(f, b"(writer)");

@@ -154,29 +154,35 @@ pub trait CustomTypeData {
 }
 
 pub trait CustomCast {
-  unsafe fn as_custom<T: CustomTypeData>(self) -> Option<Box<T>>;
+  fn is_custom<T: CustomTypeData>(&self) -> bool;
+  unsafe fn as_custom<T: CustomTypeData>(self) -> Result<Box<T>, Self> where Self: Sized;
   unsafe fn as_custom_ref<T: CustomTypeData>(&self) -> Option<&T>;
   unsafe fn as_custom_mut<T: CustomTypeData>(&mut self) -> Option<&mut T>;
 }
 
 impl CustomCast for Box<dyn Custom> {
-  unsafe fn as_custom<T>(self) -> Option<Box<T>>
+  fn is_custom<T>(&self) -> bool
   where T: CustomTypeData
   {
-    if <T>::custom_type_name() != (*self).custom_type_name() { return None }
+    <T>::custom_type_name() == (*self).custom_type_name()
+  }
+  unsafe fn as_custom<T>(self) -> Result<Box<T>, Self>
+  where T: CustomTypeData
+  {
+    if !self.is_custom::<T>() { return Err(self) }
     let raw = Box::into_raw(self);
-    Some(Box::from_raw(raw.cast::<T>()))
+    Ok(Box::from_raw(raw.cast::<T>()))
   }
   unsafe fn as_custom_ref<T>(&self) -> Option<&T>
   where T: CustomTypeData
   {
-    if <T>::custom_type_name() != (*self).custom_type_name() { return None }
+    if !self.is_custom::<T>() { return None }
     Some(&*(&**self as *const dyn Custom).cast::<T>())
   }
   unsafe fn as_custom_mut<T>(&mut self) -> Option<&mut T>
   where T: CustomTypeData
   {
-    if <T>::custom_type_name() != (*self).custom_type_name() { return None }
+    if !self.is_custom::<T>() { return None }
     Some(&mut *(&mut **self as *mut dyn Custom).cast::<T>())
   }
 }
@@ -1409,6 +1415,7 @@ impl CognitionEval {
         } else {
           let w = self.stack.peek();
           state = state.evalstack(wdn, w, self.cranking());
+          state.control.clear();
           while let Some(f) = self.local_family.pop() { state.family.push(f) }
           self.stack.advance(&mut state);
           self.first_v = false;

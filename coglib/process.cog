@@ -11,5 +11,7 @@ std::namespace::invert
 [ msleep ] bequeath
 [ µsleep ] bequeath
 [ nsleep ] bequeath
+[ spawn ] bequeath
+[ wait ] bequeath
 
 std::namespace::end

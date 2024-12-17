@@ -356,10 +356,10 @@ fn default_serde(name: proc_macro2::TokenStream, custom_type: Type) -> proc_macr
 
 fn add_serialize(expanded: &mut proc_macro2::TokenStream, custom_type: Type) {
   expanded.extend(quote! {
-    impl ::serde::ser::Serialize for #custom_type {
+    impl Serialize for #custom_type {
       fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
       where
-        S: ::serde::ser::Serializer,
+        S: Serializer,
       { Void::serialize(&Void{}, serializer) }
     }
   });

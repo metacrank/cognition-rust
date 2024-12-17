@@ -1,0 +1,36 @@
+#!/usr/bin/env -S crank -q -s 2 std/bootstrap.cog
+cog std
+cog env
+cog process
+
+[ over ] ( ( dup ) dip swap ) def
+
+[ current-dir ] # -- "dir"
+  env ( cd "current-dir" unglue uncd ) eval eval def
+
+[ set-current-dir ] # "dir" --
+  env ( cd "set-current-dir" unglue uncd ) eval eval def
+
+[ run ] process ( # "cmd" [args...] "dir" [[envvar,val]...] [<io>] -- [(child)] "code"
+  cd "spawn" unglue "wait" unglue uncd ) eval eval compose def
+
+[ shell-read ] ( # -- "input" "cmd" [args...]
+  read dup strstack size ( [ 1 ] split ) ( drop drop return ) if ) def
+
+[ run-command ] ( # "input" "cmd" [args...] --
+  "." [ ] [ ] esize ( run ) dip esize = ( drop drop drop ) dip
+  [ ] ( drop drop edrop edrop streval ) if
+) def
+
+[ shell-print ] ( # --
+  current-dir print "% " print ) def
+
+[ shell-run ] ( # --
+  \ shell-print shell-read over "cd" =
+  ( set-current-dir drop drop ) ( \ run-command ) if
+) def
+
+[ cogsh ] ( # --
+  ssize 0 == [ ] ( ? ) if \ shell-run \ cogsh ) def
+
+cogsh

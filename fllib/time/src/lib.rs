@@ -472,7 +472,7 @@ pub fn cog_earlier_questionmark(mut state: CognitionState, w: Option<&Value>) ->
   state
 }
 
-pub fn cog_clear_time_pools(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
+pub fn cog_clear_pools(mut state: CognitionState, _: Option<&Value>) -> CognitionState {
   clear_pools(&mut state.pool);
   state
 }
@@ -546,7 +546,7 @@ pub extern fn add_words(state: &mut CognitionState, lib: &Library) {
   add_word!(state, lib, "system-time?", cog_system_time_questionmark);
   add_word!(state, lib, "later?", cog_later_questionmark);
   add_word!(state, lib, "earlier?", cog_earlier_questionmark);
-  add_word!(state, lib, "clear-time-pools", cog_clear_time_pools);
+  add_word!(state, lib, "clear-pools", cog_clear_pools);
 
   overload_word!(state, lib, "+", cog_duration_sum_overload, cog_add_duration);
   overload_word!(state, lib, "-", cog_duration_sum_overload, cog_sub_duration);

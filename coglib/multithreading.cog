@@ -21,6 +21,6 @@ std::namespace::invert
 [ poisoned? ] bequeath
 [ clear-poison ] bequeath
 [ eval-shared ] bequeath
-[ clear-multithreading-pools ] bequeath
+[ clear-pools ] bequeath
 
 std::namespace::end

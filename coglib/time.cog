@@ -19,7 +19,7 @@ std::namespace::invert
 [ system-time? ] bequeath
 [ later? ] bequeath
 [ earlier? ] bequeath
-[ clear-time-pools ] bequeath
+[ clear-pools ] bequeath
 
 [ "+" bequeath "-" bequeath ] dip
 
