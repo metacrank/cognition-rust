@@ -58,6 +58,8 @@ A repl with just the standard library loaded can be accessed with the following 
 crank -s 2 std/bootstrap.cog std/repl.cog
 ```
 
+Since it is also a script (check out the shebang line in std/repl.cog), this repl can also be run simply with ```/path/to/repl.cog```.
+
 To get a fully fledged Cognition repl, first install all foreign language libraries (fllibs) as described in 'Installing libraries'.
 
 Now you can use this command:
@@ -68,5 +70,9 @@ crank -s 4 std/bootstrap.cog std.cog examples/common-fllibs.cog utils/repl.cog
 
 To open a new terminal emulator with the cognition repl, consider modifying the shell script ```cognition-repl.sh``` in ```./scripts``` to use your favourite emulator.
 This will require you to set the ```COGLIB_DIR``` envvar globally for your user.
+
+### The CogShell
+A primitive shell written in cognition, with an integrated cognition repl, is implemented in ```coglib/utils/cogsh.cog```.
+Like the repl, this file is a cognition script and is executable. To run the shell in a new terminal emulator, see the ```cogsh.sh``` script in ```./scripts```.
 
 <div align="center"><img src="assets/images/logos/cog.png" width="50" height="50"></div>
