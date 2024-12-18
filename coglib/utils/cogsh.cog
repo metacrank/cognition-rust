@@ -33,4 +33,6 @@ cog process
 [ cogsh ] ( # --
   ssize 0 == [ ] ( ? ) if \ shell-run \ cogsh ) def
 
+"HOME" var "/.cogshrc" concat feval
+
 cogsh
