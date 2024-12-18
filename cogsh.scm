@@ -17,11 +17,13 @@
      (method git-fetch)
      (uri (git-reference
            (url "https://github.com/metacrank/cognition-rust.git")
-           (commit "f665258ee23895c38da42656b9fd8c734843f2f7")))
+           (commit "03cf05bd2ba08d2c44b299cf5736a2707d71cd94")))
      (sha256
       (base32
-       "1bk751x11mwcm70pl2q2s89b3y7m9aw0px2xkq50njhsl3j53ccg"))))
+       "0dy7kam835l2znqpapm0gc5by4bx513r3wmznvmca0rp8679889j"))))
    (build-system copy-build-system)
+   (arguments
+    `(#:install-plan `(("coglib/utils/cogsh.cog" "bin/cogsh"))))
    (synopsis "A shell based on the Cognition programming language.")
    (description
     "Cogsh is a shell based on the Cognition programming language. It requires the env and process fllibs. It does not yet support Bash syntax.")
