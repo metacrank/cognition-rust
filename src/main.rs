@@ -275,7 +275,7 @@ fn parse_short(short: &str, args: &Vec<String>, argc: usize, iptr: &mut usize, c
   let last = char_iter.next().unwrap();
   // check if short args are valid
   for c in short[..short.len()-1].chars() {
-    if "hqv".chars().all(|ch| ch != c) {
+    if "hquv".chars().all(|ch| ch != c) {
       println!("{}: invalid option -- '{}'", binary_name(), c);
       return Err(try_help(2))
     }
