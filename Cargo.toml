@@ -3,7 +3,7 @@ members = ["macros"]
 
 [package]
 name = "cognition"
-version = "0.3.10"
+version = "0.3.11"
 edition = "2021"
 description = "Rust implementation of the Cognition programming language"
 

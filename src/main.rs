@@ -415,7 +415,7 @@ fn help() -> ExitCode {
 }
 
 fn version() -> ExitCode {
-  println!("cognition {VERSION}, written by Matthew Hinton and Preston Pan, MIT License 2024");
+  println!("cognition {VERSION}, written by Matthew Hinton and Preston Pan, GNU GPLv3+ License 2024");
   ExitCode::SUCCESS
 }
 
