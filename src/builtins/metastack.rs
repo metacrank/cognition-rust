@@ -15,7 +15,7 @@ pub fn cog_cd(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
 pub fn cog_ccd(mut state: CognitionState, w: Option<&Value>) -> CognitionState {
   let mut cur_v = state.pop_cur();
   let stack = &mut cur_v.metastack_container().stack;
-  let Some(mut v) = stack.pop() else { return state.eval_error("TOO FEW ARGUMENTS", w) };
+  let Some(mut v) = stack.pop() else { return state.push_cur(cur_v).eval_error("TOO FEW ARGUMENTS", w) };
   if !v.is_stack() {
     stack.push(v);
     return state.push_cur(cur_v).eval_error("BAD ARGUMENT TYPE", w)
